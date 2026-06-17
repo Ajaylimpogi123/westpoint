@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
 use App\Models\User;
+use App\Models\Branch;
+use App\Models\Role;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -20,7 +22,13 @@ class RegisteredUserController extends Controller
      */
     public function create(): Response
     {
-        return Inertia::render('Auth/Register');
+        $branches = Branch::all(['id', 'branch_name']);
+        $roles = Role::all(['id', 'role_name']);
+
+        return Inertia::render('Auth/Register', [
+            'branches' => $branches,
+            'roles' => $roles,
+        ]);
     }
 
     /**
@@ -34,12 +42,16 @@ class RegisteredUserController extends Controller
             'name' => 'required|string|max:255',
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
+            'branch_id' => 'required|exists:branches,id',
+            'role_id' => 'required|exists:roles,id',
         ]);
 
         $user = User::create([
             'name' => $request->name,
             'email' => $request->email,
             'password' => Hash::make($request->password),
+            'branch_id' => $request->branch_id,
+            'role_id' => $request->role_id,
         ]);
 
         event(new Registered($user));

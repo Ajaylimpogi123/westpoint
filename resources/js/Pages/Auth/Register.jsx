@@ -5,12 +5,14 @@ import TextInput from '@/Components/TextInput';
 import GuestLayout from '@/Layouts/GuestLayout';
 import { Head, Link, useForm } from '@inertiajs/react';
 
-export default function Register() {
+export default function Register({ branches, roles }) {
     const { data, setData, post, processing, errors, reset } = useForm({
         name: '',
         email: '',
         password: '',
         password_confirmation: '',
+        branch_id: '',
+        role_id: '',
     });
 
     const submit = (e) => {
@@ -60,6 +62,50 @@ export default function Register() {
                     <InputError message={errors.email} className="mt-2" />
                 </div>
 
+                 <div className="mt-4">
+                    <InputLabel htmlFor="branch_id" value="Branch" />
+
+                    <select
+                        id="branch_id"
+                        name="branch_id"
+                        value={data.branch_id}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        onChange={(e) => setData('branch_id', e.target.value)}
+                        required
+                    >
+                        <option value="">- Select a Branch -</option>
+                        {branches.map((branch) => (
+                            <option key={branch.id} value={branch.id}>
+                                {branch.branch_name}
+                            </option>
+                        ))}
+                    </select>
+
+                    <InputError message={errors.branch_id} className="mt-2" />
+                </div>
+
+                <div className="mt-4">
+                    <InputLabel htmlFor="role_id" value="Role" />
+
+                    <select
+                        id="role_id"
+                        name="role_id"
+                        value={data.role_id}
+                        className="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        onChange={(e) => setData('role_id', e.target.value)}
+                        required
+                    >
+                        <option value="">- Select a Role -</option>
+                        {roles.map((role) => (
+                            <option key={role.id} value={role.id}>
+                                {role.role_name}
+                            </option>
+                        ))}
+                    </select>
+
+                    <InputError message={errors.role_id} className="mt-2" />
+                </div>
+
                 <div className="mt-4">
                     <InputLabel htmlFor="password" value="Password" />
 
@@ -101,6 +147,8 @@ export default function Register() {
                         className="mt-2"
                     />
                 </div>
+
+
 
                 <div className="mt-4 flex items-center justify-end">
                     <Link
