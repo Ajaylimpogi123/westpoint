@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\SuperadminDashboardController;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
 
@@ -14,9 +15,9 @@ Route::get('/admin-dashboard', function () {
     return Inertia::render('AdminDashboard');
 })->middleware(['auth', 'verified'])->name('admin-dashboard');
 
-Route::get('/superadmin-dashboard', function () {
-    return Inertia::render('SuperadminDashboard');
-})->middleware(['auth', 'verified'])->name('superadmin-dashboard');
+Route::get('/superadmin-dashboard', [SuperadminDashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('superadmin-dashboard');
 
 Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');

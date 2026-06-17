@@ -91,7 +91,7 @@ const roleNavMain =
         ? [
               {
                   title: "User Registration",
-                  url: route("register"),
+                  url: route("superadmin-dashboard") + "#user-registration",
                   icon: UserRound,
               },
           ]
