@@ -37,6 +37,15 @@ class User extends Authenticatable
         return $this->belongsTo(Branch::class);
     }
 
+    public function dashboardRouteName(): string
+    {
+        return match ((int) $this->role_id) {
+            2 => 'admin-dashboard',
+            3 => 'superadmin-dashboard',
+            default => 'dashboard',
+        };
+    }
+
     /**
      * The attributes that should be hidden for serialization.
      *

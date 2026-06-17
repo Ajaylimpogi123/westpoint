@@ -50,11 +50,10 @@ export function AppSidebar({ ...props }) {
             avatar: auth?.user?.avatar || "/images/logo/tiumay.png",
         };
 
-const navItems = {
-    
-   user: userData,
-   
-    navMain: [
+const roleId = auth?.user?.role_id;
+console.log("roleId raw:", roleId, "| type:", typeof roleId);
+
+const defaultNavMain = [
         {
             title: "Dashboard",
             url: route("dashboard"),
@@ -85,8 +84,40 @@ const navItems = {
             url: route("history.index"),
             icon: History,
         },
-       
-    ],
+    ];
+
+const roleNavMain =
+    roleId === 3
+        ? [
+              {
+                  title: "User Registration",
+                  url: route("register"),
+                  icon: UserRound,
+              },
+          ]
+        : roleId === 2
+          ? [
+                {
+                    title: "Product Management",
+                    url: route("product.index"),
+                    icon: UtensilsCrossed,
+                },
+            ]
+          : defaultNavMain;
+
+const defaultDocuments = [
+        {
+            name: "Users",
+            url: route("user.index"),
+            icon: UserRound,
+        },
+    ];
+
+const navItems = {
+
+   user: userData,
+
+    navMain: roleNavMain,
     navClouds: [
         {
             title: "Capture",
@@ -152,14 +183,7 @@ const navItems = {
             icon: SearchIcon,
         },
     ],
-    documents: [
-        {
-            name: "Users",
-            url: route("user.index"),
-            icon: UserRound,
-        },
-       
-    ],
+    documents: roleId === 2 || roleId === 3 ? [] : defaultDocuments,
 };
 
   // Log the user data to verify it's working
@@ -190,7 +214,9 @@ const navItems = {
             </SidebarHeader>
             <SidebarContent>
                 <NavMain items={navItems.navMain} />
-                <NavDocuments items={navItems.documents} />
+                {navItems.documents.length > 0 && (
+                    <NavDocuments items={navItems.documents} />
+                )}
                 {/* <NavSecondary items={data.navSecondary} className="mt-auto" /> */}
             </SidebarContent>
             <SidebarFooter>
