@@ -33,7 +33,14 @@ class AuthenticatedSessionController extends Controller
 
         $request->session()->regenerate();
 
-        return redirect()->intended(route($request->user()->dashboardRouteName(), absolute: false));
+        // Store user's role_id and branch_id in session
+        $user = $request->user();
+        session([
+            'role_id' => $user->role_id,
+            'branch_id' => $user->branch_id,
+        ]);
+
+        return redirect()->intended(route($user->dashboardRouteName(), absolute: false));
     }
 
     /**
@@ -46,6 +53,9 @@ class AuthenticatedSessionController extends Controller
         $request->session()->invalidate();
 
         $request->session()->regenerateToken();
+
+        // Clear user role and branch session data
+        session()->forget(['role_id', 'branch_id']);
 
         return redirect('/');
     }
