@@ -86,21 +86,39 @@ const defaultNavMain = [
         },
     ];
 
+//2 = Admin
+//3 = Superadmin
+
 const roleNavMain =
     roleId === 3
         ? [
               {
-                  title: "User Registration",
-                  url: route("superadmin-dashboard") + "#user-registration",
+                  title: "User Management",
+                  url: route("user-management.index") + "#user-registration",
                   icon: UserRound,
               },
+              {
+                title: "Branch management",
+                url: route("dashboard"),
+                icon: LayoutDashboardIcon,
+            },
           ]
         : roleId === 2
           ? [
                 {
+                    title: "Dashboard",
+                    url: route("dashboard"),
+                    icon: LayoutDashboardIcon,
+                },
+                {
                     title: "Product Management",
                     url: route("product.index"),
                     icon: UtensilsCrossed,
+                },
+                {
+                    title: "User Management",
+                    url: route("user-management.index") + "#user-registration",
+                    icon: UserRound,
                 },
             ]
           : defaultNavMain;
@@ -108,7 +126,7 @@ const roleNavMain =
 const defaultDocuments = [
         {
             name: "Users",
-            url: route("user.index"),
+            url: route("user-management.index"),
             icon: UserRound,
         },
     ];

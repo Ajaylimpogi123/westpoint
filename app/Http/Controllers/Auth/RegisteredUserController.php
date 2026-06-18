@@ -57,7 +57,7 @@ class RegisteredUserController extends Controller
         event(new Registered($user));
 
         if (Auth::check()) {
-            return redirect(route('superadmin-dashboard', absolute: false))
+            return redirect(route('user-management.index', absolute: false))
                 ->with('success', 'User registered successfully.');
         }
 
