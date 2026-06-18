@@ -3,7 +3,7 @@
 use App\Http\Controllers\BranchController;
 use Illuminate\Support\Facades\Route;
 
-Route::middleware('auth')->group(function () {
+Route::middleware(['auth', 'role:2,3'])->group(function () {
     Route::get('/branch-management', [BranchController::class, 'index'])
         ->name('branch-management.index');
     Route::post('/branch-management', [BranchController::class, 'store'])
