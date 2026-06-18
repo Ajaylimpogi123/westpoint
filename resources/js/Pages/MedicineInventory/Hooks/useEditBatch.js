@@ -1,26 +1,28 @@
 import { useState, useEffect, useMemo } from "react";
 import { useForm } from "@inertiajs/react";
 
-export default function useAddStock(medicine) {
+export default function useEditBatch(batch, medicine) {
     const [open, setOpen] = useState(false);
 
-    const { data, setData, post, errors, processing, reset } = useForm({
-        product_id: "",
-        boxes_received: 1,
+    const { data, setData, patch, errors, processing, reset } = useForm({
         lot_number: "",
         expiry: "",
+        boxes_received: 0,
     });
 
     useEffect(() => {
-        if (!medicine || !open) return;
+        if (!batch || !medicine || !open) return;
+
+        const packSize = medicine.pack_size || 1;
+        const boxes =
+            packSize > 0 ? Math.round(batch.quantity / packSize) : 0;
 
         setData({
-            product_id: String(medicine.id),
-            boxes_received: 1,
-            lot_number: "",
-            expiry: "",
+            lot_number: batch.lot_number || "",
+            expiry: batch.expiry ? batch.expiry.slice(0, 10) : "",
+            boxes_received: boxes,
         });
-    }, [medicine, open]);
+    }, [batch, medicine, open]);
 
     const piecesPreview = useMemo(() => {
         const boxes = Number(data.boxes_received) || 0;
@@ -37,7 +39,7 @@ export default function useAddStock(medicine) {
     const handleSubmit = (e) => {
         e.preventDefault();
 
-        post(route("medicine-inventory.store-stock"), {
+        patch(route("medicine-inventory.update-batch", batch.id), {
             onSuccess: () => {
                 closeModal();
             },

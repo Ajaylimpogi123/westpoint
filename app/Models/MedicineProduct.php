@@ -32,6 +32,11 @@ class MedicineProduct extends Model
         ];
     }
 
+    public function batches(): HasMany
+    {
+        return $this->hasMany(ProductQty::class, 'product_id');
+    }
+
     public function quantities(): HasMany
     {
         return $this->hasMany(ProductQty::class, 'product_id');

@@ -14,4 +14,8 @@ Route::middleware('auth')->group(function () {
         ->name('medicine-inventory.destroy');
     Route::post('/medicine-inventory/stock', [MedicineInventoryController::class, 'storeStock'])
         ->name('medicine-inventory.store-stock');
+    Route::patch('/medicine-inventory/batch/{id}', [MedicineInventoryController::class, 'updateBatch'])
+        ->name('medicine-inventory.update-batch');
+    Route::delete('/medicine-inventory/batch/{id}', [MedicineInventoryController::class, 'destroyBatch'])
+        ->name('medicine-inventory.destroy-batch');
 });

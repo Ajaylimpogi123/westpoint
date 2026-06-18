@@ -11,9 +11,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import InputError from "@/Components/InputError";
-import useAddStock from "../Hooks/useAddStock";
+import useEditBatch from "../Hooks/useEditBatch";
 
-export default function AddStockModal({ medicine, children }) {
+export default function EditBatchModal({ batch, medicine, children }) {
     const {
         open,
         openModal,
@@ -24,7 +24,7 @@ export default function AddStockModal({ medicine, children }) {
         processing,
         handleSubmit,
         piecesPreview,
-    } = useAddStock(medicine);
+    } = useEditBatch(batch, medicine);
 
     return (
         <>
@@ -34,28 +34,24 @@ export default function AddStockModal({ medicine, children }) {
                 <DialogContent className="sm:max-w-[480px]">
                     <form onSubmit={handleSubmit}>
                         <DialogHeader className="pb-4">
-                            <DialogTitle>Add Stock</DialogTitle>
+                            <DialogTitle>Edit Batch</DialogTitle>
                             <DialogDescription>
-                                Receive inventory for{" "}
-                                <span className="font-medium">
-                                    {medicine?.med_name}
-                                </span>
-                                . Stock is assigned to your branch
-                                automatically. Enter quantity in boxes — the
-                                system converts to pieces using pack size (
+                                Update lot details for batch{" "}
+                                {batch?.lot_number || `#${batch?.id}`}. Quantity
+                                is stored in pieces (
                                 {medicine?.pack_size ?? 1} pcs/box).
                             </DialogDescription>
                         </DialogHeader>
 
                         <div className="grid gap-4">
                             <div className="grid gap-3">
-                                <Label htmlFor="boxes_received">
-                                    Boxes Received
+                                <Label htmlFor="edit_boxes_received">
+                                    Boxes (stock level)
                                 </Label>
                                 <Input
-                                    id="boxes_received"
+                                    id="edit_boxes_received"
                                     type="number"
-                                    min="1"
+                                    min="0"
                                     value={data.boxes_received}
                                     onChange={(e) =>
                                         setData(
@@ -66,22 +62,20 @@ export default function AddStockModal({ medicine, children }) {
                                 />
                                 <InputError message={errors.boxes_received} />
                                 <p className="text-sm text-muted-foreground">
-                                    Total pieces to save:{" "}
+                                    Total pieces:{" "}
                                     <span className="font-semibold text-foreground">
                                         {piecesPreview}
-                                    </span>{" "}
-                                    ({data.boxes_received || 0} ×{" "}
-                                    {medicine?.pack_size ?? 1})
+                                    </span>
                                 </p>
                             </div>
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-3">
-                                    <Label htmlFor="lot_number">
+                                    <Label htmlFor="edit_lot_number">
                                         Lot Number
                                     </Label>
                                     <Input
-                                        id="lot_number"
+                                        id="edit_lot_number"
                                         value={data.lot_number}
                                         onChange={(e) =>
                                             setData(
@@ -89,14 +83,15 @@ export default function AddStockModal({ medicine, children }) {
                                                 e.target.value,
                                             )
                                         }
-                                        placeholder="Optional"
                                     />
                                     <InputError message={errors.lot_number} />
                                 </div>
                                 <div className="grid gap-3">
-                                    <Label htmlFor="expiry">Expiry Date</Label>
+                                    <Label htmlFor="edit_expiry">
+                                        Expiry Date
+                                    </Label>
                                     <Input
-                                        id="expiry"
+                                        id="edit_expiry"
                                         type="date"
                                         value={data.expiry}
                                         onChange={(e) =>
@@ -121,7 +116,7 @@ export default function AddStockModal({ medicine, children }) {
                             </DialogClose>
 
                             <Button type="submit" disabled={processing}>
-                                Add Stock
+                                Save Batch
                             </Button>
                         </DialogFooter>
                     </form>

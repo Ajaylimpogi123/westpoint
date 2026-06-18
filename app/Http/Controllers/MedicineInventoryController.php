@@ -2,12 +2,10 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Branch;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -15,13 +13,26 @@ class MedicineInventoryController extends Controller
 {
     public function index(Request $request): Response
     {
+        $branchId = $this->branchId();
         $search = $request->input('search');
         $status = $request->input('status', 'Active');
 
         $medicines = MedicineProduct::query()
-            ->withSum(['quantities as total_quantity' => function ($query) {
-                $query->where('status', 'Active');
-            }], 'quantity')
+            ->when($branchId, function ($query) use ($branchId) {
+                $query
+                    ->withSum(['batches as total_stock' => function ($batchQuery) use ($branchId) {
+                        $batchQuery
+                            ->where('branch_id', $branchId)
+                            ->where('status', '!=', 'Deleted');
+                    }], 'quantity')
+                    ->with(['batches' => function ($batchQuery) use ($branchId) {
+                        $batchQuery
+                            ->where('branch_id', $branchId)
+                            ->where('status', '!=', 'Deleted')
+                            ->orderBy('expiry')
+                            ->select(['id', 'product_id', 'lot_number', 'expiry', 'quantity', 'status']);
+                    }]);
+            })
             ->when($search, function ($query, $search) {
                 $query->where(function ($query) use ($search) {
                     $query->where('med_name', 'like', "%{$search}%")
@@ -31,19 +42,16 @@ class MedicineInventoryController extends Controller
                 });
             })
             ->when($status && $status !== 'all', function ($query) use ($status) {
-                $query->where('status', $status);
+                $query->where('tbl_products.status', $status);
             })
             ->orderBy('med_name')
             ->paginate(10)
             ->withQueryString();
 
-        $branches = Branch::orderBy('branch_name')->get(['id', 'branch_name']);
-
         return Inertia::render('MedicineInventory/Index', [
             'medicines' => $medicines,
-            'branches' => $branches,
             'filters' => $request->only(['search', 'status']),
-            'userBranchId' => Auth::user()?->branch_id,
+            'branchId' => $branchId,
         ]);
     }
 
@@ -90,10 +98,12 @@ class MedicineInventoryController extends Controller
 
     public function destroy(int $id): RedirectResponse
     {
+        $branchId = $this->branchIdOrFail();
         $medicine = MedicineProduct::findOrFail($id);
         $medicine->softDelete();
 
         ProductQty::where('product_id', $medicine->id)
+            ->where('branch_id', $branchId)
             ->where('status', 'Active')
             ->update(['status' => 'Inactive']);
 
@@ -103,10 +113,11 @@ class MedicineInventoryController extends Controller
 
     public function storeStock(Request $request): RedirectResponse
     {
+        $branchId = $this->branchIdOrFail();
+
         $validated = $request->validate([
             'product_id' => ['required', 'integer', 'exists:tbl_products,id'],
             'boxes_received' => ['required', 'integer', 'min:1'],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
             'lot_number' => ['nullable', 'string', 'max:100'],
             'expiry' => ['nullable', 'date'],
         ]);
@@ -117,7 +128,7 @@ class MedicineInventoryController extends Controller
         ProductQty::create([
             'product_id' => $medicine->id,
             'quantity' => $quantityInPieces,
-            'branch_id' => $validated['branch_id'],
+            'branch_id' => $branchId,
             'status' => 'Active',
             'lot_number' => $validated['lot_number'] ?? null,
             'expiry' => $validated['expiry'] ?? null,
@@ -125,5 +136,67 @@ class MedicineInventoryController extends Controller
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', "Stock added: {$validated['boxes_received']} box(es) ({$quantityInPieces} pieces).");
+    }
+
+    public function updateBatch(Request $request, int $id): RedirectResponse
+    {
+        $branchId = $this->branchIdOrFail();
+        $batch = $this->findBranchBatchOrFail($id, $branchId);
+
+        $validated = $request->validate([
+            'lot_number' => ['nullable', 'string', 'max:100'],
+            'expiry' => ['nullable', 'date'],
+            'boxes_received' => ['required', 'integer', 'min:0'],
+        ]);
+
+        $medicine = MedicineProduct::findOrFail($batch->product_id);
+        $quantityInPieces = $validated['boxes_received'] * $medicine->pack_size;
+
+        $batch->update([
+            'lot_number' => $validated['lot_number'] ?? null,
+            'expiry' => $validated['expiry'] ?? null,
+            'quantity' => $quantityInPieces,
+        ]);
+
+        return redirect()->route('medicine-inventory.index')
+            ->with('success', 'Batch updated successfully.');
+    }
+
+    public function destroyBatch(int $id): RedirectResponse
+    {
+        $branchId = $this->branchIdOrFail();
+        $batch = $this->findBranchBatchOrFail($id, $branchId);
+
+        $batch->update(['status' => 'Deleted']);
+
+        return redirect()->route('medicine-inventory.index')
+            ->with('success', 'Batch has been removed.');
+    }
+
+    private function branchId(): ?int
+    {
+        $branchId = session('branch_id');
+
+        return $branchId ? (int) $branchId : null;
+    }
+
+    private function branchIdOrFail(): int
+    {
+        $branchId = $this->branchId();
+
+        if (! $branchId) {
+            abort(403, 'No branch assigned to your session.');
+        }
+
+        return $branchId;
+    }
+
+    private function findBranchBatchOrFail(int $id, int $branchId): ProductQty
+    {
+        return ProductQty::query()
+            ->where('id', $id)
+            ->where('branch_id', $branchId)
+            ->where('status', '!=', 'Deleted')
+            ->firstOrFail();
     }
 }

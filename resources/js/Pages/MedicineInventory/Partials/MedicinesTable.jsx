@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -9,19 +10,18 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent } from "@/Components/ui/card";
-import { router, useForm } from "@inertiajs/react";
-import { PackagePlus, Pencil, Trash2 } from "lucide-react";
-import Swal from "sweetalert2";
-import EditModal from "./EditModal";
-import AddStockModal from "./AddStockModal";
+import { router } from "@inertiajs/react";
+import MedicineRow from "./MedicineRow";
 
-export default function MedicinesTable({
-    medicines,
-    branches,
-    userBranchId,
-    filters,
-}) {
-    const { delete: destroy } = useForm();
+export default function MedicinesTable({ medicines, filters, branchId }) {
+    const [expandedRows, setExpandedRows] = useState({});
+
+    const toggleRow = (id) => {
+        setExpandedRows((prev) => ({
+            ...prev,
+            [id]: !prev[id],
+        }));
+    };
 
     const goToPage = (page) => {
         router.get(
@@ -62,39 +62,16 @@ export default function MedicinesTable({
         );
     };
 
-    const handleDelete = (medicine) => {
-        Swal.fire({
-            title: "Deactivate Medicine?",
-            text: `"${medicine.med_name}" will be marked as Deleted. Stock records will be set to Inactive. Sales history is preserved.`,
-            icon: "warning",
-            showCancelButton: true,
-            confirmButtonColor: "#dc2626",
-            cancelButtonColor: "#6b7280",
-            confirmButtonText: "Deactivate",
-        }).then((result) => {
-            if (result.isConfirmed) {
-                destroy(route("medicine-inventory.destroy", medicine.id), {
-                    preserveScroll: true,
-                    only: ["medicines"],
-                });
-            }
-        });
-    };
-
-    const formatPrice = (value) => {
-        const num = Number(value);
-        return Number.isFinite(num) ? num.toFixed(2) : "0.00";
-    };
-
-    const statusBadgeClass = (status) => {
-        if (status === "Active") return "bg-green-100 text-green-800";
-        if (status === "Inactive") return "bg-yellow-100 text-yellow-800";
-        return "bg-red-100 text-red-800";
-    };
-
     return (
         <Card>
             <CardContent className="space-y-4 pt-6">
+                {!branchId && (
+                    <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                        No branch is assigned to your session. Inventory data
+                        is hidden until a branch is linked to your account.
+                    </div>
+                )}
+
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <Input
                         placeholder="Search medicines..."
@@ -122,14 +99,13 @@ export default function MedicinesTable({
                     <Table>
                         <TableHeader>
                             <TableRow>
+                                <TableHead className="w-10" />
                                 <TableHead>Medicine</TableHead>
-                                <TableHead>Dose / Form</TableHead>
                                 <TableHead>Brand</TableHead>
-                                <TableHead>Pack Size</TableHead>
-                                <TableHead>Retail (pc)</TableHead>
-                                <TableHead>Wholesale (box)</TableHead>
-                                <TableHead>Total Stock (pcs)</TableHead>
-                                <TableHead>Status</TableHead>
+                                <TableHead>Dose</TableHead>
+                                <TableHead>Form</TableHead>
+                                <TableHead>Price (pc)</TableHead>
+                                <TableHead>Branch Stock (pcs)</TableHead>
                                 <TableHead className="text-right">
                                     Actions
                                 </TableHead>
@@ -138,102 +114,17 @@ export default function MedicinesTable({
                         <TableBody>
                             {medicines.data.length ? (
                                 medicines.data.map((medicine) => (
-                                    <TableRow key={medicine.id}>
-                                        <TableCell className="font-medium">
-                                            {medicine.med_name}
-                                        </TableCell>
-                                        <TableCell>
-                                            {[medicine.dose, medicine.form]
-                                                .filter(Boolean)
-                                                .join(" / ") || "-"}
-                                        </TableCell>
-                                        <TableCell>
-                                            {medicine.brand_name || "-"}
-                                        </TableCell>
-                                        <TableCell>
-                                            {medicine.pack_size}
-                                        </TableCell>
-                                        <TableCell>
-                                            {formatPrice(medicine.retail_price)}
-                                        </TableCell>
-                                        <TableCell>
-                                            {formatPrice(
-                                                medicine.wholesale_price,
-                                            )}
-                                        </TableCell>
-                                        <TableCell>
-                                            {medicine.total_quantity ?? 0}
-                                        </TableCell>
-                                        <TableCell>
-                                            <span
-                                                className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusBadgeClass(medicine.status)}`}
-                                            >
-                                                {medicine.status}
-                                            </span>
-                                        </TableCell>
-                                        <TableCell className="text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                {medicine.status ===
-                                                    "Active" && (
-                                                    <AddStockModal
-                                                        medicine={medicine}
-                                                        branches={branches}
-                                                        userBranchId={
-                                                            userBranchId
-                                                        }
-                                                    >
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="flex items-center gap-1"
-                                                        >
-                                                            <PackagePlus className="h-3.5 w-3.5" />
-                                                            Stock
-                                                        </Button>
-                                                    </AddStockModal>
-                                                )}
-                                                {medicine.status ===
-                                                    "Active" && (
-                                                    <EditModal
-                                                        medicine={medicine}
-                                                    >
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="flex items-center gap-1"
-                                                        >
-                                                            <Pencil className="h-3.5 w-3.5" />
-                                                            Edit
-                                                        </Button>
-                                                    </EditModal>
-                                                )}
-                                                {medicine.status ===
-                                                    "Active" && (
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="flex items-center gap-1 text-red-600 hover:text-red-700"
-                                                        onClick={() =>
-                                                            handleDelete(
-                                                                medicine,
-                                                            )
-                                                        }
-                                                    >
-                                                        <Trash2 className="h-3.5 w-3.5" />
-                                                        Delete
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </TableCell>
-                                    </TableRow>
+                                    <MedicineRow
+                                        key={medicine.id}
+                                        medicine={medicine}
+                                        isExpanded={!!expandedRows[medicine.id]}
+                                        onToggle={() => toggleRow(medicine.id)}
+                                    />
                                 ))
                             ) : (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={9}
+                                        colSpan={8}
                                         className="h-24 text-center"
                                     >
                                         No medicines found.

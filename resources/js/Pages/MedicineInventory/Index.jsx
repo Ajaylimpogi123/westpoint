@@ -6,7 +6,7 @@ import AddModal from "./Partials/AddModal";
 import MedicinesTable from "./Partials/MedicinesTable";
 import { useMedicineAlerts } from "./Hooks/useMedicineAlerts";
 
-export default function Index({ medicines, branches, filters, userBranchId }) {
+export default function Index({ medicines, filters, branchId }) {
     useMedicineAlerts();
 
     return (
@@ -21,8 +21,9 @@ export default function Index({ medicines, branches, filters, userBranchId }) {
                                 Medicine Inventory
                             </h1>
                             <p className="mt-2 text-sm text-white">
-                                Add, edit, and manage medicine products and
-                                stock intake by branch
+                                Manage medicines and branch stock batches.
+                                Expand a row to view lot breakdown and intake
+                                tools.
                             </p>
                         </div>
 
@@ -39,9 +40,8 @@ export default function Index({ medicines, branches, filters, userBranchId }) {
 
                     <MedicinesTable
                         medicines={medicines}
-                        branches={branches}
-                        userBranchId={userBranchId}
                         filters={filters}
+                        branchId={branchId}
                     />
                 </div>
             </div>
