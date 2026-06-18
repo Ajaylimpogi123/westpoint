@@ -123,14 +123,6 @@ const roleNavMain =
             ]
           : defaultNavMain;
 
-const defaultDocuments = [
-        {
-            name: "Users",
-            url: route("user-management.index"),
-            icon: UserRound,
-        },
-    ];
-
 const navItems = {
 
    user: userData,
@@ -201,7 +193,13 @@ const navItems = {
             icon: SearchIcon,
         },
     ],
-    documents: roleId === 2 || roleId === 3 ? [] : defaultDocuments,
+    documents: [1, 2, 3].includes(roleId) ? [] : [
+        {
+            name: "Users",
+            url: route("user-management.index"),
+            icon: UserRound,
+        },
+    ],
 };
 
   // Log the user data to verify it's working
