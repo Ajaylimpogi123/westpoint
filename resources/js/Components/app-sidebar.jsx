@@ -99,7 +99,7 @@ const roleNavMain =
               },
               {
                 title: "Branch management",
-                url: route("dashboard"),
+                url: route("branch-management.index"),
                 icon: LayoutDashboardIcon,
             },
           ]

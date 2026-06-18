@@ -3,8 +3,11 @@ import { Head } from "@inertiajs/react";
 import { useEffect } from "react";
 import RegistrationForm from "./Partials/RegistrationForm";
 import UsersTable from "./Partials/UsersTable";
+import { useRegistrationAlerts } from "./Hooks/useRegistrationAlerts";
 
 export default function Index({ branches, roles, users, filters }) {
+    useRegistrationAlerts();
+
     useEffect(() => {
         if (window.location.hash === "#user-registration") {
             document.getElementById("user-registration")?.scrollIntoView({

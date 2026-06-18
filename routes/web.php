@@ -33,3 +33,4 @@ require __DIR__ . '/menu.php';
 require __DIR__ . '/order.php';
 require __DIR__ . '/history.php';
 require __DIR__ . '/user.php';
+require __DIR__ . '/branch-management.php';

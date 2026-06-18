@@ -4,6 +4,9 @@ import PrimaryButton from "@/Components/PrimaryButton";
 import TextInput from "@/Components/TextInput";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
 import { useForm } from "@inertiajs/react";
+import {
+    showRegistrationError,
+} from "../Hooks/useRegistrationAlerts";
 
 export default function RegistrationForm({ branches, roles }) {
     const { data, setData, post, processing, errors, reset } = useForm({
@@ -19,6 +22,9 @@ export default function RegistrationForm({ branches, roles }) {
         e.preventDefault();
 
         post(route("register"), {
+            onError: (formErrors) => {
+                showRegistrationError(formErrors);
+            },
             onFinish: () => reset("password", "password_confirmation"),
             preserveScroll: true,
         });
