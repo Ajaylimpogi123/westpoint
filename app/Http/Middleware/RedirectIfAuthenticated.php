@@ -15,7 +15,11 @@ class RedirectIfAuthenticated
 
         foreach ($guards as $guard) {
             if (Auth::guard($guard)->check()) {
-                return redirect()->route(Auth::guard($guard)->user()->dashboardRouteName());
+                try {
+                    return redirect()->route(Auth::guard($guard)->user()->dashboardRouteName());
+                } catch (\Exception $e) {
+                    return redirect('/dashboard');
+                }
             }
         }
 
