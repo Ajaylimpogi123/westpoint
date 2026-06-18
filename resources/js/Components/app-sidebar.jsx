@@ -22,7 +22,8 @@ import {
     Database,
     LayoutGrid,
     ClipboardList,
-    History
+    History,
+    Pill,
 } from "lucide-react";
 
 import { NavDocuments } from "@/components/nav-documents";
@@ -75,6 +76,11 @@ const defaultNavMain = [
             icon: UtensilsCrossed,
         },
         {
+            title: "Medicine Inventory",
+            url: route("medicine-inventory.index"),
+            icon: Pill,
+        },
+        {
             title: "Menu",
             url: route("menu.index"),
             icon: ClipboardList,
@@ -102,6 +108,11 @@ const roleNavMain =
                 url: route("branch-management.index"),
                 icon: LayoutDashboardIcon,
             },
+            {
+                title: "Medicine Inventory",
+                url: route("medicine-inventory.index"),
+                icon: Pill,
+            },
           ]
         : roleId === 2
           ? [
@@ -114,6 +125,11 @@ const roleNavMain =
                     title: "Product Management",
                     url: route("product.index"),
                     icon: UtensilsCrossed,
+                },
+                {
+                    title: "Medicine Inventory",
+                    url: route("medicine-inventory.index"),
+                    icon: Pill,
                 },
                 {
                     title: "User Management",
