@@ -11,11 +11,18 @@ import {
 import Swal from "sweetalert2";
 import EditModal from "./EditModal";
 import BatchTable from "./BatchTable";
+import StockStatusBadge from "./StockStatusBadge";
+import { getMedicineStockStatus } from "../lib/stockStatus";
 
 const COLUMN_COUNT = 8;
 
 export default function MedicineRow({ medicine, isExpanded, onToggle }) {
     const { delete: destroy } = useForm();
+
+    const stockStatus = getMedicineStockStatus(
+        medicine.total_stock,
+        medicine.pack_size,
+    );
 
     const formatPrice = (value) => {
         const num = Number(value);
@@ -82,7 +89,10 @@ export default function MedicineRow({ medicine, isExpanded, onToggle }) {
                     {formatPrice(medicine.retail_price)}
                 </TableCell>
                 <TableCell onClick={onToggle}>
-                    {medicine.total_stock ?? 0}
+                    <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
+                        <span>{medicine.total_stock ?? 0}</span>
+                        <StockStatusBadge status={stockStatus} />
+                    </div>
                 </TableCell>
                 <TableCell className="text-right">
                     {medicine.status === "Active" && (

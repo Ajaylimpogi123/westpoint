@@ -12,6 +12,8 @@ import { PackagePlus, Pencil, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
 import AddStockModal from "./AddStockModal";
 import EditBatchModal from "./EditBatchModal";
+import StockStatusBadge from "./StockStatusBadge";
+import { getBatchStockStatus } from "../lib/stockStatus";
 
 export default function BatchTable({ medicine, batches }) {
     const { delete: destroy } = useForm();
@@ -19,12 +21,6 @@ export default function BatchTable({ medicine, batches }) {
     const formatDate = (dateString) => {
         if (!dateString) return "-";
         return new Date(dateString).toLocaleDateString();
-    };
-
-    const statusBadgeClass = (status) => {
-        if (status === "Active") return "bg-green-100 text-green-800";
-        if (status === "Inactive") return "bg-yellow-100 text-yellow-800";
-        return "bg-red-100 text-red-800";
     };
 
     const handleDeleteBatch = (batch) => {
@@ -74,13 +70,19 @@ export default function BatchTable({ medicine, batches }) {
                             <TableHead>Lot Number</TableHead>
                             <TableHead>Expiry</TableHead>
                             <TableHead>Batch Pieces</TableHead>
-                            <TableHead>Status</TableHead>
+                            <TableHead>Stock Status</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
                         {batches?.length ? (
-                            batches.map((batch) => (
+                            batches.map((batch) => {
+                                const batchStatus = getBatchStockStatus(
+                                    batch.quantity,
+                                    batch.expiry,
+                                );
+
+                                return (
                                 <TableRow key={batch.id}>
                                     <TableCell>
                                         {batch.lot_number || "-"}
@@ -90,11 +92,7 @@ export default function BatchTable({ medicine, batches }) {
                                     </TableCell>
                                     <TableCell>{batch.quantity}</TableCell>
                                     <TableCell>
-                                        <span
-                                            className={`inline-flex rounded-full px-2 py-1 text-xs font-medium ${statusBadgeClass(batch.status)}`}
-                                        >
-                                            {batch.status}
-                                        </span>
+                                        <StockStatusBadge status={batchStatus} />
                                     </TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
@@ -127,7 +125,8 @@ export default function BatchTable({ medicine, batches }) {
                                         </div>
                                     </TableCell>
                                 </TableRow>
-                            ))
+                                );
+                            })
                         ) : (
                             <TableRow>
                                 <TableCell
