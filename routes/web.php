@@ -35,3 +35,4 @@ require __DIR__ . '/history.php';
 require __DIR__ . '/user.php';
 require __DIR__ . '/branch-management.php';
 require __DIR__ . '/medicine-inventory.php';
+require __DIR__ . '/pos.php';

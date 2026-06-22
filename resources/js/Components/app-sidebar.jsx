@@ -24,6 +24,7 @@ import {
     ClipboardList,
     History,
     Pill,
+    ShoppingCart,
 } from "lucide-react";
 
 import { NavDocuments } from "@/components/nav-documents";
@@ -81,6 +82,11 @@ const defaultNavMain = [
             icon: Pill,
         },
         {
+            title: "Point of Sale",
+            url: route("pos.index"),
+            icon: ShoppingCart,
+        },
+        {
             title: "Menu",
             url: route("menu.index"),
             icon: ClipboardList,
@@ -113,6 +119,11 @@ const roleNavMain =
                 url: route("medicine-inventory.index"),
                 icon: Pill,
             },
+            {
+                title: "Point of Sale",
+                url: route("pos.index"),
+                icon: ShoppingCart,
+            },
           ]
         : roleId === 2
           ? [
@@ -130,6 +141,11 @@ const roleNavMain =
                     title: "Medicine Inventory",
                     url: route("medicine-inventory.index"),
                     icon: Pill,
+                },
+                {
+                    title: "Point of Sale",
+                    url: route("pos.index"),
+                    icon: ShoppingCart,
                 },
                 {
                     title: "User Management",
