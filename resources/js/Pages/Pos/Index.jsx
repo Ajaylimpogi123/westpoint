@@ -1,13 +1,15 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head, router } from "@inertiajs/react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { Head } from "@inertiajs/react";
+import { useCallback } from "react";
 import ProductCatalog from "./Partials/ProductCatalog";
 import CartPanel from "./Partials/CartPanel";
 import { usePosCart } from "./Hooks/usePosCart";
+import { usePosProducts } from "./Hooks/usePosProducts";
 import { usePosAlerts } from "./Hooks/usePosAlerts";
 
-export default function Index({ products, filters, branchId }) {
-    const [search, setSearch] = useState(filters?.search ?? "");
+export default function Index({ products, branchId }) {
+    const { search, setSearch, filteredProducts, allProducts } =
+        usePosProducts(products);
     const {
         cartItems,
         discount,
@@ -22,29 +24,6 @@ export default function Index({ products, filters, branchId }) {
     } = usePosCart();
 
     usePosAlerts();
-
-    const isFirstSearch = useRef(true);
-
-    useEffect(() => {
-        if (isFirstSearch.current) {
-            isFirstSearch.current = false;
-            return;
-        }
-
-        const timeout = setTimeout(() => {
-            router.get(
-                route("pos.search"),
-                { search: search || undefined },
-                {
-                    preserveState: true,
-                    preserveScroll: true,
-                    replace: true,
-                },
-            );
-        }, 300);
-
-        return () => clearTimeout(timeout);
-    }, [search]);
 
     const handleAddToCart = useCallback(
         (product, unitType) => {
@@ -77,10 +56,11 @@ export default function Index({ products, filters, branchId }) {
 
                     <div className="grid gap-6 lg:grid-cols-[1fr_420px] xl:grid-cols-[1fr_480px]">
                         <ProductCatalog
-                            products={products}
+                            products={filteredProducts}
                             search={search}
                             onSearchChange={setSearch}
                             onAddToCart={handleAddToCart}
+                            hasProducts={allProducts.length > 0}
                         />
 
                         <CartPanel

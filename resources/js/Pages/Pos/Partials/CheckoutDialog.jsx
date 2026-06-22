@@ -61,7 +61,7 @@ export default function CheckoutDialog({
             },
             {
                 preserveScroll: true,
-                preserveState: true,
+                preserveState: false,
                 onSuccess: () => {
                     setOpen(false);
                     setAmountReceived("");

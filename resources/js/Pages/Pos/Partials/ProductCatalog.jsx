@@ -8,7 +8,12 @@ export default function ProductCatalog({
     search,
     onSearchChange,
     onAddToCart,
+    hasProducts,
 }) {
+    const emptyMessage = hasProducts
+        ? "No products match your search."
+        : "No products in stock for your branch.";
+
     return (
         <div className="flex h-full flex-col space-y-4">
             <div className="relative">
@@ -24,7 +29,7 @@ export default function ProductCatalog({
             {products.length === 0 ? (
                 <Card>
                     <CardContent className="py-12 text-center text-muted-foreground">
-                        No products in stock for your branch.
+                        {emptyMessage}
                     </CardContent>
                 </Card>
             ) : (

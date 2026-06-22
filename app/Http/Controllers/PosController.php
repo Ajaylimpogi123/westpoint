@@ -14,24 +14,12 @@ use Inertia\Response;
 
 class PosController extends Controller
 {
-    public function index(Request $request): Response
+    public function index(): Response
     {
         $branchId = $this->branchIdOrFail();
 
         return Inertia::render('Pos/Index', [
-            'products' => $this->branchProductsQuery($branchId, $request->input('search'))->get(),
-            'filters' => $request->only(['search']),
-            'branchId' => $branchId,
-        ]);
-    }
-
-    public function search(Request $request): Response
-    {
-        $branchId = $this->branchIdOrFail();
-
-        return Inertia::render('Pos/Index', [
-            'products' => $this->branchProductsQuery($branchId, $request->input('search'))->get(),
-            'filters' => $request->only(['search']),
+            'products' => $this->branchProductsQuery($branchId)->get(),
             'branchId' => $branchId,
         ]);
     }
@@ -73,6 +61,13 @@ class PosController extends Controller
                 $piecesNeeded = $unitType === 'Box'
                     ? $quantitySold * (int) $product->pack_size
                     : $quantitySold;
+
+                $this->assertSufficientBranchStock(
+                    $product->id,
+                    $branchId,
+                    $piecesNeeded,
+                    $product->med_name
+                );
 
                 $deductions = $this->deductStockFefo(
                     $product->id,
@@ -128,7 +123,7 @@ class PosController extends Controller
         }
     }
 
-    private function branchProductsQuery(int $branchId, ?string $search)
+    private function branchProductsQuery(int $branchId)
     {
         return MedicineProduct::query()
             ->active()
@@ -144,15 +139,26 @@ class PosController extends Controller
                     ->where('status', 'Active')
                     ->where('quantity', '>', 0);
             })
-            ->when($search, function ($query, $search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('med_name', 'like', "%{$search}%")
-                        ->orWhere('brand_name', 'like', "%{$search}%")
-                        ->orWhere('dose', 'like', "%{$search}%")
-                        ->orWhere('form', 'like', "%{$search}%");
-                });
-            })
             ->orderBy('med_name');
+    }
+
+    private function assertSufficientBranchStock(
+        int $productId,
+        int $branchId,
+        int $piecesNeeded,
+        string $productName
+    ): void {
+        $totalAvailable = (int) ProductQty::query()
+            ->where('product_id', $productId)
+            ->where('branch_id', $branchId)
+            ->where('status', 'Active')
+            ->where('quantity', '>', 0)
+            ->lockForUpdate()
+            ->sum('quantity');
+
+        if ($totalAvailable < $piecesNeeded) {
+            throw new \RuntimeException("Insufficient Stock for {$productName}.");
+        }
     }
 
     /**
