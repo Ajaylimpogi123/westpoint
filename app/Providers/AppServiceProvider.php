@@ -30,19 +30,19 @@ class AppServiceProvider extends ServiceProvider
         Inertia::share([
             'auth' => function () {
                 $user = auth()->user(); // ✅ Store user once
-                
+
                 return [
                     'user' => $user ? [
                         'id' => $user->id,
                         'name' => $user->name,
                         'email' => $user->email,
-                        'avatar' => $user->avatar ?? '/images/logo/tiumay.png',
+                        'avatar' => $user->avatar ?? '/images/logo/Westpoint.png',
                     ] : null,
                 ];
             },
-            
-     
-            
+
+
+
             'flash' => function () {
                 return [
                     'success' => session('success'),

@@ -19,6 +19,7 @@ import { formatCurrency } from "../lib/pricing";
 
 export default function CartTable({
     cartItems,
+    syncing,
     onRemove,
     onUpdateQuantity,
     onUpdateUnitType,
@@ -63,6 +64,7 @@ export default function CartTable({
                                     onValueChange={(value) =>
                                         onUpdateUnitType(item.key, value)
                                     }
+                                    disabled={syncing}
                                 >
                                     <SelectTrigger className="h-8 w-[100px]">
                                         <SelectValue />
@@ -84,7 +86,7 @@ export default function CartTable({
                                         onClick={() =>
                                             onUpdateQuantity(item.key, -1)
                                         }
-                                        disabled={item.quantity <= 1}
+                                        disabled={syncing || item.quantity <= 1}
                                     >
                                         <Minus className="h-3 w-3" />
                                     </Button>
@@ -98,6 +100,7 @@ export default function CartTable({
                                         onClick={() =>
                                             onUpdateQuantity(item.key, 1)
                                         }
+                                        disabled={syncing}
                                     >
                                         <Plus className="h-3 w-3" />
                                     </Button>
@@ -115,6 +118,7 @@ export default function CartTable({
                                     size="icon"
                                     className="h-8 w-8 text-muted-foreground hover:text-red-600"
                                     onClick={() => onRemove(item.key)}
+                                    disabled={syncing}
                                 >
                                     <Trash2 className="h-4 w-4" />
                                 </Button>

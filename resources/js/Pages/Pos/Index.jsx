@@ -7,21 +7,23 @@ import { usePosCart } from "./Hooks/usePosCart";
 import { usePosProducts } from "./Hooks/usePosProducts";
 import { usePosAlerts } from "./Hooks/usePosAlerts";
 
-export default function Index({ products, branchId }) {
+export default function Index({ products, branchId, activeCart }) {
     const { search, setSearch, filteredProducts, allProducts } =
         usePosProducts(products);
     const {
+        cartId,
         cartItems,
         discount,
         setDiscount,
         grossTotal,
         netTotal,
+        syncing,
         addToCart,
         removeFromCart,
         updateQuantity,
         updateUnitType,
         clearCart,
-    } = usePosCart();
+    } = usePosCart(activeCart, branchId);
 
     usePosAlerts();
 
@@ -64,11 +66,13 @@ export default function Index({ products, branchId }) {
                         />
 
                         <CartPanel
+                            cartId={cartId}
                             cartItems={cartItems}
                             discount={discount}
                             setDiscount={setDiscount}
                             grossTotal={grossTotal}
                             netTotal={netTotal}
+                            syncing={syncing}
                             onRemove={removeFromCart}
                             onUpdateQuantity={updateQuantity}
                             onUpdateUnitType={updateUnitType}

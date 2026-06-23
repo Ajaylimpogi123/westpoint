@@ -24,6 +24,7 @@ import { formatCurrency } from "../lib/pricing";
 
 export default function CheckoutDialog({
     children,
+    cartId,
     cartItems,
     discount,
     grossTotal,
@@ -33,6 +34,7 @@ export default function CheckoutDialog({
     const [open, setOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState("cash");
     const [amountReceived, setAmountReceived] = useState("");
+    const [customerName, setCustomerName] = useState("");
     const [processing, setProcessing] = useState(false);
 
     const received = Number(amountReceived) || 0;
@@ -40,15 +42,23 @@ export default function CheckoutDialog({
         paymentMethod === "cash" ? Math.max(received - netTotal, 0) : 0;
 
     const canConfirm =
-        paymentMethod === "gcash" ||
-        (paymentMethod === "cash" && received >= netTotal);
+        cartId &&
+        (paymentMethod === "gcash" ||
+            (paymentMethod === "cash" && received >= netTotal));
 
     const handleConfirm = () => {
+        if (!cartId) {
+            toast.error("Active cart not found. Please refresh and try again.");
+            return;
+        }
+
         setProcessing(true);
 
         router.post(
             route("pos.store"),
             {
+                cart_id: cartId,
+                customer_name: customerName.trim() || null,
                 items: cartItems.map((item) => ({
                     product_id: item.product.id,
                     unit_type: item.unitType,
@@ -65,6 +75,7 @@ export default function CheckoutDialog({
                 onSuccess: () => {
                     setOpen(false);
                     setAmountReceived("");
+                    setCustomerName("");
                     setPaymentMethod("cash");
                     onCheckoutSuccess?.();
                 },
@@ -82,7 +93,15 @@ export default function CheckoutDialog({
     };
 
     return (
-        <Dialog open={open} onOpenChange={setOpen}>
+        <Dialog
+            open={open}
+            onOpenChange={(nextOpen) => {
+                setOpen(nextOpen);
+                if (!nextOpen) {
+                    setCustomerName("");
+                }
+            }}
+        >
             <DialogTrigger asChild>{children}</DialogTrigger>
             <DialogContent className="sm:max-w-md">
                 <DialogHeader>
@@ -108,6 +127,24 @@ export default function CheckoutDialog({
                                 {formatCurrency(netTotal)}
                             </span>
                         </div>
+                    </div>
+
+                    <div className="space-y-2">
+                        <Label htmlFor="customer_name">
+                            Customer Name{" "}
+                            <span className="text-muted-foreground">
+                                (optional)
+                            </span>
+                        </Label>
+                        <Input
+                            id="customer_name"
+                            value={customerName}
+                            onChange={(event) =>
+                                setCustomerName(event.target.value)
+                            }
+                            placeholder="Walk-in customer"
+                            maxLength={255}
+                        />
                     </div>
 
                     <div className="space-y-2">

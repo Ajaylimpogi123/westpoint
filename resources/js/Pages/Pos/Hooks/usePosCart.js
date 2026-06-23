@@ -1,134 +1,112 @@
 import { useCallback, useMemo, useState } from "react";
-import { getLineTotal, getUnitPrice } from "../lib/pricing";
+import { toast } from "sonner";
+import {
+    addCartItem,
+    removeCartItem,
+    updateCartItem,
+} from "../lib/posCartApi";
 
-function createCartKey(productId, unitType) {
-    return `${productId}-${unitType}`;
+function resolveCartError(error) {
+    return (
+        error?.response?.data?.message ||
+        "Failed to sync cart. Please try again."
+    );
 }
 
-export function usePosCart() {
-    const [cartItems, setCartItems] = useState([]);
+export function usePosCart(initialActiveCart, branchId) {
+    const [cartId, setCartId] = useState(initialActiveCart?.id ?? null);
+    const [cartItems, setCartItems] = useState(initialActiveCart?.items ?? []);
     const [discount, setDiscount] = useState(0);
+    const [syncing, setSyncing] = useState(false);
 
-    const addToCart = useCallback((product, unitType = "Piece") => {
-        setCartItems((current) => {
-            const existingIndex = current.findIndex(
-                (item) =>
-                    item.product.id === product.id &&
-                    item.unitType === unitType,
+    const applyCartResponse = useCallback((data) => {
+        setCartId(data.id);
+        setCartItems(data.items ?? []);
+    }, []);
+
+    const syncCart = useCallback(
+        async (operation) => {
+            if (!branchId) {
+                toast.error("No branch assigned to your session.");
+                return false;
+            }
+
+            setSyncing(true);
+
+            try {
+                const data = await operation();
+                applyCartResponse(data);
+
+                return true;
+            } catch (error) {
+                toast.error(resolveCartError(error));
+
+                return false;
+            } finally {
+                setSyncing(false);
+            }
+        },
+        [applyCartResponse, branchId],
+    );
+
+    const addToCart = useCallback(
+        async (product, unitType = "Piece") => {
+            await syncCart(() => addCartItem(product.id, unitType));
+        },
+        [syncCart],
+    );
+
+    const removeFromCart = useCallback(
+        async (key) => {
+            const item = cartItems.find((entry) => entry.key === key);
+
+            if (!item?.id) {
+                return;
+            }
+
+            await syncCart(() => removeCartItem(item.id));
+        },
+        [cartItems, syncCart],
+    );
+
+    const updateQuantity = useCallback(
+        async (key, change) => {
+            const item = cartItems.find((entry) => entry.key === key);
+
+            if (!item?.id) {
+                return;
+            }
+
+            const quantity = Math.max(1, item.quantity + change);
+
+            if (quantity <= 0) {
+                await syncCart(() => removeCartItem(item.id));
+
+                return;
+            }
+
+            await syncCart(() =>
+                updateCartItem(item.id, { quantity_sold: quantity }),
             );
+        },
+        [cartItems, syncCart],
+    );
 
-            if (existingIndex >= 0) {
-                return current.map((item, index) => {
-                    if (index !== existingIndex) {
-                        return item;
-                    }
+    const updateUnitType = useCallback(
+        async (key, unitType) => {
+            const item = cartItems.find((entry) => entry.key === key);
 
-                    const quantity = item.quantity + 1;
-
-                    return {
-                        ...item,
-                        quantity,
-                        priceUsed: getUnitPrice(product, unitType),
-                        totalPrice: getLineTotal(product, unitType, quantity),
-                    };
-                });
+            if (!item?.id || item.unitType === unitType) {
+                return;
             }
 
-            return [
-                ...current,
-                {
-                    key: createCartKey(product.id, unitType),
-                    product,
-                    unitType,
-                    quantity: 1,
-                    priceUsed: getUnitPrice(product, unitType),
-                    totalPrice: getLineTotal(product, unitType, 1),
-                },
-            ];
-        });
-    }, []);
-
-    const removeFromCart = useCallback((key) => {
-        setCartItems((current) => current.filter((item) => item.key !== key));
-    }, []);
-
-    const updateQuantity = useCallback((key, change) => {
-        setCartItems((current) =>
-            current
-                .map((item) => {
-                    if (item.key !== key) {
-                        return item;
-                    }
-
-                    const quantity = Math.max(1, item.quantity + change);
-
-                    return {
-                        ...item,
-                        quantity,
-                        priceUsed: getUnitPrice(item.product, item.unitType),
-                        totalPrice: getLineTotal(
-                            item.product,
-                            item.unitType,
-                            quantity,
-                        ),
-                    };
-                })
-                .filter((item) => item.quantity > 0),
-        );
-    }, []);
-
-    const updateUnitType = useCallback((key, unitType) => {
-        setCartItems((current) => {
-            const target = current.find((item) => item.key === key);
-
-            if (!target) {
-                return current;
-            }
-
-            const withoutTarget = current.filter((item) => item.key !== key);
-            const newKey = createCartKey(target.product.id, unitType);
-            const existingIndex = withoutTarget.findIndex(
-                (item) => item.key === newKey,
-            );
-
-            const updatedItem = {
-                ...target,
-                key: newKey,
-                unitType,
-                priceUsed: getUnitPrice(target.product, unitType),
-                totalPrice: getLineTotal(
-                    target.product,
-                    unitType,
-                    target.quantity,
-                ),
-            };
-
-            if (existingIndex >= 0) {
-                return withoutTarget.map((item, index) => {
-                    if (index !== existingIndex) {
-                        return item;
-                    }
-
-                    const quantity = item.quantity + updatedItem.quantity;
-
-                    return {
-                        ...item,
-                        quantity,
-                        priceUsed: getUnitPrice(item.product, unitType),
-                        totalPrice: getLineTotal(
-                            item.product,
-                            unitType,
-                            quantity,
-                        ),
-                    };
-                });
-            }
-
-            return [...withoutTarget, updatedItem];
-        });
-    }, []);
+            await syncCart(() => updateCartItem(item.id, { unit_type: unitType }));
+        },
+        [cartItems, syncCart],
+    );
 
     const clearCart = useCallback(() => {
+        setCartId(null);
         setCartItems([]);
         setDiscount(0);
     }, []);
@@ -148,11 +126,13 @@ export function usePosCart() {
     );
 
     return {
+        cartId,
         cartItems,
         discount,
         setDiscount,
         grossTotal,
         netTotal,
+        syncing,
         addToCart,
         removeFromCart,
         updateQuantity,

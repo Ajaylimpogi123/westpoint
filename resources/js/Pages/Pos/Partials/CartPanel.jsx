@@ -7,11 +7,13 @@ import CheckoutDialog from "./CheckoutDialog";
 import { formatCurrency } from "../lib/pricing";
 
 export default function CartPanel({
+    cartId,
     cartItems,
     discount,
     setDiscount,
     grossTotal,
     netTotal,
+    syncing,
     onRemove,
     onUpdateQuantity,
     onUpdateUnitType,
@@ -33,6 +35,7 @@ export default function CartPanel({
             <CardContent className="flex flex-1 flex-col gap-4 pt-4">
                 <CartTable
                     cartItems={cartItems}
+                    syncing={syncing}
                     onRemove={onRemove}
                     onUpdateQuantity={onUpdateQuantity}
                     onUpdateUnitType={onUpdateUnitType}
@@ -82,13 +85,14 @@ export default function CartPanel({
                         </div>
 
                         <CheckoutDialog
+                            cartId={cartId}
                             cartItems={cartItems}
                             discount={discount}
                             grossTotal={grossTotal}
                             netTotal={netTotal}
                             onCheckoutSuccess={onCheckoutSuccess}
                         >
-                            <Button className="w-full" size="lg">
+                            <Button className="w-full" size="lg" disabled={syncing}>
                                 Checkout {formatCurrency(netTotal)}
                             </Button>
                         </CheckoutDialog>

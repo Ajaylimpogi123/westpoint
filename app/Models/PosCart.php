@@ -7,31 +7,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-class Sale extends Model
+class PosCart extends Model
 {
     use HasFactory;
 
-    protected $table = 'tbl_sales';
+    protected $table = 'tbl_carts';
 
     protected $fillable = [
-        'invoice_number',
         'branch_id',
         'user_id',
-        'customer_name',
-        'gross_amount',
-        'discount_amount',
-        'net_amount',
-        'payment_method',
     ];
-
-    protected function casts(): array
-    {
-        return [
-            'gross_amount' => 'decimal:2',
-            'discount_amount' => 'decimal:2',
-            'net_amount' => 'decimal:2',
-        ];
-    }
 
     public function branch(): BelongsTo
     {
@@ -45,6 +30,6 @@ class Sale extends Model
 
     public function items(): HasMany
     {
-        return $this->hasMany(SaleItem::class, 'sale_id');
+        return $this->hasMany(PosCartItem::class, 'cart_id');
     }
 }

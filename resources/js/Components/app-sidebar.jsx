@@ -49,7 +49,7 @@ export function AppSidebar({ ...props }) {
     const  userData = {
                name: auth?.user?.name || "Guest",
             email: auth?.user?.email || "guest@example.com",
-            avatar: auth?.user?.avatar || "/images/logo/tiumay.png",
+            avatar: auth?.user?.avatar || "/images/logo/Westpoint.png",
         };
 
 const roleId = auth?.user?.role_id;
@@ -251,7 +251,7 @@ const navItems = {
                         >
                             <a href="#">
                                 <img
-                                    src="/images/logo/tiumay.png"
+                                    src="/images/logo/Westpoint.png"
                                     alt="Tiumai"
                                     className="object-contain"
                                 />

@@ -3,9 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\MedicineProduct;
+use App\Models\PosCart;
+use App\Models\PosCartItem;
 use App\Models\ProductQty;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -21,7 +24,74 @@ class PosController extends Controller
         return Inertia::render('Pos/Index', [
             'products' => $this->branchProductsQuery($branchId)->get(),
             'branchId' => $branchId,
+            'activeCart' => $this->serializeActiveCart($branchId),
         ]);
+    }
+
+    public function storeCartItem(Request $request): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        $validated = $request->validate([
+            'product_id' => ['required', 'integer', 'exists:tbl_products,id'],
+            'unit_type' => ['required', 'string', 'in:Piece,Box'],
+        ]);
+
+        MedicineProduct::active()->findOrFail($validated['product_id']);
+
+        $cart = $this->getOrCreateActiveCart($branchId);
+
+        $existing = PosCartItem::query()
+            ->where('cart_id', $cart->id)
+            ->where('product_id', $validated['product_id'])
+            ->where('unit_type', $validated['unit_type'])
+            ->first();
+
+        if ($existing) {
+            $existing->increment('quantity_sold');
+        } else {
+            PosCartItem::create([
+                'cart_id' => $cart->id,
+                'product_id' => $validated['product_id'],
+                'unit_type' => $validated['unit_type'],
+                'quantity_sold' => 1,
+            ]);
+        }
+
+        return response()->json($this->serializeActiveCart($branchId));
+    }
+
+    public function updateCartItem(Request $request, PosCartItem $cartItem): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+        $this->assertCartItemAccess($cartItem, $branchId);
+
+        $validated = $request->validate([
+            'quantity_sold' => ['sometimes', 'integer', 'min:1'],
+            'unit_type' => ['sometimes', 'string', 'in:Piece,Box'],
+        ]);
+
+        if (isset($validated['unit_type']) && $validated['unit_type'] !== $cartItem->unit_type) {
+            $this->changeCartItemUnitType($cartItem, $validated['unit_type']);
+
+            return response()->json($this->serializeActiveCart($branchId));
+        }
+
+        if (isset($validated['quantity_sold'])) {
+            $cartItem->update(['quantity_sold' => $validated['quantity_sold']]);
+        }
+
+        return response()->json($this->serializeActiveCart($branchId));
+    }
+
+    public function destroyCartItem(PosCartItem $cartItem): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+        $this->assertCartItemAccess($cartItem, $branchId);
+
+        $cartItem->delete();
+
+        return response()->json($this->serializeActiveCart($branchId));
     }
 
     public function store(Request $request): RedirectResponse
@@ -29,6 +99,7 @@ class PosController extends Controller
         $branchId = $this->branchIdOrFail();
 
         $validated = $request->validate([
+            'cart_id' => ['required', 'integer', 'exists:tbl_carts,id'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:tbl_products,id'],
             'items.*.unit_type' => ['required', 'string', 'in:Piece,Box'],
@@ -36,9 +107,28 @@ class PosController extends Controller
             'payment_method' => ['required', 'string', 'in:cash,gcash'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'amount_received' => ['required', 'numeric', 'min:0'],
+            'customer_name' => ['nullable', 'string', 'max:255'],
         ]);
 
+        $cart = PosCart::query()
+            ->where('id', $validated['cart_id'])
+            ->where('branch_id', $branchId)
+            ->where('user_id', auth()->id())
+            ->first();
+
+        if (! $cart) {
+            return redirect()->back()
+                ->with('error', 'Active cart not found for your branch session.');
+        }
+
         $discountAmount = (float) ($validated['discount_amount'] ?? 0);
+        $customerName = isset($validated['customer_name'])
+            ? trim($validated['customer_name'])
+            : null;
+
+        if ($customerName === '') {
+            $customerName = null;
+        }
 
         try {
             DB::beginTransaction();
@@ -96,6 +186,7 @@ class PosController extends Controller
                 'invoice_number' => $this->generateInvoiceNumber(),
                 'branch_id' => $branchId,
                 'user_id' => auth()->id(),
+                'customer_name' => $customerName,
                 'gross_amount' => $grossAmount,
                 'discount_amount' => $discountAmount,
                 'net_amount' => $netAmount,
@@ -105,6 +196,12 @@ class PosController extends Controller
             foreach ($lineItems as $lineItem) {
                 $this->createSaleItemRows($sale->id, $lineItem);
             }
+
+            PosCart::query()
+                ->where('id', $cart->id)
+                ->where('branch_id', $branchId)
+                ->where('user_id', auth()->id())
+                ->delete();
 
             DB::commit();
 
@@ -121,6 +218,97 @@ class PosController extends Controller
             return redirect()->back()
                 ->with('error', 'Failed to process sale. Please try again.');
         }
+    }
+
+    private function getOrCreateActiveCart(int $branchId): PosCart
+    {
+        return PosCart::query()->firstOrCreate(
+            [
+                'branch_id' => $branchId,
+                'user_id' => auth()->id(),
+            ]
+        );
+    }
+
+    private function activeCartQuery(int $branchId)
+    {
+        return PosCart::query()
+            ->where('branch_id', $branchId)
+            ->where('user_id', auth()->id());
+    }
+
+    private function assertCartItemAccess(PosCartItem $cartItem, int $branchId): void
+    {
+        $cartItem->loadMissing('cart');
+
+        if (
+            ! $cartItem->cart
+            || (int) $cartItem->cart->branch_id !== $branchId
+            || (int) $cartItem->cart->user_id !== (int) auth()->id()
+        ) {
+            abort(403, 'Cart item is not accessible in your branch session.');
+        }
+    }
+
+    private function changeCartItemUnitType(PosCartItem $cartItem, string $unitType): void
+    {
+        $existing = PosCartItem::query()
+            ->where('cart_id', $cartItem->cart_id)
+            ->where('product_id', $cartItem->product_id)
+            ->where('unit_type', $unitType)
+            ->where('id', '!=', $cartItem->id)
+            ->first();
+
+        if ($existing) {
+            $existing->update([
+                'quantity_sold' => $existing->quantity_sold + $cartItem->quantity_sold,
+            ]);
+            $cartItem->delete();
+
+            return;
+        }
+
+        $cartItem->update(['unit_type' => $unitType]);
+    }
+
+    /**
+     * @return array{id: int|null, items: array<int, array<string, mixed>>}
+     */
+    private function serializeActiveCart(int $branchId): array
+    {
+        $cart = $this->activeCartQuery($branchId)
+            ->with(['items.product'])
+            ->first();
+
+        if (! $cart) {
+            return [
+                'id' => null,
+                'items' => [],
+            ];
+        }
+
+        return [
+            'id' => $cart->id,
+            'items' => $cart->items->map(function (PosCartItem $item) {
+                $product = $item->product;
+                $unitType = $item->unit_type;
+                $quantity = (int) $item->quantity_sold;
+
+                $priceUsed = $unitType === 'Box'
+                    ? (float) $product->wholesale_price
+                    : (float) $product->retail_price;
+
+                return [
+                    'id' => $item->id,
+                    'key' => "{$item->product_id}-{$unitType}",
+                    'product' => $product,
+                    'unitType' => $unitType,
+                    'quantity' => $quantity,
+                    'priceUsed' => $priceUsed,
+                    'totalPrice' => round($priceUsed * $quantity, 2),
+                ];
+            })->values()->all(),
+        ];
     }
 
     private function branchProductsQuery(int $branchId)
