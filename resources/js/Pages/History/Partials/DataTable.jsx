@@ -95,7 +95,7 @@ export function DataTable({ columns, data }) {
     // Calculate totals
     const totals = useMemo(() => {
         const totalAmount = filteredData.reduce((sum, item) => {
-            return sum + (parseFloat(item.od_total_amt_due) || 0);
+            return sum + (parseFloat(item.net_amount) || 0);
         }, 0);
 
         const paymentCounts = filteredData.reduce((acc, item) => {
@@ -105,7 +105,10 @@ export function DataTable({ columns, data }) {
         }, {});
 
         return {
-            totalAmount: totalAmount.toFixed(2),
+            totalAmount: totalAmount.toLocaleString("en-PH", {
+                minimumFractionDigits: 2,
+                maximumFractionDigits: 2,
+            }),
             paymentCounts,
             totalTransactions: filteredData.length,
         };
@@ -130,7 +133,7 @@ export function DataTable({ columns, data }) {
     const handleClearFilters = useCallback(() => {
         setDateRange(undefined);
         setPaymentMethodFilter("all");
-        table.getColumn("invoice_no")?.setFilterValue("");
+        table.getColumn("invoice_number")?.setFilterValue("");
     }, [table]);
 
     // Get active filter count
@@ -138,7 +141,7 @@ export function DataTable({ columns, data }) {
         let count = 0;
         if (dateRange?.from) count++;
         if (paymentMethodFilter !== "all") count++;
-        if (table.getColumn("invoice_no")?.getFilterValue()) count++;
+        if (table.getColumn("invoice_number")?.getFilterValue()) count++;
         return count;
     }, [dateRange, paymentMethodFilter, table]);
 
@@ -164,14 +167,14 @@ export function DataTable({ columns, data }) {
         const totalsRow = {};
         columns.forEach((column) => {
             if (column.accessorKey) {
-                if (column.accessorKey === 'od_total_amt_due') {
+                if (column.accessorKey === 'net_amount') {
                     totalsRow[column.header || column.accessorKey] = `Total: ${totals.totalAmount}`;
                 } else if (column.accessorKey === 'payment_method') {
                     const paymentSummary = Object.entries(totals.paymentCounts)
                         .map(([type, count]) => `${type}: ${count}`)
                         .join(', ');
                     totalsRow[column.header || column.accessorKey] = paymentSummary;
-                } else if (column.accessorKey === 'invoice_no') {
+                } else if (column.accessorKey === 'invoice_number') {
                     totalsRow[column.header || column.accessorKey] = `Total Transactions: ${totals.totalTransactions}`;
                 } else {
                     totalsRow[column.header || column.accessorKey] = '';
@@ -228,14 +231,14 @@ export function DataTable({ columns, data }) {
         const totalsRow = columns
             .filter(col => col.accessorKey)
             .map((col) => {
-                if (col.accessorKey === 'od_total_amt_due') {
+                if (col.accessorKey === 'net_amount') {
                     return `Total: ${totals.totalAmount}`;
                 } else if (col.accessorKey === 'payment_method') {
                     const paymentSummary = Object.entries(totals.paymentCounts)
                         .map(([type, count]) => `${type}: ${count}`)
                         .join(', ');
                     return paymentSummary;
-                } else if (col.accessorKey === 'invoice_no') {
+                } else if (col.accessorKey === 'invoice_number') {
                     return `Total Transactions: ${totals.totalTransactions}`;
                 } else {
                     return "";
@@ -346,14 +349,14 @@ export function DataTable({ columns, data }) {
         const totalsRow = columns
             .filter(col => col.accessorKey)
             .map((col) => {
-                if (col.accessorKey === 'od_total_amt_due') {
+                if (col.accessorKey === 'net_amount') {
                     return `Total: ${totals.totalAmount}`;
                 } else if (col.accessorKey === 'payment_method') {
                     const paymentSummary = Object.entries(totals.paymentCounts)
                         .map(([type, count]) => `${type}: ${count}`)
                         .join(', ');
                     return paymentSummary;
-                } else if (col.accessorKey === 'invoice_no') {
+                } else if (col.accessorKey === 'invoice_number') {
                     return `Total Transactions: ${totals.totalTransactions}`;
                 } else {
                     return "";
@@ -387,9 +390,9 @@ export function DataTable({ columns, data }) {
                     <div className="flex-1 min-w-[200px]">
                         <Input
                             placeholder="Filter by Invoice Number..."
-                            value={table.getColumn("invoice_no")?.getFilterValue() || ""}
+                            value={table.getColumn("invoice_number")?.getFilterValue() || ""}
                             onChange={(e) =>
-                                table.getColumn("invoice_no")?.setFilterValue(e.target.value)
+                                table.getColumn("invoice_number")?.setFilterValue(e.target.value)
                             }
                             className="max-w-sm"
                         />

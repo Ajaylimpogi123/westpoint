@@ -1,20 +1,11 @@
-import Checkbox from "@/Components/Checkbox";
 import { Button } from "@/components/ui/button";
-import {
-    DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
-    DropdownMenuLabel,
-    DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { MoreHorizontal } from "lucide-react";
-import EditModal from "./EditModal";
-import { Printer } from "lucide-react";
+import { Eye, Printer } from "lucide-react";
 import { toast } from "sonner";
-export const columns = [
+import ViewModal from "./ViewModal";
 
+export const columns = [
     {
-        accessorKey: "invoice_no",
+        accessorKey: "invoice_number",
         header: "Invoice Number",
     },
     {
@@ -33,19 +24,19 @@ export const columns = [
         },
     },
     {
-        accessorKey: "table_number",
-        header: "Table Number",
-    },
-    {
-        accessorKey: "cust_fullname",
+        accessorKey: "customer_name",
         header: "Customer",
+        cell: ({ row }) => {
+            const name = row.getValue("customer_name");
+            return name && String(name).trim() !== "" ? name : "Walk-in";
+        },
     },
     {
-        accessorKey: "od_total_amt_due",
+        accessorKey: "net_amount",
         cell: ({ row }) => (
             <>
                 ₱
-                {Number(row.getValue("od_total_amt_due")).toLocaleString("en-PH", {
+                {Number(row.getValue("net_amount")).toLocaleString("en-PH", {
                     minimumFractionDigits: 2,
                     maximumFractionDigits: 2,
                 })}
@@ -56,35 +47,39 @@ export const columns = [
     {
         accessorKey: "payment_method",
         header: "Payment",
+        cell: ({ row }) => {
+            const method = row.getValue("payment_method");
+            return method ? String(method).toUpperCase() : "";
+        },
     },
     {
-        id: "Print",
-        header: "Print",
+        id: "actions",
+        header: "Actions",
         cell: ({ row }) => {
-            const order = row.original;
+            const sale = row.original;
 
             const handlePrintReceipt = () => {
-                if (order && order.od_id) {
-                    // Open print window similar to CartSummary
-                    window.open(route('order.print', order.od_id), '_blank');
+                if (sale?.id) {
+                    window.open(route("history.print", sale.id), "_blank");
                     toast.success("Printing receipt...");
-                } else if (order && order.invoice_no) {
-                    // If od_id is not available, try using invoice_no or order_id
-                    const orderId = order.od_id || order.id || order.order_id;
-                    if (orderId) {
-                        window.open(route('order.print', orderId), '_blank');
-                        toast.success("Printing receipt...");
-                    } else {
-                        toast.error("Cannot print receipt: Order ID not found");
-                    }
-                } else {
-                    toast.error("No order data to print");
+                    return;
                 }
+
+                toast.error("Cannot print receipt: Sale ID not found");
             };
 
-
             return (
-              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2">
+                    <ViewModal saleId={sale.id}>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 w-8 p-0"
+                            title="View sale details"
+                        >
+                            <Eye className="h-4 w-4" />
+                        </Button>
+                    </ViewModal>
                     <Button
                         variant="ghost"
                         size="sm"
