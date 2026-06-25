@@ -13,7 +13,7 @@ import { Card, CardContent } from "@/Components/ui/card";
 import { router } from "@inertiajs/react";
 import MedicineRow from "./MedicineRow";
 
-export default function MedicinesTable({ medicines, filters, branchId }) {
+export default function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
     const [expandedRows, setExpandedRows] = useState({});
 
     const toggleRow = (id) => {
@@ -119,6 +119,7 @@ export default function MedicinesTable({ medicines, filters, branchId }) {
                                         medicine={medicine}
                                         isExpanded={!!expandedRows[medicine.id]}
                                         onToggle={() => toggleRow(medicine.id)}
+                                        canEditMedicine={canEditMedicine}
                                     />
                                 ))
                             ) : (

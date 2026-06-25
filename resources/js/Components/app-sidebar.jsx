@@ -62,21 +62,6 @@ const defaultNavMain = [
             icon: LayoutDashboardIcon,
         },
         {
-            title: "Table",
-            url: route("table.index"),
-            icon: LayoutGrid,
-        },
-        {
-            title: "Category Page",
-            url: route("category.index"),
-            icon: ListIcon,
-        },
-        {
-            title: "Product Management",
-            url: route("product.index"),
-            icon: UtensilsCrossed,
-        },
-        {
             title: "Medicine Inventory",
             url: route("medicine-inventory.index"),
             icon: Pill,
@@ -85,11 +70,6 @@ const defaultNavMain = [
             title: "Point of Sale",
             url: route("pos.index"),
             icon: ShoppingCart,
-        },
-        {
-            title: "Menu",
-            url: route("menu.index"),
-            icon: ClipboardList,
         },
         {
             title: "Order History",

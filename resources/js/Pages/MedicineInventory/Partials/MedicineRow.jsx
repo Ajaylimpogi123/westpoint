@@ -16,7 +16,12 @@ import { getMedicineStockStatus } from "../lib/stockStatus";
 
 const COLUMN_COUNT = 8;
 
-export default function MedicineRow({ medicine, isExpanded, onToggle }) {
+export default function MedicineRow({
+    medicine,
+    isExpanded,
+    onToggle,
+    canEditMedicine = false,
+}) {
     const { delete: destroy } = useForm();
 
     const stockStatus = getMedicineStockStatus(
@@ -97,18 +102,19 @@ export default function MedicineRow({ medicine, isExpanded, onToggle }) {
                 <TableCell className="text-right">
                     {medicine.status === "Active" && (
                         <div className="flex items-center justify-end gap-2">
-                            <EditModal medicine={medicine}>
-                                <Button
-                                    type="button"
-                                    variant="outline"
-                                    size="sm"
-                                    className="flex items-center gap-1"
-                                    onClick={(e) => e.stopPropagation()}
-                                >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                    Edit
-                                </Button>
-                            </EditModal>
+                            {canEditMedicine && (
+                                <EditModal medicine={medicine}>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex items-center gap-1"
+                                    >
+                                        <Pencil className="h-3.5 w-3.5" />
+                                        Edit
+                                    </Button>
+                                </EditModal>
+                            )}
                             <Button
                                 type="button"
                                 variant="outline"

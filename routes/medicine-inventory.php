@@ -9,6 +9,7 @@ Route::middleware('auth')->group(function () {
     Route::post('/medicine-inventory', [MedicineInventoryController::class, 'store'])
         ->name('medicine-inventory.store');
     Route::patch('/medicine-inventory/{id}', [MedicineInventoryController::class, 'update'])
+        ->middleware('role:2,3')
         ->name('medicine-inventory.update');
     Route::delete('/medicine-inventory/{id}', [MedicineInventoryController::class, 'destroy'])
         ->name('medicine-inventory.destroy');

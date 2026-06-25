@@ -6,7 +6,7 @@ import AddModal from "./Partials/AddModal";
 import MedicinesTable from "./Partials/MedicinesTable";
 import { useMedicineAlerts } from "./Hooks/useMedicineAlerts";
 
-export default function Index({ medicines, filters, branchId }) {
+export default function Index({ medicines, filters, branchId, canEditMedicine }) {
     useMedicineAlerts();
 
     return (
@@ -42,6 +42,7 @@ export default function Index({ medicines, filters, branchId }) {
                         medicines={medicines}
                         filters={filters}
                         branchId={branchId}
+                        canEditMedicine={canEditMedicine}
                     />
                 </div>
             </div>

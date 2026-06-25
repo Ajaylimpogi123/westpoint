@@ -48,10 +48,13 @@ class MedicineInventoryController extends Controller
             ->paginate(10)
             ->withQueryString();
 
+        $roleId = (int) session('role_id');
+
         return Inertia::render('MedicineInventory/Index', [
             'medicines' => $medicines,
             'filters' => $request->only(['search', 'status']),
             'branchId' => $branchId,
+            'canEditMedicine' => in_array($roleId, [2, 3], true),
         ]);
     }
 

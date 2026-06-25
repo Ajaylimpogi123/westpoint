@@ -1,3 +1,4 @@
+import { cloneElement, isValidElement } from "react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -25,11 +26,28 @@ export default function EditModal({ medicine, children }) {
         handleSubmit,
     } = useEditMedicine(medicine);
 
+    const trigger = isValidElement(children)
+        ? cloneElement(children, {
+              onClick: (e) => {
+                  e.stopPropagation();
+                  children.props.onClick?.(e);
+                  openModal();
+              },
+          })
+        : children;
+
     return (
         <>
-            <div onClick={openModal}>{children}</div>
+            {trigger}
 
-            <Dialog open={open} onOpenChange={closeModal}>
+            <Dialog
+                open={open}
+                onOpenChange={(nextOpen) => {
+                    if (!nextOpen) {
+                        closeModal();
+                    }
+                }}
+            >
                 <DialogContent className="sm:max-w-[520px]">
                     <form onSubmit={handleSubmit}>
                         <DialogHeader>
