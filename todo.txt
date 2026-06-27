@@ -1,0 +1,9 @@
+create a feature for specific lot number and expiry for POS
+
+unified stock management
+
+ask when wholesale price gets lower when many ir ordered
+
+only admin can delete inventory
+
+Remove box POS whole sale will be on a different page

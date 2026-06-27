@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class MedicineProduct extends Model
@@ -13,6 +14,7 @@ class MedicineProduct extends Model
     protected $table = 'tbl_products';
 
     protected $fillable = [
+        'branch_id',
         'med_name',
         'dose',
         'form',
@@ -32,6 +34,11 @@ class MedicineProduct extends Model
         ];
     }
 
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
+
     public function batches(): HasMany
     {
         return $this->hasMany(ProductQty::class, 'product_id');
@@ -45,6 +52,11 @@ class MedicineProduct extends Model
     public function scopeActive($query)
     {
         return $query->where('status', 'Active');
+    }
+
+    public function scopeForBranch($query, int $branchId)
+    {
+        return $query->where('branch_id', $branchId);
     }
 
     public function softDelete(): void

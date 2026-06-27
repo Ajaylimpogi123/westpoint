@@ -8,12 +8,14 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 
 class Product extends Model
 {
-    use HasFactory;
-    use SoftDeletes;
+    use HasFactory, SoftDeletes;
+
     protected $table = 'tbl_product';
     protected $primaryKey = 'pd_id';
+
     protected $fillable = [
         'cat_id',
+        'branch_id',
         'pd_name',
         'pd_description',
         'pd_price',
@@ -25,13 +27,18 @@ class Product extends Model
         'pd_status',
     ];
 
-        // Define relationship to Category
     public function category()
     {
         return $this->belongsTo(Category::class, 'cat_id', 'cat_id');
     }
+
     public function carts()
     {
         return $this->hasMany(Cart::class, 'pd_id', 'pd_id');
+    }
+
+    public function stockInItems()
+    {
+        return $this->hasMany(StockInItem::class, 'pd_id', 'pd_id');
     }
 }

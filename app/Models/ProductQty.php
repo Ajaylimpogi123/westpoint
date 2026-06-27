@@ -15,7 +15,6 @@ class ProductQty extends Model
     protected $fillable = [
         'product_id',
         'quantity',
-        'branch_id',
         'status',
         'lot_number',
         'expiry',
@@ -32,10 +31,5 @@ class ProductQty extends Model
     public function product(): BelongsTo
     {
         return $this->belongsTo(MedicineProduct::class, 'product_id');
-    }
-
-    public function branch(): BelongsTo
-    {
-        return $this->belongsTo(Branch::class, 'branch_id');
     }
 }

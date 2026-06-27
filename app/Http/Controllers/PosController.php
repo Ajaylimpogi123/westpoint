@@ -37,7 +37,9 @@ class PosController extends Controller
             'unit_type' => ['required', 'string', 'in:Piece,Box'],
         ]);
 
-        MedicineProduct::active()->findOrFail($validated['product_id']);
+        MedicineProduct::active()
+            ->forBranch($branchId)
+            ->findOrFail($validated['product_id']);
 
         $cart = $this->getOrCreateActiveCart($branchId);
 
@@ -137,7 +139,9 @@ class PosController extends Controller
             $lineItems = [];
 
             foreach ($validated['items'] as $item) {
-                $product = MedicineProduct::active()->findOrFail($item['product_id']);
+                $product = MedicineProduct::active()
+                    ->forBranch($branchId)
+                    ->findOrFail($item['product_id']);
                 $unitType = $item['unit_type'];
                 $quantitySold = (int) $item['quantity_sold'];
 
@@ -315,15 +319,14 @@ class PosController extends Controller
     {
         return MedicineProduct::query()
             ->active()
-            ->withSum(['batches as total_stock' => function ($batchQuery) use ($branchId) {
+            ->forBranch($branchId)
+            ->withSum(['batches as total_stock' => function ($batchQuery) {
                 $batchQuery
-                    ->where('branch_id', $branchId)
                     ->where('status', 'Active')
                     ->where('quantity', '>', 0);
             }], 'quantity')
-            ->whereHas('batches', function ($batchQuery) use ($branchId) {
+            ->whereHas('batches', function ($batchQuery) {
                 $batchQuery
-                    ->where('branch_id', $branchId)
                     ->where('status', 'Active')
                     ->where('quantity', '>', 0);
             })
@@ -336,9 +339,17 @@ class PosController extends Controller
         int $piecesNeeded,
         string $productName
     ): void {
+        $belongsToBranch = MedicineProduct::query()
+            ->where('id', $productId)
+            ->forBranch($branchId)
+            ->exists();
+
+        if (! $belongsToBranch) {
+            throw new \RuntimeException("Insufficient Stock for {$productName}.");
+        }
+
         $totalAvailable = (int) ProductQty::query()
             ->where('product_id', $productId)
-            ->where('branch_id', $branchId)
             ->where('status', 'Active')
             ->where('quantity', '>', 0)
             ->lockForUpdate()
@@ -354,9 +365,17 @@ class PosController extends Controller
      */
     private function deductStockFefo(int $productId, int $branchId, int $piecesNeeded, string $productName): array
     {
+        $belongsToBranch = MedicineProduct::query()
+            ->where('id', $productId)
+            ->forBranch($branchId)
+            ->exists();
+
+        if (! $belongsToBranch) {
+            throw new \RuntimeException("Insufficient Stock for {$productName}.");
+        }
+
         $batches = ProductQty::query()
             ->where('product_id', $productId)
-            ->where('branch_id', $branchId)
             ->where('status', 'Active')
             ->where('quantity', '>', 0)
             ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
