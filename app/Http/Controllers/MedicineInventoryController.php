@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use Illuminate\Http\RedirectResponse;
@@ -47,11 +48,33 @@ class MedicineInventoryController extends Controller
             ->withQueryString();
 
         $roleId = (int) session('role_id');
+        $branchName = $branchId
+            ? Branch::query()->whereKey($branchId)->value('branch_name')
+            : null;
+
+        $products = $branchId
+            ? MedicineProduct::query()
+                ->active()
+                ->forBranch($branchId)
+                ->orderBy('med_name')
+                ->get([
+                    'id',
+                    'med_name',
+                    'brand_name',
+                    'dose',
+                    'form',
+                    'retail_price',
+                    'wholesale_price',
+                    'pack_size',
+                ])
+            : collect();
 
         return Inertia::render('MedicineInventory/Index', [
             'medicines' => $medicines,
             'filters' => $request->only(['search', 'status']),
             'branchId' => $branchId,
+            'branchName' => $branchName,
+            'products' => $products,
             'canEditMedicine' => in_array($roleId, [2, 3], true),
         ]);
     }

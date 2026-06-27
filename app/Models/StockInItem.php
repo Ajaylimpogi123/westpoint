@@ -26,8 +26,16 @@ class StockInItem extends Model
         return $this->belongsTo(StockIn::class, 'stock_in_id', 'stock_in_id');
     }
 
+    protected function casts(): array
+    {
+        return [
+            'expiry_date' => 'date',
+            'quantity_received' => 'integer',
+        ];
+    }
+
     public function product()
     {
-        return $this->belongsTo(Product::class, 'pd_id', 'pd_id');
+        return $this->belongsTo(MedicineProduct::class, 'pd_id');
     }
 }

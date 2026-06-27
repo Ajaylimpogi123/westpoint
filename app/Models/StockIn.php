@@ -16,8 +16,16 @@ class StockIn extends Model
         'supplier_name',
         'delivery_date',
         'branch_id',
-        'received_by'
+        'received_by',
+        'remarks',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'delivery_date' => 'date',
+        ];
+    }
 
     public function items()
     {
