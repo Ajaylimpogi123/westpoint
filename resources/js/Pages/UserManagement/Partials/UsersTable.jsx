@@ -9,10 +9,30 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
-import { router, useForm } from "@inertiajs/react";
-import { useEffect } from "react";
+import { router, useForm, usePage } from "@inertiajs/react";
+import { useEffect, useMemo } from "react";
+
+const SUPERADMIN_ROLE_ID = 3;
 
 export default function UsersTable({ users, branches, roles, filters }) {
+    const { auth } = usePage().props;
+    const roleId = auth?.user?.role_id;
+
+    const availableRoles = useMemo(
+        () =>
+            roleId === 2
+                ? roles.filter((role) => role.id !== SUPERADMIN_ROLE_ID)
+                : roles,
+        [roles, roleId],
+    );
+
+    const visibleUsers = useMemo(
+        () =>
+            roleId === 2
+                ? users.data.filter((user) => user.role_id !== SUPERADMIN_ROLE_ID)
+                : users.data,
+        [users.data, roleId],
+    );
     const { data: filterData, setData: setFilterData } = useForm({
         role_id: filters?.role_id || "",
         branch_id: filters?.branch_id || "",
@@ -94,7 +114,7 @@ export default function UsersTable({ users, branches, roles, filters }) {
                             }}
                         >
                             <option value="">All Roles</option>
-                            {roles.map((role) => (
+                            {availableRoles.map((role) => (
                                 <option key={role.id} value={role.id}>
                                     {role.role_name}
                                 </option>
@@ -141,8 +161,8 @@ export default function UsersTable({ users, branches, roles, filters }) {
                             </TableRow>
                         </TableHeader>
                         <TableBody>
-                            {users.data.length ? (
-                                users.data.map((user) => (
+                            {visibleUsers.length ? (
+                                visibleUsers.map((user) => (
                                     <TableRow key={user.id}>
                                         <TableCell>{user.name}</TableCell>
                                         <TableCell>{user.email}</TableCell>
