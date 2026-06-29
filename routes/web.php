@@ -1,21 +1,20 @@
 <?php
 
+use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\ProfileController;
-use App\Http\Controllers\SuperadminDashboardController;
 use Illuminate\Support\Facades\Route;
-use Inertia\Inertia;
 
 Route::redirect('/', '/login');
 
-Route::get('/dashboard', function () {
-    return Inertia::render('Dashboard');
-})->middleware(['auth', 'verified'])->name('dashboard');
+Route::get('/dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('dashboard');
 
-Route::get('/admin-dashboard', function () {
-    return Inertia::render('AdminDashboard');
-})->middleware(['auth', 'verified'])->name('admin-dashboard');
+Route::get('/admin-dashboard', [DashboardController::class, 'index'])
+    ->middleware(['auth', 'verified'])
+    ->name('admin-dashboard');
 
-Route::get('/superadmin-dashboard', [SuperadminDashboardController::class, 'index'])
+Route::get('/superadmin-dashboard', [DashboardController::class, 'index'])
     ->middleware(['auth', 'verified'])
     ->name('superadmin-dashboard');
 

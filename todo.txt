@@ -6,4 +6,4 @@ ask when wholesale price gets lower when many ir ordered
 
 Remove box POS whole sale will be on a different page
 
-
+add backend pagination for POS, make sure to work on client side loading architecture
