@@ -4,6 +4,6 @@ unified stock management
 
 ask when wholesale price gets lower when many ir ordered
 
-only admin can delete inventory
-
 Remove box POS whole sale will be on a different page
+
+

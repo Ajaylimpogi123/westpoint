@@ -15,6 +15,7 @@ export default function Index({
     branchId,
     branchName,
     products,
+    stockIns,
     canEditMedicine,
 }) {
     useMedicineAlerts();
@@ -62,6 +63,8 @@ export default function Index({
                                 branchId={branchId}
                                 branchName={branchName}
                                 products={products}
+                                stockIns={stockIns}
+                                filters={filters}
                             />
                         </TabsContent>
 

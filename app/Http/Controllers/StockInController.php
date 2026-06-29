@@ -6,6 +6,7 @@ use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\StockIn;
 use App\Models\StockInItem;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -89,6 +90,56 @@ class StockInController extends Controller
 
         return redirect()->back()
             ->with('success', 'Stock-in transaction recorded successfully.');
+    }
+
+    public function show(StockIn $stockIn): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $stockIn->branch_id !== $branchId) {
+            abort(403, 'You do not have access to this stock-in transaction.');
+        }
+
+        $stockIn->load([
+            'items' => function ($query) {
+                $query->select([
+                    'item_id',
+                    'stock_in_id',
+                    'pd_id',
+                    'batch_number',
+                    'expiry_date',
+                    'quantity_received',
+                    'unit_type',
+                ]);
+            },
+            'items.product:id,med_name,brand_name,dose,form',
+        ]);
+
+        return response()->json([
+            'stock_in' => [
+                'stock_in_id' => $stockIn->stock_in_id,
+                'supplier_name' => $stockIn->supplier_name,
+                'delivery_date' => $stockIn->delivery_date,
+                'received_by' => $stockIn->received_by,
+                'remarks' => $stockIn->remarks,
+                'created_at' => $stockIn->created_at,
+            ],
+            'items' => $stockIn->items->map(function (StockInItem $item) {
+                return [
+                    'item_id' => $item->item_id,
+                    'batch_number' => $item->batch_number,
+                    'expiry_date' => $item->expiry_date,
+                    'quantity_received' => $item->quantity_received,
+                    'unit_type' => $item->unit_type,
+                    'product' => $item->product ? [
+                        'med_name' => $item->product->med_name,
+                        'brand_name' => $item->product->brand_name,
+                        'dose' => $item->product->dose,
+                        'form' => $item->product->form,
+                    ] : null,
+                ];
+            }),
+        ]);
     }
 
     private function branchIdOrFail(): int

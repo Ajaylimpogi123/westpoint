@@ -10,8 +10,37 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 import InputError from "@/Components/InputError";
 import useAddMedicine from "../Hooks/useAddMedicine";
+
+const MEDICINE_FORMS = [
+    "Tablet",
+    "Capsule",
+    "Injectibles",
+    "Eye drops",
+    "Otic drops",
+    "Film-coated tablet",
+    "Syrup",
+    "Drops",
+    "Suppository",
+    "Vial",
+    "Ampule",
+    "Cream",
+    "Ointment",
+    "Gel",
+    "Sachet",
+    "Powder",
+    "Effervescent tablet",
+    "Patch",
+    "Medical Supply",
+];
 
 export default function AddModal({ children }) {
     const {
@@ -69,14 +98,26 @@ export default function AddModal({ children }) {
                                 </div>
                                 <div className="grid gap-3">
                                     <Label htmlFor="form">Form</Label>
-                                    <Input
-                                        id="form"
+                                    <Select
                                         value={data.form}
-                                        onChange={(e) =>
-                                            setData("form", e.target.value)
+                                        onValueChange={(value) =>
+                                            setData("form", value)
                                         }
-                                        placeholder="e.g. Tablet"
-                                    />
+                                    >
+                                        <SelectTrigger id="form">
+                                            <SelectValue placeholder="Select form" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            {MEDICINE_FORMS.map((form) => (
+                                                <SelectItem
+                                                    key={form}
+                                                    value={form}
+                                                >
+                                                    {form}
+                                                </SelectItem>
+                                            ))}
+                                        </SelectContent>
+                                    </Select>
                                     <InputError message={errors.form} />
                                 </div>
                             </div>
@@ -90,10 +131,7 @@ export default function AddModal({ children }) {
                                         min="1"
                                         value={data.pack_size}
                                         onChange={(e) =>
-                                            setData(
-                                                "pack_size",
-                                                e.target.value,
-                                            )
+                                            setData("pack_size", e.target.value)
                                         }
                                         placeholder="Pieces per box"
                                     />
@@ -105,10 +143,7 @@ export default function AddModal({ children }) {
                                         id="brand_name"
                                         value={data.brand_name}
                                         onChange={(e) =>
-                                            setData(
-                                                "brand_name",
-                                                e.target.value,
-                                            )
+                                            setData("brand_name", e.target.value)
                                         }
                                         placeholder="Brand name"
                                     />
@@ -128,10 +163,7 @@ export default function AddModal({ children }) {
                                         min="0"
                                         value={data.retail_price}
                                         onChange={(e) =>
-                                            setData(
-                                                "retail_price",
-                                                e.target.value,
-                                            )
+                                            setData("retail_price", e.target.value)
                                         }
                                         placeholder="0.00"
                                     />
@@ -148,16 +180,11 @@ export default function AddModal({ children }) {
                                         min="0"
                                         value={data.wholesale_price}
                                         onChange={(e) =>
-                                            setData(
-                                                "wholesale_price",
-                                                e.target.value,
-                                            )
+                                            setData("wholesale_price", e.target.value)
                                         }
                                         placeholder="0.00"
                                     />
-                                    <InputError
-                                        message={errors.wholesale_price}
-                                    />
+                                    <InputError message={errors.wholesale_price} />
                                 </div>
                             </div>
                         </div>

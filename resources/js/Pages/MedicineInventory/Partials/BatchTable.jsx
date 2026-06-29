@@ -15,7 +15,7 @@ import EditBatchModal from "./EditBatchModal";
 import StockStatusBadge from "./StockStatusBadge";
 import { getBatchStockStatus } from "../lib/stockStatus";
 
-export default function BatchTable({ medicine, batches }) {
+export default function BatchTable({ medicine, batches, canEditMedicine = false }) {
     const { delete: destroy } = useForm();
 
     const formatDate = (dateString) => {
@@ -95,34 +95,36 @@ export default function BatchTable({ medicine, batches }) {
                                         <StockStatusBadge status={batchStatus} />
                                     </TableCell>
                                     <TableCell className="text-right">
-                                        <div className="flex items-center justify-end gap-2">
-                                            <EditBatchModal
-                                                batch={batch}
-                                                medicine={medicine}
-                                            >
+                                        {canEditMedicine && (
+                                            <div className="flex items-center justify-end gap-2">
+                                                <EditBatchModal
+                                                    batch={batch}
+                                                    medicine={medicine}
+                                                >
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="flex items-center gap-1"
+                                                    >
+                                                        <Pencil className="h-3.5 w-3.5" />
+                                                        Edit
+                                                    </Button>
+                                                </EditBatchModal>
                                                 <Button
                                                     type="button"
                                                     variant="outline"
                                                     size="sm"
-                                                    className="flex items-center gap-1"
+                                                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                                                    onClick={() =>
+                                                        handleDeleteBatch(batch)
+                                                    }
                                                 >
-                                                    <Pencil className="h-3.5 w-3.5" />
-                                                    Edit
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    Delete
                                                 </Button>
-                                            </EditBatchModal>
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
-                                                className="flex items-center gap-1 text-red-600 hover:text-red-700"
-                                                onClick={() =>
-                                                    handleDeleteBatch(batch)
-                                                }
-                                            >
-                                                <Trash2 className="h-3.5 w-3.5" />
-                                                Delete
-                                            </Button>
-                                        </div>
+                                            </div>
+                                        )}
                                     </TableCell>
                                 </TableRow>
                                 );

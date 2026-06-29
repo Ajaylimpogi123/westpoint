@@ -3,11 +3,14 @@ import { Card, CardContent } from "@/Components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/ui/tabs";
 import { Plus } from "lucide-react";
 import StockInModal from "./StockInModal";
+import StockInHistoryTable from "./StockInHistoryTable";
 
 export default function NewTransactionsPanel({
     branchId,
     branchName,
     products,
+    stockIns,
+    filters,
 }) {
     return (
         <Card>
@@ -47,6 +50,13 @@ export default function NewTransactionsPanel({
                                 Assign a branch to your account before recording
                                 stock-in transactions.
                             </div>
+                        )}
+
+                        {branchId && (
+                            <StockInHistoryTable
+                                stockIns={stockIns}
+                                filters={filters}
+                            />
                         )}
                     </TabsContent>
 

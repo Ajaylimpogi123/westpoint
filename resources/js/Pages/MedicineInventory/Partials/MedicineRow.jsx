@@ -115,19 +115,21 @@ export default function MedicineRow({
                                     </Button>
                                 </EditModal>
                             )}
-                            <Button
-                                type="button"
-                                variant="outline"
-                                size="sm"
-                                className="flex items-center gap-1 text-red-600 hover:text-red-700"
-                                onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleDelete();
-                                }}
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Delete
-                            </Button>
+                            {canEditMedicine && (
+                                <Button
+                                    type="button"
+                                    variant="outline"
+                                    size="sm"
+                                    className="flex items-center gap-1 text-red-600 hover:text-red-700"
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleDelete();
+                                    }}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                    Delete
+                                </Button>
+                            )}
                         </div>
                     )}
                 </TableCell>
@@ -139,6 +141,7 @@ export default function MedicineRow({
                         <BatchTable
                             medicine={medicine}
                             batches={medicine.batches}
+                            canEditMedicine={canEditMedicine}
                         />
                     </TableCell>
                 </TableRow>

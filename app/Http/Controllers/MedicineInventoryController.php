@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
+use App\Models\StockIn;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -69,12 +70,22 @@ class MedicineInventoryController extends Controller
                 ])
             : collect();
 
+        $stockIns = $branchId
+            ? StockIn::query()
+                ->where('branch_id', $branchId)
+                ->orderByDesc('delivery_date')
+                ->orderByDesc('stock_in_id')
+                ->paginate(10, ['stock_in_id', 'supplier_name', 'delivery_date', 'received_by'], 'stock_in_page')
+                ->withQueryString()
+            : null;
+
         return Inertia::render('MedicineInventory/Index', [
             'medicines' => $medicines,
             'filters' => $request->only(['search', 'status']),
             'branchId' => $branchId,
             'branchName' => $branchName,
             'products' => $products,
+            'stockIns' => $stockIns,
             'canEditMedicine' => in_array($roleId, [2, 3], true),
         ]);
     }
