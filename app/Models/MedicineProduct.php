@@ -49,6 +49,16 @@ class MedicineProduct extends Model
         return $this->hasMany(ProductQty::class, 'product_id');
     }
 
+        /**
+     * productsQty — used by StockTransfer wizard eager load.
+     * Same as quantities(); kept as a named alias so the controller
+     * relationship string 'productsQty' resolves correctly.
+     */
+    public function productsQty(): HasMany
+    {
+        return $this->hasMany(ProductQty::class, 'product_id');
+    }
+
     public function scopeActive($query)
     {
         return $query->where('status', 'Active');

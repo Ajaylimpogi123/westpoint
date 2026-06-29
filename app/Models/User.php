@@ -32,10 +32,16 @@ class User extends Authenticatable
         return $this->belongsTo(Role::class);
     }
 
+    // public function branch()
+    // {
+    //     return $this->belongsTo(Branch::class);
+    // }
+
+    
     public function branch()
-    {
-        return $this->belongsTo(Branch::class);
-    }
+{
+    return $this->belongsTo(Branch::class, 'branch_id');
+}
 
     public function dashboardRouteName(): string
     {
