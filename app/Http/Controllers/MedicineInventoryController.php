@@ -6,6 +6,7 @@ use App\Models\Branch;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\StockIn;
+use App\Models\StockOut;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -57,6 +58,13 @@ class MedicineInventoryController extends Controller
             ? MedicineProduct::query()
                 ->active()
                 ->forBranch($branchId)
+                ->with(['batches' => function ($batchQuery) {
+                    $batchQuery
+                        ->where('status', 'Active')
+                        ->where('quantity', '>', 0)
+                        ->orderBy('expiry')
+                        ->select(['id', 'product_id', 'lot_number', 'expiry', 'quantity']);
+                }])
                 ->orderBy('med_name')
                 ->get([
                     'id',
@@ -79,6 +87,19 @@ class MedicineInventoryController extends Controller
                 ->withQueryString()
             : null;
 
+        $stockOuts = $branchId
+            ? StockOut::query()
+                ->where('branch_id', $branchId)
+                ->orderByDesc('created_at')
+                ->orderByDesc('stock_out_id')
+                ->paginate(
+                    10,
+                    ['stock_out_id', 'transaction_subtype', 'issued_by', 'patient_reference', 'created_at'],
+                    'stock_out_page'
+                )
+                ->withQueryString()
+            : null;
+
         return Inertia::render('MedicineInventory/Index', [
             'medicines' => $medicines,
             'filters' => $request->only(['search', 'status']),
@@ -86,6 +107,7 @@ class MedicineInventoryController extends Controller
             'branchName' => $branchName,
             'products' => $products,
             'stockIns' => $stockIns,
+            'stockOuts' => $stockOuts,
             'canEditMedicine' => in_array($roleId, [2, 3], true),
         ]);
     }

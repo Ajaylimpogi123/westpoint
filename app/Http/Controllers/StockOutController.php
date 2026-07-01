@@ -1,0 +1,158 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\MedicineProduct;
+use App\Models\ProductQty;
+use App\Models\StockOut;
+use App\Models\StockOutItem;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Throwable;
+
+class StockOutController extends Controller
+{
+    public function store(Request $request): RedirectResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        $validated = $request->validate([
+            'transaction_subtype' => ['required', 'string', Rule::in([
+                'Dispensed to patient',
+                'Internal use / consumption',
+                'Expired — write off',
+                'Damaged / lost',
+                'Returned to supplier',
+            ])],
+            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'patient_reference' => ['nullable', 'string', 'max:255'],
+            'issued_by' => ['required', 'string', 'max:255'],
+            'remarks' => ['nullable', 'string', 'max:2000'],
+            'items' => ['required', 'array', 'min:1'],
+            'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
+            'items.*.lot_number' => ['required', 'string', 'max:100'],
+            'items.*.quantity_deducted' => ['required', 'integer', 'min:1'],
+        ]);
+
+        if ((int) $validated['branch_id'] !== $branchId) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'The source branch does not match your session branch.');
+        }
+
+        try {
+            DB::transaction(function () use ($validated, $branchId) {
+                $stockOut = StockOut::create([
+                    'transaction_subtype' => $validated['transaction_subtype'],
+                    'branch_id' => $branchId,
+                    'patient_reference' => $validated['patient_reference'] ?? null,
+                    'issued_by' => $validated['issued_by'],
+                    'remarks' => $validated['remarks'] ?? null,
+                ]);
+
+                foreach ($validated['items'] as $item) {
+                    $medicine = MedicineProduct::query()
+                        ->active()
+                        ->forBranch($branchId)
+                        ->findOrFail($item['pd_id']);
+
+                    $batch = ProductQty::query()
+                        ->where('product_id', $medicine->id)
+                        ->where('lot_number', $item['lot_number'])
+                        ->lockForUpdate()
+                        ->first();
+
+                    if (! $batch || $item['quantity_deducted'] > $batch->quantity) {
+                        throw new \RuntimeException('Qty exceeds lot stock. Reduce or select another lot.');
+                    }
+
+                    $batch->decrement('quantity', $item['quantity_deducted']);
+
+                    if ($batch->fresh()->quantity <= 0) {
+                        $batch->update(['status' => 'Out of Stock']);
+                    }
+
+                    StockOutItem::create([
+                        'stock_out_id' => $stockOut->stock_out_id,
+                        'pd_id' => $medicine->id,
+                        'lot_number' => $item['lot_number'],
+                        'quantity_deducted' => $item['quantity_deducted'],
+                    ]);
+                }
+            });
+        } catch (\RuntimeException $exception) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', $exception->getMessage());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'Stock-out could not be saved. Please verify your entries and try again.');
+        }
+
+        return redirect()->back()
+            ->with('success', 'Stock-out transaction recorded successfully.');
+    }
+
+    public function show(StockOut $stockOut): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $stockOut->branch_id !== $branchId) {
+            abort(403, 'You do not have access to this stock-out transaction.');
+        }
+
+        $stockOut->load([
+            'items' => function ($query) {
+                $query->select([
+                    'item_id',
+                    'stock_out_id',
+                    'pd_id',
+                    'lot_number',
+                    'quantity_deducted',
+                ]);
+            },
+            'items.product:id,med_name,brand_name,dose,form',
+        ]);
+
+        return response()->json([
+            'stock_out' => [
+                'stock_out_id' => $stockOut->stock_out_id,
+                'transaction_subtype' => $stockOut->transaction_subtype,
+                'patient_reference' => $stockOut->patient_reference,
+                'issued_by' => $stockOut->issued_by,
+                'remarks' => $stockOut->remarks,
+                'created_at' => $stockOut->created_at,
+            ],
+            'items' => $stockOut->items->map(function (StockOutItem $item) {
+                return [
+                    'item_id' => $item->item_id,
+                    'lot_number' => $item->lot_number,
+                    'quantity_deducted' => $item->quantity_deducted,
+                    'product' => $item->product ? [
+                        'med_name' => $item->product->med_name,
+                        'brand_name' => $item->product->brand_name,
+                        'dose' => $item->product->dose,
+                        'form' => $item->product->form,
+                    ] : null,
+                ];
+            }),
+        ]);
+    }
+
+    private function branchIdOrFail(): int
+    {
+        $branchId = session('branch_id');
+
+        if (! $branchId) {
+            abort(403, 'No branch assigned to your session.');
+        }
+
+        return (int) $branchId;
+    }
+}
