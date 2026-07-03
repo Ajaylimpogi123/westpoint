@@ -22,10 +22,32 @@ class PosController extends Controller
         $branchId = $this->branchIdOrFail();
 
         return Inertia::render('Pos/Index', [
-            'products' => $this->branchProductsQuery($branchId)->get(),
             'branchId' => $branchId,
             'activeCart' => $this->serializeActiveCart($branchId),
         ]);
+    }
+
+    public function searchProducts(Request $request): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        $validated = $request->validate([
+            'search' => ['nullable', 'string', 'max:255'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+        ]);
+
+        $search = trim($validated['search'] ?? '');
+
+        $products = $this->branchProductsQuery($branchId)
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($query) use ($search) {
+                    $query->where('med_name', 'like', "%{$search}%")
+                        ->orWhere('brand_name', 'like', "%{$search}%");
+                });
+            })
+            ->paginate(50);
+
+        return response()->json($products);
     }
 
     public function storeCartItem(Request $request): JsonResponse

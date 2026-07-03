@@ -50,12 +50,24 @@ const STATS_PERIOD_OPTIONS = [
     { value: "monthly", label: "Monthly" },
 ];
 
+const PAYMENT_METHOD_OPTIONS = [
+    { value: "all", label: "All Payments" },
+    { value: "cash", label: "Cash" },
+    { value: "gcash", label: "GCash" },
+];
+
 function statsCardTitle(baseTitle, statsPeriod) {
     if (statsPeriod === "all") {
         return baseTitle;
     }
 
     return baseTitle.replace("Total", statsPeriod.charAt(0).toUpperCase() + statsPeriod.slice(1));
+}
+
+function buildStatsSubtitle(statsPeriodLabel, paymentMethodLabel) {
+    const parts = [statsPeriodLabel, paymentMethodLabel].filter(Boolean);
+
+    return parts.length > 0 ? parts.join(" · ") : null;
 }
 
 export default function Dashboard({
@@ -66,6 +78,7 @@ export default function Dashboard({
     branches = [],
     filters = {},
     statsPeriodLabel = null,
+    paymentMethodLabel = null,
     canViewAllBranches = false,
     branchName = null,
     dashboardRoute = "dashboard",
@@ -77,6 +90,8 @@ export default function Dashboard({
         (selectedStatsPeriod === "monthly"
             ? new Date().toISOString().slice(0, 7)
             : new Date().toISOString().slice(0, 10));
+    const selectedPaymentMethod = filters?.payment_method ?? "all";
+    const statsSubtitle = buildStatsSubtitle(statsPeriodLabel, paymentMethodLabel);
 
     const buildFilterParams = (overrides = {}) => ({
         branch_id: overrides.branch_id ?? selectedBranchId,
@@ -85,6 +100,7 @@ export default function Dashboard({
             (overrides.stats_period ?? selectedStatsPeriod) === "all"
                 ? undefined
                 : overrides.stats_date ?? selectedStatsDate,
+        payment_method: overrides.payment_method ?? selectedPaymentMethod,
     });
 
     const applyFilters = (overrides = {}) => {
@@ -92,6 +108,10 @@ export default function Dashboard({
 
         if (params.stats_period === "all") {
             delete params.stats_date;
+        }
+
+        if (params.payment_method === "all") {
+            delete params.payment_method;
         }
 
         router.get(route(dashboardRoute), params, {
@@ -119,6 +139,10 @@ export default function Dashboard({
         applyFilters({ stats_date: statsDate });
     };
 
+    const handlePaymentMethodChange = (paymentMethod) => {
+        applyFilters({ payment_method: paymentMethod });
+    };
+
     const scopeLabel = canViewAllBranches
         ? selectedBranchId === "all"
             ? "All Branches"
@@ -131,37 +155,15 @@ export default function Dashboard({
 
             <div className="relative z-10 py-8">
                 <div className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
-                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold tracking-tight text-white">
-                                Sales Dashboard
-                            </h1>
-                            <p className="mt-2 text-sm text-white/80">
-                                {canViewAllBranches
-                                    ? "Overview of sales performance across branches."
-                                    : `Sales overview for ${branchName ?? "your branch"}.`}
-                            </p>
-                        </div>
-
-                        {canViewAllBranches && (
-                            <div className="w-full sm:w-64">
-                                <InputLabel htmlFor="branch_id" value="Branch" />
-                                <select
-                                    id="branch_id"
-                                    name="branch_id"
-                                    value={selectedBranchId}
-                                    onChange={(e) => handleBranchChange(e.target.value)}
-                                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                                >
-                                    <option value="all">All Branches</option>
-                                    {branches.map((branch) => (
-                                        <option key={branch.id} value={branch.id}>
-                                            {branch.branch_name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                        )}
+                    <div>
+                        <h1 className="text-3xl font-bold tracking-tight text-white">
+                            Sales Dashboard
+                        </h1>
+                        <p className="mt-2 text-sm text-white/80">
+                            {canViewAllBranches
+                                ? "Overview of sales performance across branches."
+                                : `Sales overview for ${branchName ?? "your branch"}.`}
+                        </p>
                     </div>
 
                     <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
@@ -223,6 +225,43 @@ export default function Dashboard({
                                 />
                             </div>
                         )}
+
+                        <div className="w-full sm:w-48">
+                            <InputLabel htmlFor="payment_method" value="Payment Method" />
+                            <select
+                                id="payment_method"
+                                name="payment_method"
+                                value={selectedPaymentMethod}
+                                onChange={(e) => handlePaymentMethodChange(e.target.value)}
+                                className="mt-1 block w-full rounded-md border-gray-300 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            >
+                                {PAYMENT_METHOD_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {canViewAllBranches && (
+                            <div className="w-full sm:w-48">
+                                <InputLabel htmlFor="branch_id" value="Branch" />
+                                <select
+                                    id="branch_id"
+                                    name="branch_id"
+                                    value={selectedBranchId}
+                                    onChange={(e) => handleBranchChange(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border-gray-300 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                >
+                                    <option value="all">All Branches</option>
+                                    {branches.map((branch) => (
+                                        <option key={branch.id} value={branch.id}>
+                                            {branch.branch_name}
+                                        </option>
+                                    ))}
+                                </select>
+                            </div>
+                        )}
                     </div>
 
                     {scopeLabel && (
@@ -235,13 +274,20 @@ export default function Dashboard({
                                     <span className="text-white">{statsPeriodLabel}</span>
                                 </>
                             )}
+                            {paymentMethodLabel && (
+                                <>
+                                    {" "}
+                                    · Payment:{" "}
+                                    <span className="text-white">{paymentMethodLabel}</span>
+                                </>
+                            )}
                         </p>
                     )}
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <StatsCard
                             title={statsCardTitle("Total Revenue", selectedStatsPeriod)}
-                            subtitle={statsPeriodLabel}
+                            subtitle={statsSubtitle}
                             value={formatCurrency(stats?.totalRevenue ?? 0)}
                             icon={DollarSign}
                             iconColor="text-green-600"
@@ -249,7 +295,7 @@ export default function Dashboard({
                         />
                         <StatsCard
                             title={statsCardTitle("Total Transactions", selectedStatsPeriod)}
-                            subtitle={statsPeriodLabel}
+                            subtitle={statsSubtitle}
                             value={Number(stats?.totalTransactions ?? 0).toLocaleString()}
                             icon={Receipt}
                             iconColor="text-blue-600"

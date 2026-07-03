@@ -7,9 +7,18 @@ import { usePosCart } from "./Hooks/usePosCart";
 import { usePosProducts } from "./Hooks/usePosProducts";
 import { usePosAlerts } from "./Hooks/usePosAlerts";
 
-export default function Index({ products, branchId, activeCart }) {
-    const { search, setSearch, filteredProducts, allProducts } =
-        usePosProducts(products);
+export default function Index({ branchId, activeCart }) {
+    const {
+        searchInput,
+        setSearchInput,
+        products,
+        pagination,
+        loading,
+        hasSearched,
+        searchDisabled,
+        executeSearch,
+        goToPage,
+    } = usePosProducts();
     const {
         cartId,
         cartItems,
@@ -58,11 +67,16 @@ export default function Index({ products, branchId, activeCart }) {
 
                     <div className="grid gap-6 lg:grid-cols-[1fr_420px] xl:grid-cols-[1fr_480px]">
                         <ProductCatalog
-                            products={filteredProducts}
-                            search={search}
-                            onSearchChange={setSearch}
+                            products={products}
+                            searchInput={searchInput}
+                            onSearchInputChange={setSearchInput}
+                            onSearch={executeSearch}
+                            searchDisabled={searchDisabled}
+                            loading={loading}
+                            hasSearched={hasSearched}
+                            pagination={pagination}
+                            onPageChange={goToPage}
                             onAddToCart={handleAddToCart}
-                            hasProducts={allProducts.length > 0}
                         />
 
                         <CartPanel

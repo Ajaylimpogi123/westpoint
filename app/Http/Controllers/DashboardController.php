@@ -20,9 +20,11 @@ class DashboardController extends Controller
         $selectedBranchId = $this->resolveSelectedBranchId($roleId, $request);
         $statsPeriod = $this->resolveStatsPeriod($request);
         $statsDate = $this->resolveStatsDate($request, $statsPeriod);
+        $paymentMethod = $this->resolvePaymentMethod($request);
 
         $salesQuery = $this->scopedSalesQuery($roleId, $selectedBranchId);
         $statsQuery = $this->applyStatsDateFilter(clone $salesQuery, $statsPeriod, $statsDate);
+        $statsQuery = $this->applyPaymentMethodFilter($statsQuery, $paymentMethod);
 
         $totalRevenue = $statsQuery->sum('net_amount');
         $totalTransactions = $statsQuery->count();
@@ -50,8 +52,10 @@ class DashboardController extends Controller
                 'branch_id' => $selectedBranchId,
                 'stats_period' => $statsPeriod,
                 'stats_date' => $statsDate,
+                'payment_method' => $paymentMethod,
             ],
             'statsPeriodLabel' => $this->statsPeriodLabel($statsPeriod, $statsDate),
+            'paymentMethodLabel' => $this->paymentMethodLabel($paymentMethod),
             'canViewAllBranches' => $canViewAllBranches,
             'branchName' => $branchName,
             'dashboardRoute' => $this->dashboardRouteName($roleId),
@@ -143,6 +147,31 @@ class DashboardController extends Controller
         }
 
         return $query->whereBetween('created_at', [$start, $end]);
+    }
+
+    private function resolvePaymentMethod(Request $request): string
+    {
+        $paymentMethod = $request->input('payment_method', 'all');
+
+        return in_array($paymentMethod, ['all', 'cash', 'gcash'], true) ? $paymentMethod : 'all';
+    }
+
+    private function applyPaymentMethodFilter($query, string $paymentMethod)
+    {
+        if ($paymentMethod === 'all') {
+            return $query;
+        }
+
+        return $query->where('payment_method', $paymentMethod);
+    }
+
+    private function paymentMethodLabel(string $paymentMethod): ?string
+    {
+        return match ($paymentMethod) {
+            'cash' => 'Cash',
+            'gcash' => 'GCash',
+            default => null,
+        };
     }
 
     private function statsPeriodLabel(string $statsPeriod, ?string $statsDate): ?string
