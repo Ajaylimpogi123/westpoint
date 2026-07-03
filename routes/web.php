@@ -36,5 +36,6 @@ require __DIR__ . '/branch-management.php';
 require __DIR__ . '/medicine-inventory.php';
 require __DIR__ . '/stock-in.php';
 require __DIR__ . '/stock-out.php';
+require __DIR__ . '/movement-logs.php';
 require __DIR__ . '/pos.php';
 require __DIR__ . '/stocktransfer.php';

@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Branch;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use Carbon\Carbon;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -17,11 +18,14 @@ class DashboardController extends Controller
         $roleId = (int) session('role_id');
         $canViewAllBranches = in_array($roleId, [2, 3], true);
         $selectedBranchId = $this->resolveSelectedBranchId($roleId, $request);
+        $statsPeriod = $this->resolveStatsPeriod($request);
+        $statsDate = $this->resolveStatsDate($request, $statsPeriod);
 
         $salesQuery = $this->scopedSalesQuery($roleId, $selectedBranchId);
+        $statsQuery = $this->applyStatsDateFilter(clone $salesQuery, $statsPeriod, $statsDate);
 
-        $totalRevenue = (clone $salesQuery)->sum('net_amount');
-        $totalTransactions = (clone $salesQuery)->count();
+        $totalRevenue = $statsQuery->sum('net_amount');
+        $totalTransactions = $statsQuery->count();
 
         $branchName = $this->resolveBranchName($roleId, $selectedBranchId);
 
@@ -44,7 +48,10 @@ class DashboardController extends Controller
                 : [],
             'filters' => [
                 'branch_id' => $selectedBranchId,
+                'stats_period' => $statsPeriod,
+                'stats_date' => $statsDate,
             ],
+            'statsPeriodLabel' => $this->statsPeriodLabel($statsPeriod, $statsDate),
             'canViewAllBranches' => $canViewAllBranches,
             'branchName' => $branchName,
             'dashboardRoute' => $this->dashboardRouteName($roleId),
@@ -77,6 +84,79 @@ class DashboardController extends Controller
         }
 
         return $query;
+    }
+
+    private function resolveStatsPeriod(Request $request): string
+    {
+        $period = $request->input('stats_period', 'all');
+
+        return in_array($period, ['all', 'daily', 'weekly', 'monthly'], true) ? $period : 'all';
+    }
+
+    private function resolveStatsDate(Request $request, string $statsPeriod): ?string
+    {
+        if ($statsPeriod === 'all') {
+            return null;
+        }
+
+        $statsDate = $request->input('stats_date');
+
+        if ($statsPeriod === 'monthly') {
+            if (is_string($statsDate) && preg_match('/^\d{4}-\d{2}$/', $statsDate)) {
+                return $statsDate;
+            }
+
+            return now()->format('Y-m');
+        }
+
+        if (is_string($statsDate) && preg_match('/^\d{4}-\d{2}-\d{2}$/', $statsDate)) {
+            return $statsDate;
+        }
+
+        return now()->toDateString();
+    }
+
+    private function applyStatsDateFilter($query, string $statsPeriod, ?string $statsDate)
+    {
+        if ($statsPeriod === 'all' || $statsDate === null) {
+            return $query;
+        }
+
+        [$start, $end] = match ($statsPeriod) {
+            'daily' => [
+                Carbon::parse($statsDate)->startOfDay(),
+                Carbon::parse($statsDate)->endOfDay(),
+            ],
+            'weekly' => [
+                Carbon::parse($statsDate)->startOfWeek(),
+                Carbon::parse($statsDate)->endOfWeek(),
+            ],
+            'monthly' => [
+                Carbon::createFromFormat('Y-m', $statsDate)->startOfMonth(),
+                Carbon::createFromFormat('Y-m', $statsDate)->endOfMonth(),
+            ],
+            default => [null, null],
+        };
+
+        if ($start === null || $end === null) {
+            return $query;
+        }
+
+        return $query->whereBetween('created_at', [$start, $end]);
+    }
+
+    private function statsPeriodLabel(string $statsPeriod, ?string $statsDate): ?string
+    {
+        return match ($statsPeriod) {
+            'daily' => Carbon::parse($statsDate)->format('F j, Y'),
+            'weekly' => sprintf(
+                '%s – %s',
+                Carbon::parse($statsDate)->startOfWeek()->format('M j'),
+                Carbon::parse($statsDate)->endOfWeek()->format('M j, Y')
+            ),
+            'monthly' => Carbon::createFromFormat('Y-m', $statsDate)->format('F Y'),
+            default => null,
+        };
     }
 
     private function topSellingMedicines(int $roleId, string $selectedBranchId): array

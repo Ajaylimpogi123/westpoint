@@ -3,10 +3,12 @@
 namespace App\Http\Controllers;
 
 use App\Models\Branch;
+use App\Models\InventoryMovementLog;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\StockIn;
 use App\Models\StockOut;
+use App\Services\InventoryMovementLogger;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -14,6 +16,16 @@ use Inertia\Response;
 
 class MedicineInventoryController extends Controller
 {
+    private const MEDICINE_DETAIL_FIELDS = [
+        'med_name',
+        'dose',
+        'form',
+        'pack_size',
+        'brand_name',
+        'retail_price',
+        'wholesale_price',
+    ];
+
     public function index(Request $request): Response
     {
         $branchId = $this->branchId();
@@ -100,14 +112,30 @@ class MedicineInventoryController extends Controller
                 ->withQueryString()
             : null;
 
+        $movementLogPerPage = (int) $request->input('movement_log_per_page', 15);
+        $movementLogPerPage = in_array($movementLogPerPage, [10, 15, 25, 50], true)
+            ? $movementLogPerPage
+            : 15;
+
+        $movementLogs = $branchId
+            ? InventoryMovementLog::query()
+                ->where('branch_id', $branchId)
+                ->with('performer:id,name')
+                ->orderByDesc('created_at')
+                ->orderByDesc('log_id')
+                ->paginate($movementLogPerPage, ['*'], 'movement_log_page')
+                ->withQueryString()
+            : null;
+
         return Inertia::render('MedicineInventory/Index', [
             'medicines' => $medicines,
-            'filters' => $request->only(['search', 'status']),
+            'filters' => $request->only(['search', 'status', 'movement_log_per_page']),
             'branchId' => $branchId,
             'branchName' => $branchName,
             'products' => $products,
             'stockIns' => $stockIns,
             'stockOuts' => $stockOuts,
+            'movementLogs' => $movementLogs,
             'canEditMedicine' => in_array($roleId, [2, 3], true),
         ]);
     }
@@ -126,11 +154,29 @@ class MedicineInventoryController extends Controller
             'wholesale_price' => ['required', 'numeric', 'min:0'],
         ]);
 
-        MedicineProduct::create([
+        $medicine = MedicineProduct::create([
             ...$validated,
             'branch_id' => $branchId,
             'status' => 'Active',
         ]);
+
+        InventoryMovementLogger::log(
+            branchId: $branchId,
+            movementType: InventoryMovementLog::TYPE_MEDICINE_ADDED,
+            referenceLabel: "Medicine #{$medicine->id}",
+            referenceId: $medicine->id,
+            pdId: $medicine->id,
+            medicineName: $medicine->med_name,
+            remarks: $medicine->brand_name
+                ? "Brand: {$medicine->brand_name}"
+                : null,
+            metadata: [
+                'snapshot' => InventoryMovementLogger::snapshotFields(
+                    $medicine->toArray(),
+                    self::MEDICINE_DETAIL_FIELDS,
+                ),
+            ],
+        );
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', 'Medicine added successfully.');
@@ -150,7 +196,30 @@ class MedicineInventoryController extends Controller
             'wholesale_price' => ['required', 'numeric', 'min:0'],
         ]);
 
+        $before = $medicine->only(self::MEDICINE_DETAIL_FIELDS);
+
         $medicine->update($validated);
+
+        $medicine->refresh();
+
+        $changes = InventoryMovementLogger::diffFields(
+            $before,
+            $medicine->only(self::MEDICINE_DETAIL_FIELDS),
+            self::MEDICINE_DETAIL_FIELDS,
+        );
+
+        InventoryMovementLogger::log(
+            branchId: $this->branchIdOrFail(),
+            movementType: InventoryMovementLog::TYPE_MEDICINE_UPDATED,
+            referenceLabel: "Medicine #{$medicine->id}",
+            referenceId: $medicine->id,
+            pdId: $medicine->id,
+            medicineName: $medicine->med_name,
+            remarks: $changes
+                ? 'Medicine details updated.'
+                : 'Medicine saved with no field changes.',
+            metadata: ['changes' => $changes],
+        );
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', 'Medicine updated successfully.');
@@ -165,6 +234,16 @@ class MedicineInventoryController extends Controller
         ProductQty::where('product_id', $medicine->id)
             ->where('status', 'Active')
             ->update(['status' => 'Inactive']);
+
+        InventoryMovementLogger::log(
+            branchId: $branchId,
+            movementType: InventoryMovementLog::TYPE_MEDICINE_DELETED,
+            referenceLabel: "Medicine #{$medicine->id}",
+            referenceId: $medicine->id,
+            pdId: $medicine->id,
+            medicineName: $medicine->med_name,
+            remarks: 'Medicine deactivated.',
+        );
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', 'Medicine has been deactivated.');
@@ -194,6 +273,18 @@ class MedicineInventoryController extends Controller
             'expiry' => $validated['expiry'] ?? null,
         ]);
 
+        InventoryMovementLogger::log(
+            branchId: $branchId,
+            movementType: InventoryMovementLog::TYPE_ADD_STOCK,
+            referenceLabel: "Medicine #{$medicine->id}",
+            referenceId: $medicine->id,
+            pdId: $medicine->id,
+            medicineName: $medicine->med_name,
+            lotNumber: $validated['lot_number'] ?? null,
+            quantity: $quantityInPieces,
+            remarks: "{$validated['boxes_received']} box(es) added manually.",
+        );
+
         return redirect()->route('medicine-inventory.index')
             ->with('success', "Stock added: {$validated['boxes_received']} box(es) ({$quantityInPieces} pieces).");
     }
@@ -212,11 +303,39 @@ class MedicineInventoryController extends Controller
         $medicine = MedicineProduct::findOrFail($batch->product_id);
         $quantityInPieces = $validated['boxes_received'] * $medicine->pack_size;
 
+        $batchFields = ['lot_number', 'expiry', 'quantity'];
+        $before = [
+            'lot_number' => $batch->lot_number,
+            'expiry' => $batch->expiry?->format('Y-m-d'),
+            'quantity' => $batch->quantity,
+        ];
+
         $batch->update([
             'lot_number' => $validated['lot_number'] ?? null,
             'expiry' => $validated['expiry'] ?? null,
             'quantity' => $quantityInPieces,
         ]);
+
+        $after = [
+            'lot_number' => $batch->lot_number,
+            'expiry' => $batch->expiry?->format('Y-m-d'),
+            'quantity' => $batch->quantity,
+        ];
+
+        $changes = InventoryMovementLogger::diffFields($before, $after, $batchFields);
+
+        InventoryMovementLogger::log(
+            branchId: $branchId,
+            movementType: InventoryMovementLog::TYPE_BATCH_UPDATED,
+            referenceLabel: "Batch #{$batch->id}",
+            referenceId: $batch->id,
+            pdId: $medicine->id,
+            medicineName: $medicine->med_name,
+            lotNumber: $validated['lot_number'] ?? null,
+            quantity: $quantityInPieces,
+            remarks: 'Batch quantity or lot details updated.',
+            metadata: ['changes' => $changes],
+        );
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', 'Batch updated successfully.');
@@ -227,7 +346,21 @@ class MedicineInventoryController extends Controller
         $branchId = $this->branchIdOrFail();
         $batch = $this->findBranchBatchOrFail($id, $branchId);
 
+        $medicine = MedicineProduct::findOrFail($batch->product_id);
+
         $batch->update(['status' => 'Deleted']);
+
+        InventoryMovementLogger::log(
+            branchId: $branchId,
+            movementType: InventoryMovementLog::TYPE_BATCH_DELETED,
+            referenceLabel: "Batch #{$batch->id}",
+            referenceId: $batch->id,
+            pdId: $medicine->id,
+            medicineName: $medicine->med_name,
+            lotNumber: $batch->lot_number,
+            quantity: $batch->quantity,
+            remarks: 'Batch removed from inventory.',
+        );
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', 'Batch has been removed.');

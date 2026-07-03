@@ -154,7 +154,7 @@ export default function useStockOut({ branchId, products }) {
         post(route("stock-out.store"), {
             onSuccess: () => closeModal(),
             preserveScroll: true,
-            only: ["stockOuts", "medicines", "products"],
+            only: ["stockOuts", "medicines", "products", "movementLogs"],
         });
     };
 

@@ -17,6 +17,7 @@ export default function Index({
     products,
     stockIns,
     stockOuts,
+    movementLogs,
     canEditMedicine,
 }) {
     useMedicineAlerts();
@@ -92,7 +93,11 @@ export default function Index({
                         </TabsContent>
 
                         <TabsContent value="movement-logs">
-                            <MovementLogsPanel />
+                            <MovementLogsPanel
+                                branchId={branchId}
+                                movementLogs={movementLogs}
+                                filters={filters}
+                            />
                         </TabsContent>
                     </Tabs>
                 </div>

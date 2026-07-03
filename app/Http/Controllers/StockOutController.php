@@ -6,6 +6,8 @@ use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\StockOut;
 use App\Models\StockOutItem;
+use App\Models\InventoryMovementLog;
+use App\Services\InventoryMovementLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -81,6 +83,18 @@ class StockOutController extends Controller
                         'lot_number' => $item['lot_number'],
                         'quantity_deducted' => $item['quantity_deducted'],
                     ]);
+
+                    InventoryMovementLogger::log(
+                        branchId: $branchId,
+                        movementType: InventoryMovementLog::TYPE_STOCK_OUT,
+                        referenceLabel: "Stock Out #{$stockOut->stock_out_id}",
+                        referenceId: $stockOut->stock_out_id,
+                        pdId: $medicine->id,
+                        medicineName: $medicine->med_name,
+                        lotNumber: $item['lot_number'],
+                        quantity: -$item['quantity_deducted'],
+                        remarks: $validated['remarks'] ?? $validated['transaction_subtype'],
+                    );
                 }
             });
         } catch (\RuntimeException $exception) {

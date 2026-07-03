@@ -95,7 +95,7 @@ export default function useStockIn({ branchId, products }) {
         post(route("stock-in.store"), {
             onSuccess: () => closeModal(),
             preserveScroll: true,
-            only: ["stockIns", "medicines"],
+            only: ["stockIns", "medicines", "movementLogs"],
         });
     };
 

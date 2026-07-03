@@ -22,13 +22,16 @@ function formatCurrency(amount) {
     })}`;
 }
 
-function StatsCard({ title, value, icon: Icon, iconColor, iconBg }) {
+function StatsCard({ title, value, icon: Icon, iconColor, iconBg, subtitle }) {
     return (
         <Card className="border-0 shadow-sm">
             <CardContent className="p-6">
                 <div className="flex items-start justify-between gap-4">
                     <div>
                         <p className="text-sm text-muted-foreground">{title}</p>
+                        {subtitle && (
+                            <p className="mt-1 text-xs text-muted-foreground">{subtitle}</p>
+                        )}
                         <p className="mt-2 text-3xl font-bold tracking-tight">{value}</p>
                     </div>
                     <div className={`rounded-lg p-3 ${iconBg}`}>
@@ -40,6 +43,21 @@ function StatsCard({ title, value, icon: Icon, iconColor, iconBg }) {
     );
 }
 
+const STATS_PERIOD_OPTIONS = [
+    { value: "all", label: "All Time" },
+    { value: "daily", label: "Daily" },
+    { value: "weekly", label: "Weekly" },
+    { value: "monthly", label: "Monthly" },
+];
+
+function statsCardTitle(baseTitle, statsPeriod) {
+    if (statsPeriod === "all") {
+        return baseTitle;
+    }
+
+    return baseTitle.replace("Total", statsPeriod.charAt(0).toUpperCase() + statsPeriod.slice(1));
+}
+
 export default function Dashboard({
     stats,
     topMedicines = [],
@@ -47,22 +65,58 @@ export default function Dashboard({
     charts = {},
     branches = [],
     filters = {},
+    statsPeriodLabel = null,
     canViewAllBranches = false,
     branchName = null,
     dashboardRoute = "dashboard",
 }) {
     const selectedBranchId = filters?.branch_id ?? "all";
+    const selectedStatsPeriod = filters?.stats_period ?? "all";
+    const selectedStatsDate =
+        filters?.stats_date ??
+        (selectedStatsPeriod === "monthly"
+            ? new Date().toISOString().slice(0, 7)
+            : new Date().toISOString().slice(0, 10));
+
+    const buildFilterParams = (overrides = {}) => ({
+        branch_id: overrides.branch_id ?? selectedBranchId,
+        stats_period: overrides.stats_period ?? selectedStatsPeriod,
+        stats_date:
+            (overrides.stats_period ?? selectedStatsPeriod) === "all"
+                ? undefined
+                : overrides.stats_date ?? selectedStatsDate,
+    });
+
+    const applyFilters = (overrides = {}) => {
+        const params = buildFilterParams(overrides);
+
+        if (params.stats_period === "all") {
+            delete params.stats_date;
+        }
+
+        router.get(route(dashboardRoute), params, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+    };
 
     const handleBranchChange = (branchId) => {
-        router.get(
-            route(dashboardRoute),
-            { branch_id: branchId },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-            },
-        );
+        applyFilters({ branch_id: branchId });
+    };
+
+    const handleStatsPeriodChange = (statsPeriod) => {
+        applyFilters({
+            stats_period: statsPeriod,
+            stats_date:
+                statsPeriod === "monthly"
+                    ? new Date().toISOString().slice(0, 7)
+                    : new Date().toISOString().slice(0, 10),
+        });
+    };
+
+    const handleStatsDateChange = (statsDate) => {
+        applyFilters({ stats_date: statsDate });
     };
 
     const scopeLabel = canViewAllBranches
@@ -110,22 +164,92 @@ export default function Dashboard({
                         )}
                     </div>
 
+                    <div className="flex flex-col gap-4 sm:flex-row sm:items-end">
+                        <div className="w-full sm:w-48">
+                            <InputLabel htmlFor="stats_period" value="Stats Period" />
+                            <select
+                                id="stats_period"
+                                name="stats_period"
+                                value={selectedStatsPeriod}
+                                onChange={(e) => handleStatsPeriodChange(e.target.value)}
+                                className="mt-1 block w-full rounded-md border-gray-300 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            >
+                                {STATS_PERIOD_OPTIONS.map((option) => (
+                                    <option key={option.value} value={option.value}>
+                                        {option.label}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {selectedStatsPeriod === "daily" && (
+                            <div className="w-full sm:w-48">
+                                <InputLabel htmlFor="stats_date" value="Date" />
+                                <input
+                                    id="stats_date"
+                                    name="stats_date"
+                                    type="date"
+                                    value={selectedStatsDate}
+                                    onChange={(e) => handleStatsDateChange(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border-gray-300 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                />
+                            </div>
+                        )}
+
+                        {selectedStatsPeriod === "weekly" && (
+                            <div className="w-full sm:w-48">
+                                <InputLabel htmlFor="stats_week" value="Week Of" />
+                                <input
+                                    id="stats_week"
+                                    name="stats_week"
+                                    type="date"
+                                    value={selectedStatsDate}
+                                    onChange={(e) => handleStatsDateChange(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border-gray-300 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                />
+                            </div>
+                        )}
+
+                        {selectedStatsPeriod === "monthly" && (
+                            <div className="w-full sm:w-48">
+                                <InputLabel htmlFor="stats_month" value="Month" />
+                                <input
+                                    id="stats_month"
+                                    name="stats_month"
+                                    type="month"
+                                    value={selectedStatsDate}
+                                    onChange={(e) => handleStatsDateChange(e.target.value)}
+                                    className="mt-1 block w-full rounded-md border-gray-300 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                                />
+                            </div>
+                        )}
+                    </div>
+
                     {scopeLabel && (
                         <p className="text-sm font-medium text-white/90">
                             Viewing: <span className="text-white">{scopeLabel}</span>
+                            {statsPeriodLabel && (
+                                <>
+                                    {" "}
+                                    · Stats:{" "}
+                                    <span className="text-white">{statsPeriodLabel}</span>
+                                </>
+                            )}
                         </p>
                     )}
 
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <StatsCard
-                            title="Total Revenue"
+                            title={statsCardTitle("Total Revenue", selectedStatsPeriod)}
+                            subtitle={statsPeriodLabel}
                             value={formatCurrency(stats?.totalRevenue ?? 0)}
                             icon={DollarSign}
                             iconColor="text-green-600"
                             iconBg="bg-green-50"
                         />
                         <StatsCard
-                            title="Total Transactions"
+                            title={statsCardTitle("Total Transactions", selectedStatsPeriod)}
+                            subtitle={statsPeriodLabel}
                             value={Number(stats?.totalTransactions ?? 0).toLocaleString()}
                             icon={Receipt}
                             iconColor="text-blue-600"

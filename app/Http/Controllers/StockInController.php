@@ -6,6 +6,8 @@ use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\StockIn;
 use App\Models\StockInItem;
+use App\Models\InventoryMovementLog;
+use App\Services\InventoryMovementLogger;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -78,6 +80,18 @@ class StockInController extends Controller
                             'expiry' => $item['expiry_date'],
                         ]);
                     }
+
+                    InventoryMovementLogger::log(
+                        branchId: $branchId,
+                        movementType: InventoryMovementLog::TYPE_STOCK_IN,
+                        referenceLabel: "Stock In #{$stockIn->stock_in_id}",
+                        referenceId: $stockIn->stock_in_id,
+                        pdId: $medicine->id,
+                        medicineName: $medicine->med_name,
+                        lotNumber: $item['batch_number'],
+                        quantity: $item['quantity_received'],
+                        remarks: $validated['remarks'] ?? "Supplier: {$validated['supplier_name']}",
+                    );
                 }
             });
         } catch (Throwable $exception) {
