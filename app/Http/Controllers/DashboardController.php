@@ -236,7 +236,7 @@ class DashboardController extends Controller
         $rows = $this->scopedSalesQuery($roleId, $selectedBranchId)
             ->where('created_at', '>=', $startDate)
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as period, SUM(net_amount) as revenue")
-            ->groupBy('period')
+            ->groupByRaw("DATE_FORMAT(created_at, '%Y-%m')")
             ->orderBy('period')
             ->pluck('revenue', 'period');
 
@@ -271,7 +271,7 @@ class DashboardController extends Controller
                 DB::raw("COALESCE(NULLIF(TRIM(tbl_products.form), ''), 'Uncategorized') as category"),
                 DB::raw('SUM(tbl_sales_items.total_price) as revenue'),
             ])
-            ->groupBy('category')
+            ->groupByRaw("COALESCE(NULLIF(TRIM(tbl_products.form), ''), 'Uncategorized')")
             ->orderByDesc('revenue')
             ->get();
 
