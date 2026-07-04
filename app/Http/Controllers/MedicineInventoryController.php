@@ -92,12 +92,26 @@ class MedicineInventoryController extends Controller
                 ])
             : collect();
 
+        $stockInPerPage = (int) $request->input('stock_in_per_page', 10);
+        $stockInPerPage = in_array($stockInPerPage, [10, 15, 25, 50], true)
+            ? $stockInPerPage
+            : 10;
+
+        $stockOutPerPage = (int) $request->input('stock_out_per_page', 10);
+        $stockOutPerPage = in_array($stockOutPerPage, [10, 15, 25, 50], true)
+            ? $stockOutPerPage
+            : 10;
+
         $stockIns = $branchId
             ? StockIn::query()
                 ->where('branch_id', $branchId)
                 ->orderByDesc('delivery_date')
                 ->orderByDesc('stock_in_id')
-                ->paginate(10, ['stock_in_id', 'supplier_name', 'delivery_date', 'received_by'], 'stock_in_page')
+                ->paginate(
+                    $stockInPerPage,
+                    ['stock_in_id', 'supplier_name', 'delivery_date', 'received_by'],
+                    'stock_in_page'
+                )
                 ->withQueryString()
             : null;
 
@@ -107,7 +121,7 @@ class MedicineInventoryController extends Controller
                 ->orderByDesc('created_at')
                 ->orderByDesc('stock_out_id')
                 ->paginate(
-                    10,
+                    $stockOutPerPage,
                     ['stock_out_id', 'transaction_subtype', 'issued_by', 'patient_reference', 'created_at'],
                     'stock_out_page'
                 )
@@ -131,7 +145,14 @@ class MedicineInventoryController extends Controller
 
         return Inertia::render('MedicineInventory/Index', [
             'medicines' => $medicines,
-            'filters' => $request->only(['search', 'status', 'stock_level', 'movement_log_per_page']),
+            'filters' => $request->only([
+                'search',
+                'status',
+                'stock_level',
+                'movement_log_per_page',
+                'stock_in_per_page',
+                'stock_out_per_page',
+            ]),
             'branchId' => $branchId,
             'branchName' => $branchName,
             'products' => $products,

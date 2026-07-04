@@ -1,4 +1,5 @@
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
     Table,
     TableBody,
@@ -11,6 +12,8 @@ import { router } from "@inertiajs/react";
 import { Eye } from "lucide-react";
 import StockInViewModal from "./StockInViewModal";
 
+const PER_PAGE_OPTIONS = [10, 15, 25, 50];
+
 const formatDate = (dateString) => {
     if (!dateString) return "-";
     return new Date(dateString).toLocaleDateString("en-PH", {
@@ -21,22 +24,64 @@ const formatDate = (dateString) => {
 };
 
 export default function StockInHistoryTable({ stockIns, filters }) {
-    const goToPage = (page) => {
+    const perPage = Number(filters?.stock_in_per_page) || 10;
+
+    const reload = (params) => {
         router.get(
             route("medicine-inventory.index"),
-            { ...filters, stock_in_page: page },
+            {
+                ...filters,
+                stock_in_per_page: perPage,
+                ...params,
+            },
             {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
-                only: ["stockIns"],
+                only: ["stockIns", "filters"],
             },
         );
     };
 
+    const goToPage = (page) => {
+        reload({ stock_in_page: page });
+    };
+
+    const changePerPage = (value) => {
+        reload({
+            stock_in_per_page: value,
+            stock_in_page: 1,
+        });
+    };
+
     return (
         <div className="space-y-4">
-            <h3 className="text-sm font-semibold">Transaction History</h3>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <h3 className="text-sm font-semibold">Transaction History</h3>
+
+                <div className="flex items-center gap-2">
+                    <Label
+                        htmlFor="stock_in_per_page"
+                        className="text-sm text-muted-foreground"
+                    >
+                        Per page
+                    </Label>
+                    <select
+                        id="stock_in_per_page"
+                        value={perPage}
+                        onChange={(event) =>
+                            changePerPage(Number(event.target.value))
+                        }
+                        className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                    >
+                        {PER_PAGE_OPTIONS.map((option) => (
+                            <option key={option} value={option}>
+                                {option}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+            </div>
 
             <div className="rounded-md border">
                 <Table>
@@ -94,41 +139,44 @@ export default function StockInHistoryTable({ stockIns, filters }) {
                 </Table>
             </div>
 
-            {stockIns?.data?.length > 0 && stockIns.last_page > 1 && (
+            {stockIns?.data?.length > 0 && (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-muted-foreground">
                         Showing {stockIns.from ?? 0} to {stockIns.to ?? 0} of{" "}
                         {stockIns.total ?? 0} transactions
                     </p>
-                    <div className="flex items-center gap-2">
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                                goToPage(stockIns.current_page - 1)
-                            }
-                            disabled={stockIns.current_page <= 1}
-                        >
-                            Previous
-                        </Button>
-                        <span className="text-sm text-muted-foreground">
-                            Page {stockIns.current_page} of {stockIns.last_page}
-                        </span>
-                        <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={() =>
-                                goToPage(stockIns.current_page + 1)
-                            }
-                            disabled={
-                                stockIns.current_page >= stockIns.last_page
-                            }
-                        >
-                            Next
-                        </Button>
-                    </div>
+                    {stockIns.last_page > 1 && (
+                        <div className="flex items-center gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                    goToPage(stockIns.current_page - 1)
+                                }
+                                disabled={stockIns.current_page <= 1}
+                            >
+                                Previous
+                            </Button>
+                            <span className="text-sm text-muted-foreground">
+                                Page {stockIns.current_page} of{" "}
+                                {stockIns.last_page}
+                            </span>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                onClick={() =>
+                                    goToPage(stockIns.current_page + 1)
+                                }
+                                disabled={
+                                    stockIns.current_page >= stockIns.last_page
+                                }
+                            >
+                                Next
+                            </Button>
+                        </div>
+                    )}
                 </div>
             )}
         </div>
