@@ -18,6 +18,8 @@ class MedicineProduct extends Model
         'med_name',
         'dose',
         'form',
+        'category',
+        'is_generic',
         'pack_size',
         'brand_name',
         'retail_price',
@@ -31,6 +33,7 @@ class MedicineProduct extends Model
             'pack_size' => 'integer',
             'retail_price' => 'decimal:2',
             'wholesale_price' => 'decimal:2',
+            'is_generic' => 'boolean',
         ];
     }
 
@@ -67,6 +70,39 @@ class MedicineProduct extends Model
     public function scopeForBranch($query, int $branchId)
     {
         return $query->where('branch_id', $branchId);
+    }
+
+    public function scopeStockLevel($query, ?string $level)
+    {
+        if (! $level || $level === 'all') {
+            return $query;
+        }
+
+        $stockSql = '(SELECT COALESCE(SUM(quantity), 0) FROM products_qty pq WHERE pq.product_id = tbl_products.id AND pq.status != \'Deleted\')';
+
+        return match ($level) {
+            'out_of_stock' => $query->whereRaw("{$stockSql} = 0"),
+            'low_stock' => $query
+                ->whereRaw("{$stockSql} > 0")
+                ->whereRaw("{$stockSql} <= (tbl_products.pack_size * 2)"),
+            'in_stock' => $query->whereRaw("{$stockSql} > (tbl_products.pack_size * 2)"),
+            'has_expired' => $query->whereHas('batches', function ($batchQuery) {
+                $batchQuery
+                    ->where('status', '!=', 'Deleted')
+                    ->where('quantity', '>', 0)
+                    ->whereNotNull('expiry')
+                    ->whereDate('expiry', '<', now()->toDateString());
+            }),
+            'expiring_soon' => $query->whereHas('batches', function ($batchQuery) {
+                $batchQuery
+                    ->where('status', '!=', 'Deleted')
+                    ->where('quantity', '>', 0)
+                    ->whereNotNull('expiry')
+                    ->whereDate('expiry', '>=', now()->toDateString())
+                    ->whereDate('expiry', '<=', now()->addDays(30)->toDateString());
+            }),
+            default => $query,
+        };
     }
 
     public function softDelete(): void

@@ -32,18 +32,32 @@ class PosController extends Controller
         $branchId = $this->branchIdOrFail();
 
         $validated = $request->validate([
-            'search' => ['nullable', 'string', 'max:255'],
-            'page' => ['sometimes', 'integer', 'min:1'],
+            'search'       => ['nullable', 'string', 'max:255'],
+            'page'         => ['sometimes', 'integer', 'min:1'],
+            'form'         => ['nullable', 'string', 'max:100'],
+            'best_seller'  => ['sometimes', 'boolean'],
+            'in_stock'     => ['sometimes', 'boolean'],
+            'generic_only' => ['sometimes', 'boolean'],
         ]);
 
-        $search = trim($validated['search'] ?? '');
+        $search      = trim($validated['search'] ?? '');
+        $form        = trim($validated['form'] ?? '');
+        $bestSeller  = $request->boolean('best_seller', false);
+        $inStock     = $request->boolean('in_stock', true);
+        $genericOnly = $request->boolean('generic_only', false);
 
-        $products = $this->branchProductsQuery($branchId)
+        $products = $this->branchProductsQuery($branchId, $inStock, $bestSeller)
             ->when($search !== '', function ($query) use ($search) {
-                $query->where(function ($query) use ($search) {
-                    $query->where('med_name', 'like', "%{$search}%")
+                $query->where(function ($q) use ($search) {
+                    $q->where('med_name', 'like', "%{$search}%")
                         ->orWhere('brand_name', 'like', "%{$search}%");
                 });
+            })
+            ->when($form !== '', function ($query) use ($form) {
+                $query->where('tbl_products.form', $form);
+            })
+            ->when($genericOnly, function ($query) {
+                $query->where('tbl_products.is_generic', true);
             })
             ->paginate(50);
 
@@ -337,22 +351,34 @@ class PosController extends Controller
         ];
     }
 
-    private function branchProductsQuery(int $branchId)
+    private function branchProductsQuery(int $branchId, bool $inStock = true, bool $bestSeller = false)
     {
-        return MedicineProduct::query()
+        $query = MedicineProduct::query()
             ->active()
             ->forBranch($branchId)
             ->withSum(['batches as total_stock' => function ($batchQuery) {
                 $batchQuery
                     ->where('status', 'Active')
                     ->where('quantity', '>', 0);
-            }], 'quantity')
-            ->whereHas('batches', function ($batchQuery) {
+            }], 'quantity');
+
+        if ($inStock) {
+            $query->whereHas('batches', function ($batchQuery) {
                 $batchQuery
                     ->where('status', 'Active')
                     ->where('quantity', '>', 0);
-            })
-            ->orderBy('med_name');
+            });
+        }
+
+        if ($bestSeller) {
+            $query->orderByRaw(
+                '(SELECT COALESCE(SUM(si.quantity_sold), 0) FROM tbl_sales_items si WHERE si.product_id = tbl_products.id) DESC'
+            );
+        } else {
+            $query->orderBy('med_name');
+        }
+
+        return $query;
     }
 
     private function assertSufficientBranchStock(

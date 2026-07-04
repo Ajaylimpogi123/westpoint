@@ -62,6 +62,19 @@ export default function MedicinesTable({ medicines, filters, branchId, canEditMe
         );
     };
 
+    const handleStockLevelFilter = (stock_level) => {
+        router.get(
+            route("medicine-inventory.index"),
+            { ...filters, stock_level, page: 1 },
+            {
+                preserveState: true,
+                preserveScroll: true,
+                replace: true,
+                only: ["medicines", "filters"],
+            },
+        );
+    };
+
     return (
         <Card>
             <CardContent className="space-y-4 pt-6">
@@ -72,7 +85,7 @@ export default function MedicinesTable({ medicines, filters, branchId, canEditMe
                     </div>
                 )}
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                     <Input
                         placeholder="Search medicines..."
                         defaultValue={filters?.search || ""}
@@ -83,16 +96,56 @@ export default function MedicinesTable({ medicines, filters, branchId, canEditMe
                             }
                         }}
                     />
-                    <select
-                        className="flex h-10 w-full max-w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm"
-                        value={filters?.status || "Active"}
-                        onChange={(e) => handleStatusFilter(e.target.value)}
-                    >
-                        <option value="Active">Active</option>
-                        <option value="Inactive">Inactive</option>
-                        <option value="Deleted">Deleted</option>
-                        <option value="all">All Statuses</option>
-                    </select>
+                    <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
+                        <div className="flex flex-col gap-1">
+                            <label
+                                htmlFor="medicine-status-filter"
+                                className="text-xs font-medium text-muted-foreground"
+                            >
+                                Medicine Status
+                            </label>
+                            <select
+                                id="medicine-status-filter"
+                                className="flex h-10 w-full min-w-[160px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={filters?.status || "Active"}
+                                onChange={(e) =>
+                                    handleStatusFilter(e.target.value)
+                                }
+                            >
+                                <option value="Active">Active</option>
+                                <option value="Inactive">Inactive</option>
+                                <option value="Deleted">Deleted</option>
+                                <option value="all">All Statuses</option>
+                            </select>
+                        </div>
+                        <div className="flex flex-col gap-1">
+                            <label
+                                htmlFor="stock-level-filter"
+                                className="text-xs font-medium text-muted-foreground"
+                            >
+                                Stock Level
+                            </label>
+                            <select
+                                id="stock-level-filter"
+                                className="flex h-10 w-full min-w-[180px] rounded-md border border-input bg-background px-3 py-2 text-sm"
+                                value={filters?.stock_level || "all"}
+                                onChange={(e) =>
+                                    handleStockLevelFilter(e.target.value)
+                                }
+                            >
+                                <option value="all">All Stock Levels</option>
+                                <option value="out_of_stock">Out of Stock</option>
+                                <option value="low_stock">Low Stock</option>
+                                <option value="in_stock">In Stock</option>
+                                <option value="has_expired">
+                                    Has Expired Batches
+                                </option>
+                                <option value="expiring_soon">
+                                    Expiring Soon (30 days)
+                                </option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="rounded-md border">

@@ -11,6 +11,8 @@ export default function Index({ branchId, activeCart }) {
     const {
         searchInput,
         setSearchInput,
+        filters,
+        updateFilter,
         products,
         pagination,
         loading,
@@ -70,6 +72,8 @@ export default function Index({ branchId, activeCart }) {
                             products={products}
                             searchInput={searchInput}
                             onSearchInputChange={setSearchInput}
+                            filters={filters}
+                            onFilterChange={updateFilter}
                             onSearch={executeSearch}
                             searchDisabled={searchDisabled}
                             loading={loading}

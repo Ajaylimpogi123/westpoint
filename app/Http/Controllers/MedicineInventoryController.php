@@ -31,9 +31,11 @@ class MedicineInventoryController extends Controller
         $branchId = $this->branchId();
         $search = $request->input('search');
         $status = $request->input('status', 'Active');
+        $stockLevel = $request->input('stock_level', 'all');
 
         $medicines = MedicineProduct::query()
             ->when($branchId, fn ($query) => $query->forBranch($branchId))
+            ->stockLevel($stockLevel)
             ->when($branchId, function ($query) {
                 $query
                     ->withSum(['batches as total_stock' => function ($batchQuery) {
@@ -129,7 +131,7 @@ class MedicineInventoryController extends Controller
 
         return Inertia::render('MedicineInventory/Index', [
             'medicines' => $medicines,
-            'filters' => $request->only(['search', 'status', 'movement_log_per_page']),
+            'filters' => $request->only(['search', 'status', 'stock_level', 'movement_log_per_page']),
             'branchId' => $branchId,
             'branchName' => $branchName,
             'products' => $products,
