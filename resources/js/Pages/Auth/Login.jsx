@@ -206,16 +206,7 @@ export default function Login({ status, canResetPassword }) {
                     </CardContent>
                 </Card>
 
-                {/* Register link */}
-                <p className="text-center text-xs text-muted-foreground mt-4">
-                    Don't have an account?{" "}
-                    <Link
-                        href={route("register")}
-                        className="text-foreground font-medium underline-offset-4 hover:underline"
-                    >
-                        Register
-                    </Link>
-                </p>
+
             </div>
         </div>
     );
