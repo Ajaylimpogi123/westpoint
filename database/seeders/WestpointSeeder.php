@@ -3,8 +3,6 @@
 namespace Database\Seeders;
 
 use App\Models\Branch;
-use App\Models\MedicineProduct;
-use App\Models\ProductQty;
 use App\Models\Role;
 use App\Models\User;
 use Illuminate\Database\Seeder;
@@ -57,33 +55,6 @@ class WestpointSeeder extends Seeder
             ]
         );
 
-        $product = MedicineProduct::firstOrCreate(
-            [
-                'branch_id' => $branch->id,
-                'med_name' => 'Paracetamol',
-                'dose' => '500mg',
-                'form' => 'Tablet',
-                'brand_name' => 'Bioflu',
-            ],
-            [
-                'pack_size' => 10,
-                'retail_price' => 5.00,
-                'wholesale_price' => 45.00,
-                'status' => 'Active',
-                'is_generic' => false,
-            ]
-        );
-
-        ProductQty::firstOrCreate(
-            [
-                'product_id' => $product->id,
-                'lot_number' => 'LOT-001',
-            ],
-            [
-                'quantity' => 100,
-                'status' => 'Active',
-                'expiry' => now()->addYear()->toDateString(),
-            ]
-        );
+        $this->call(MedicineSampleSeeder::class);
     }
 }
