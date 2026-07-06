@@ -3,29 +3,46 @@
 namespace Tests\Feature\Auth;
 
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Support\SeedsWestpoint;
 use Tests\TestCase;
 
 class RegistrationTest extends TestCase
 {
     use RefreshDatabase;
+    use SeedsWestpoint;
 
-    public function test_registration_screen_can_be_rendered(): void
+    protected function setUp(): void
     {
-        $response = $this->get('/register');
-
-        $response->assertStatus(200);
+        parent::setUp();
+        $this->seedWestpoint();
     }
 
-    public function test_new_users_can_register(): void
+    public function test_registration_screen_requires_admin_or_superadmin(): void
     {
-        $response = $this->post('/register', [
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-            'password' => 'password',
-            'password_confirmation' => 'password',
-        ]);
+        $this->get('/register')->assertRedirect('/login');
 
-        $this->assertAuthenticated();
-        $response->assertRedirect(route('dashboard', absolute: false));
+        $this->actingAsWithSession($this->staff)
+            ->get('/register')
+            ->assertForbidden();
+
+        $this->actingAsWithSession($this->admin)
+            ->get('/register')
+            ->assertOk();
+    }
+
+    public function test_admin_can_register_new_user(): void
+    {
+        $response = $this->actingAsWithSession($this->admin)
+            ->post('/register', [
+                'name' => 'Test User',
+                'email' => 'test@example.com',
+                'password' => 'password',
+                'password_confirmation' => 'password',
+                'branch_id' => $this->branchA->id,
+                'role_id' => 1,
+            ]);
+
+        $response->assertRedirect(route('user-management.index', absolute: false));
+        $this->assertDatabaseHas('users', ['email' => 'test@example.com']);
     }
 }

@@ -65,12 +65,15 @@ class WestpointFeatureTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_admin_and_superadmin_can_access_branch_management(): void
+    public function test_admin_cannot_access_branch_management(): void
     {
         $this->actingAsWithSession($this->admin)
             ->get('/branch-management')
-            ->assertOk();
+            ->assertForbidden();
+    }
 
+    public function test_superadmin_can_access_branch_management(): void
+    {
         $this->actingAsWithSession($this->superadmin)
             ->get('/branch-management')
             ->assertOk();
@@ -232,23 +235,34 @@ class WestpointFeatureTest extends TestCase
 
     public function test_branch_management_crud(): void
     {
-        $this->actingAsWithSession($this->admin)
+        $this->actingAsWithSession($this->superadmin)
             ->post('/branch-management', ['branch_name' => 'New Branch'])
             ->assertRedirect(route('branch-management.index'));
 
         $branch = \App\Models\Branch::where('branch_name', 'New Branch')->first();
         $this->assertNotNull($branch);
 
-        $this->actingAsWithSession($this->admin)
+        $this->actingAsWithSession($this->superadmin)
             ->patch("/branch-management/{$branch->id}", ['branch_name' => 'Renamed Branch'])
             ->assertRedirect(route('branch-management.index'));
 
         $this->assertDatabaseHas('branches', ['branch_name' => 'Renamed Branch']);
     }
 
-    public function test_user_management_is_accessible_to_authenticated_users(): void
+    public function test_staff_cannot_access_user_management(): void
     {
         $this->actingAsWithSession($this->staff)
+            ->get('/user-management')
+            ->assertForbidden();
+    }
+
+    public function test_admin_and_superadmin_can_access_user_management(): void
+    {
+        $this->actingAsWithSession($this->admin)
+            ->get('/user-management')
+            ->assertOk();
+
+        $this->actingAsWithSession($this->superadmin)
             ->get('/user-management')
             ->assertOk();
     }
@@ -355,11 +369,11 @@ class WestpointFeatureTest extends TestCase
             ->assertForbidden();
     }
 
-    public function test_staff_can_register_users_without_role_restriction(): void
+    public function test_staff_cannot_access_register(): void
     {
         $this->actingAsWithSession($this->staff)
             ->get('/register')
-            ->assertOk();
+            ->assertForbidden();
 
         $this->actingAsWithSession($this->staff)
             ->post('/register', [
@@ -370,11 +384,10 @@ class WestpointFeatureTest extends TestCase
                 'branch_id' => $this->branchA->id,
                 'role_id' => 3,
             ])
-            ->assertRedirect(route('user-management.index'));
+            ->assertForbidden();
 
-        $this->assertDatabaseHas('users', [
+        $this->assertDatabaseMissing('users', [
             'email' => 'unauthorized@westpoint.test',
-            'role_id' => 3,
         ]);
     }
 }

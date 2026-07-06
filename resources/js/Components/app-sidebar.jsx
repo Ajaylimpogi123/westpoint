@@ -110,6 +110,11 @@ export function AppSidebar({ ...props }) {
                       icon: ShoppingCart,
                   },
                   {
+                      title: "Order History",
+                      url: route("history.index"),
+                      icon: History,
+                  },
+                  {
                       title: "Stock Transfer",
                       url: route("stock-transfers.index"),
                       icon: ArrowUpCircleIcon,
@@ -136,6 +141,11 @@ export function AppSidebar({ ...props }) {
                         title: "Point of Sale",
                         url: route("pos.index"),
                         icon: ShoppingCart,
+                    },
+                    {
+                        title: "Order History",
+                        url: route("history.index"),
+                        icon: History,
                     },
                     {
                         title: "Stock Transfer",
