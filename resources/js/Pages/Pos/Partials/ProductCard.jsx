@@ -20,7 +20,7 @@ export default function ProductCard({ product, onAddToCart }) {
                     />
                 </div>
                 {product.brand_name && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs font-semibold text-foreground">
                         {product.brand_name}
                     </p>
                 )}

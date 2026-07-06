@@ -128,11 +128,6 @@ export function AppSidebar({ ...props }) {
                         icon: LayoutDashboardIcon,
                     },
                     {
-                        title: "Product Management",
-                        url: route("product.index"),
-                        icon: UtensilsCrossed,
-                    },
-                    {
                         title: "Medicine Inventory",
                         url: route("medicine-inventory.index"),
                         icon: Pill,
