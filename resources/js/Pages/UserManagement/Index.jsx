@@ -27,7 +27,8 @@ export default function Index({ branches, roles, users, filters }) {
                             User Management
                         </h1>
                         <p className="mt-2 text-sm text-white">
-                            Register users and manage accounts by role and branch
+                            Register users and manage accounts by role and
+                            branch
                         </p>
                     </div>
 

@@ -61,6 +61,11 @@ export function AppSidebar({ ...props }) {
             icon: LayoutDashboardIcon,
         },
         {
+            title: "Quotation",
+            url: route("quotations.index"),
+            icon: FolderIcon,
+        },
+        {
             title: "Medicine Inventory",
             url: route("medicine-inventory.index"),
             icon: Pill,
@@ -100,6 +105,11 @@ export function AppSidebar({ ...props }) {
                       icon: LayoutDashboardIcon,
                   },
                   {
+                      title: "Quotation",
+                      url: route("quotations.index"),
+                      icon: FolderIcon,
+                  },
+                  {
                       title: "Medicine Inventory",
                       url: route("medicine-inventory.index"),
                       icon: Pill,
@@ -119,6 +129,11 @@ export function AppSidebar({ ...props }) {
                       url: route("stock-transfers.index"),
                       icon: ArrowUpCircleIcon,
                   },
+                  {
+                      title: "Quotation",
+                      url: route("quotations.index"),
+                      icon: FolderIcon,
+                  },
               ]
             : roleId === 2
               ? [
@@ -126,6 +141,11 @@ export function AppSidebar({ ...props }) {
                         title: "Dashboard",
                         url: route("dashboard"),
                         icon: LayoutDashboardIcon,
+                    },
+                    {
+                        title: "Quotation",
+                        url: route("quotations.index"),
+                        icon: FolderIcon,
                     },
                     {
                         title: "Medicine Inventory",

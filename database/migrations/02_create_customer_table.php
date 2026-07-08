@@ -13,9 +13,12 @@ return new class extends Migration
     {
         Schema::create('tbl_customer', function (Blueprint $table) {
             $table->id('cust_id');
-            $table->string('cust_fname')->nullable();
-            $table->string('cust_lname')->nullable();
-            $table->integer('cust_contact')->nullable();
+        
+            $table->string('company_name')->nullable();
+            $table->string('cust_name')->nullable();
+            $table->string('address')->nullable();
+            $table->integer('contact_no')->nullable();
+            $table->integer('tin')->nullable();
             $table->string('cust_image')->nullable();
             $table->timestamps();
             $table->softDeletes();

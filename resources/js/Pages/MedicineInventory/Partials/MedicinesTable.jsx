@@ -13,7 +13,12 @@ import { Card, CardContent } from "@/Components/ui/card";
 import { router } from "@inertiajs/react";
 import MedicineRow from "./MedicineRow";
 
-export default function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
+export default function MedicinesTable({
+    medicines,
+    filters,
+    branchId,
+    canEditMedicine,
+}) {
     const [expandedRows, setExpandedRows] = useState({});
 
     const toggleRow = (id) => {
@@ -80,8 +85,8 @@ export default function MedicinesTable({ medicines, filters, branchId, canEditMe
             <CardContent className="space-y-4 pt-6">
                 {!branchId && (
                     <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
-                        No branch is assigned to your session. Inventory data
-                        is hidden until a branch is linked to your account.
+                        No branch is assigned to your session. Inventory data is
+                        hidden until a branch is linked to your account.
                     </div>
                 )}
 
@@ -115,7 +120,7 @@ export default function MedicinesTable({ medicines, filters, branchId, canEditMe
                                 <option value="Active">Active</option>
                                 <option value="Inactive">Inactive</option>
                                 <option value="Deleted">Deleted</option>
-                                <option value="all">All Statuses</option>
+                                <option value="all">All Status</option>
                             </select>
                         </div>
                         <div className="flex flex-col gap-1">
@@ -134,7 +139,9 @@ export default function MedicinesTable({ medicines, filters, branchId, canEditMe
                                 }
                             >
                                 <option value="all">All Stock Levels</option>
-                                <option value="out_of_stock">Out of Stock</option>
+                                <option value="out_of_stock">
+                                    Out of Stock
+                                </option>
                                 <option value="low_stock">Low Stock</option>
                                 <option value="in_stock">In Stock</option>
                                 <option value="has_expired">
@@ -199,9 +206,7 @@ export default function MedicinesTable({ medicines, filters, branchId, canEditMe
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                                goToPage(medicines.current_page - 1)
-                            }
+                            onClick={() => goToPage(medicines.current_page - 1)}
                             disabled={medicines.current_page <= 1}
                         >
                             Previous
@@ -214,9 +219,7 @@ export default function MedicinesTable({ medicines, filters, branchId, canEditMe
                             type="button"
                             variant="outline"
                             size="sm"
-                            onClick={() =>
-                                goToPage(medicines.current_page + 1)
-                            }
+                            onClick={() => goToPage(medicines.current_page + 1)}
                             disabled={
                                 medicines.current_page >= medicines.last_page
                             }

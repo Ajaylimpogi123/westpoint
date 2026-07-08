@@ -5,9 +5,7 @@ import TextInput from "@/Components/TextInput";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
 import { useForm, usePage } from "@inertiajs/react";
 import { useMemo } from "react";
-import {
-    showRegistrationError,
-} from "../Hooks/useRegistrationAlerts";
+import { showRegistrationError } from "../Hooks/useRegistrationAlerts";
 
 const SUPERADMIN_ROLE_ID = 3;
 
@@ -86,7 +84,9 @@ export default function RegistrationForm({ branches, roles }) {
                             name="branch_id"
                             value={data.branch_id}
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                            onChange={(e) => setData("branch_id", e.target.value)}
+                            onChange={(e) =>
+                                setData("branch_id", e.target.value)
+                            }
                             required
                         >
                             <option value="">- Select a Branch -</option>
@@ -96,7 +96,10 @@ export default function RegistrationForm({ branches, roles }) {
                                 </option>
                             ))}
                         </select>
-                        <InputError message={errors.branch_id} className="mt-2" />
+                        <InputError
+                            message={errors.branch_id}
+                            className="mt-2"
+                        />
                     </div>
 
                     <div className="mt-4">
@@ -128,10 +131,15 @@ export default function RegistrationForm({ branches, roles }) {
                             value={data.password}
                             className="mt-1 block w-full"
                             autoComplete="new-password"
-                            onChange={(e) => setData("password", e.target.value)}
+                            onChange={(e) =>
+                                setData("password", e.target.value)
+                            }
                             required
                         />
-                        <InputError message={errors.password} className="mt-2" />
+                        <InputError
+                            message={errors.password}
+                            className="mt-2"
+                        />
                     </div>
 
                     <div className="mt-4">
@@ -158,7 +166,9 @@ export default function RegistrationForm({ branches, roles }) {
                     </div>
 
                     <div className="mt-6 flex justify-end">
-                        <PrimaryButton disabled={processing}>Register User</PrimaryButton>
+                        <PrimaryButton disabled={processing}>
+                            Register User
+                        </PrimaryButton>
                     </div>
                 </form>
             </CardContent>

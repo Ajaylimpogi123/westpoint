@@ -210,6 +210,14 @@ export default function TransferDetailModal({ transfer, onClose }) {
                             className="flex items-center gap-2 text-sm px-4 py-2
                                 rounded-lg border border-blue-200 text-blue-600
                                 hover:bg-blue-50 transition"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                window.open(
+                                    route("stock-transfers.slip", transfer.id),
+                                    "_blank",
+                                    "noopener,noreferrer",
+                                );
+                            }}
                         >
                             <svg
                                 className="w-4 h-4"

@@ -89,6 +89,14 @@ export default function TransferRow({ transfer, isAdmin, onCancel, onView }) {
                             href={route("stock-transfers.slip", transfer.id)}
                             className="text-xs px-3 py-1.5 rounded-lg border border-blue-200
                                 text-blue-600 hover:bg-blue-50 transition flex items-center gap-1"
+                            onClick={(e) => {
+                                e.preventDefault();
+                                window.open(
+                                    route("stock-transfers.slip", transfer.id),
+                                    "_blank",
+                                    "noopener,noreferrer",
+                                );
+                            }}
                         >
                             <svg
                                 className="w-3 h-3"

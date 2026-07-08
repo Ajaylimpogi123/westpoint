@@ -6,6 +6,9 @@ import { formatDate, formatDateTime } from "./lib/TransferHelpers";
  * Standalone printable slip — no AuthenticatedLayout so the nav
  * doesn't appear on print. Accessed via GET /stock-transfers/{id}/slip
  *
+ * Styled after a classic ledger-style delivery receipt: bordered
+ * table, fill-in-the-blank header fields, boxed totals, signature row.
+ *
  * Props: transfer (with fromBranch, toBranch, requester, approver, items.product)
  */
 export default function TransferSlip({ transfer }) {
@@ -60,213 +63,218 @@ export default function TransferSlip({ transfer }) {
             {/* ── Slip body ─────────────────────────────────────── */}
             <div className="min-h-screen py-8 px-4 flex justify-center">
                 <div
-                    className="slip-card w-full max-w-3xl bg-white rounded-xl
-                    shadow-lg border border-gray-200 overflow-hidden"
+                    className="slip-card w-full max-w-3xl bg-white
+                    shadow-lg border border-gray-300 overflow-hidden font-serif"
                 >
-                    {/* ── HEADER ──────────────────────────────────── */}
-                    <div className="bg-blue-700 text-white px-8 py-5 flex items-start justify-between">
-                        <div>
-                            <p className="text-xs uppercase tracking-widest text-blue-200 mb-0.5">
-                                Westpoint Pharmacy
-                            </p>
-                            <h1 className="text-xl font-bold tracking-tight">
+                    <div className="px-8 pt-6 pb-8">
+                        {/* ── LETTERHEAD ──────────────────────────── */}
+                        <div className="flex items-center justify-between gap-4 border-b-2 border-gray-800 pb-3 mb-4">
+                            <img
+                                src="/storage/westpoint_logo.png"
+                                alt="Westpoint Pharmacy & Medical Supplies Trading"
+                                className="h-28 w-28 shrink-0 object-contain"
+                            />
+                            <div className="flex-1 text-center">
+                                <h1 className="text-2xl font-bold uppercase tracking-tight text-gray-900">
+                                    Westpoint
+                                </h1>
+                                <h1 className="text-2xl font-bold uppercase tracking-tight text-gray-900">
+                                    Pharmacy &amp; Medical Supplies
+                                </h1>
+                                <p className="text-[11px] text-gray-500 mt-0.5">
+                                    Multi-Branch Inventory &amp; Stock Transfer
+                                    System
+                                </p>
+                            </div>
+                            {/* Invisible spacer matching the logo's width so the
+                                centered text block stays visually centered rather
+                                than drifting toward the logo. */}
+                            <div
+                                className="h-16 w-16 shrink-0"
+                                aria-hidden="true"
+                            />
+                        </div>
+
+                        <div className="flex items-start justify-between mb-4">
+                            <h2 className="text-lg font-bold uppercase tracking-wide text-gray-900">
                                 Stock Transfer Slip
-                            </h1>
-                            <p className="text-sm text-blue-200 mt-1 font-mono">
-                                {transfer.transfer_no}
+                            </h2>
+                            <p className="text-sm text-red-600 font-semibold whitespace-nowrap">
+                                No.{" "}
+                                <span className="font-mono">
+                                    {transfer.transfer_no}
+                                </span>
                             </p>
                         </div>
 
-                        {/* APPROVED stamp */}
-                        <div className="border-2 border-green-400 rounded-lg px-4 py-2 text-center mt-1">
-                            <p className="text-[10px] uppercase tracking-widest text-green-300">
-                                Status
-                            </p>
-                            <p className="text-base font-bold text-green-300 uppercase tracking-wider">
-                                Approved
-                            </p>
-                        </div>
-                    </div>
-
-                    <div className="px-8 py-6 space-y-6">
-                        {/* ── ROUTE + META ────────────────────────── */}
-                        <div className="grid grid-cols-2 gap-4">
-                            {/* From */}
-                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                                <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">
-                                    Transferred from
-                                </p>
-                                <p className="text-base font-bold text-gray-800">
-                                    {transfer.from_branch?.branch_name ?? "—"}
-                                </p>
-                                <div className="mt-2 space-y-0.5 text-xs text-gray-500">
-                                    <Row
-                                        label="Requested by"
-                                        value={transfer.requester?.name ?? "—"}
-                                    />
-                                    <Row
-                                        label="Transfer date"
-                                        value={formatDate(
-                                            transfer.transfer_date,
-                                        )}
-                                    />
-                                    {transfer.needed_by && (
-                                        <Row
-                                            label="Needed by"
-                                            value={formatDate(
-                                                transfer.needed_by,
-                                            )}
-                                        />
-                                    )}
-                                    <Row
-                                        label="Priority"
-                                        value={transfer.priority ?? "normal"}
-                                        capitalize
-                                    />
-                                </div>
-                            </div>
-
-                            {/* To */}
-                            <div className="bg-gray-50 rounded-lg p-4 border border-gray-100">
-                                <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">
-                                    Transferred to
-                                </p>
-                                <p className="text-base font-bold text-gray-800">
-                                    {transfer.to_branch?.branch_name ?? "—"}
-                                </p>
-                                <div className="mt-2 space-y-0.5 text-xs text-gray-500">
-                                    <Row
-                                        label="Approved by"
-                                        value={transfer.approver?.name ?? "—"}
-                                    />
-                                    <Row
-                                        label="Approved at"
-                                        value={formatDateTime(
-                                            transfer.approved_at,
-                                        )}
-                                    />
-                                    <Row
-                                        label="Slip printed"
-                                        value={formatDateTime(
-                                            new Date().toISOString(),
-                                        )}
-                                    />
-                                </div>
-                            </div>
+                        {/* ── HEADER FIELDS ───────────────────────── */}
+                        <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-sm mb-5">
+                            <FieldLine
+                                label="Transferred from"
+                                value={transfer.from_branch?.branch_name}
+                            />
+                            <FieldLine
+                                label="Date"
+                                value={formatDate(transfer.transfer_date)}
+                            />
+                            <FieldLine
+                                label="Transferred to"
+                                value={transfer.to_branch?.branch_name}
+                            />
+                            <FieldLine
+                                label="Needed by"
+                                value={
+                                    transfer.needed_by
+                                        ? formatDate(transfer.needed_by)
+                                        : "—"
+                                }
+                            />
+                            <FieldLine
+                                label="Requested by"
+                                value={transfer.requester?.name}
+                            />
+                            <FieldLine
+                                label="Priority"
+                                value={transfer.priority ?? "normal"}
+                                capitalize
+                            />
+                            <FieldLine
+                                label="Approved by"
+                                value={transfer.approver?.name}
+                            />
+                            <FieldLine
+                                label="Approved at"
+                                value={formatDateTime(transfer.approved_at)}
+                            />
                         </div>
 
                         {/* Reason */}
                         {transfer.reason && (
-                            <div className="bg-yellow-50 border border-yellow-200 rounded-lg px-4 py-3">
-                                <p className="text-[10px] uppercase tracking-widest text-yellow-600 mb-1">
-                                    Reason for transfer
-                                </p>
-                                <p className="text-sm text-yellow-800">
+                            <div className="border border-gray-300 px-3 py-2 mb-5 text-sm">
+                                <span className="text-gray-500">
+                                    Reason for transfer:{" "}
+                                </span>
+                                <span className="text-gray-800">
                                     {transfer.reason}
-                                </p>
+                                </span>
                             </div>
                         )}
 
                         {/* ── ITEMS TABLE ──────────────────────────── */}
-                        <div>
-                            <p className="text-[10px] uppercase tracking-widest text-gray-400 mb-2">
-                                Items transferred
-                            </p>
-
-                            <table className="w-full text-sm border-collapse">
-                                <thead>
-                                    <tr className="bg-gray-800 text-white">
-                                        <Th>#</Th>
-                                        <Th>Medicine</Th>
-                                        <Th>Dose / Form</Th>
-                                        <Th>Brand</Th>
-                                        <Th>Lot No.</Th>
-                                        <Th>Expiry</Th>
-                                        <Th align="right">Qty</Th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {transfer.items?.map((item, idx) => {
-                                        const qty =
-                                            item.quantity_approved ??
+                        <table className="w-full text-sm border-collapse border border-gray-800">
+                            <thead>
+                                <tr>
+                                    <Th className="w-10">No.</Th>
+                                    <Th align="left">Description</Th>
+                                    <Th>Batch No.</Th>
+                                    <Th>Expiry Date</Th>
+                                    <Th>Unit</Th>
+                                    <Th align="right">Qty.</Th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {transfer.items?.map((item, idx) => {
+                                    const qty =
+                                        item.quantity_approved ??
+                                        item.quantity_requested;
+                                    const isPartial =
+                                        item.quantity_approved !== null &&
+                                        item.quantity_approved !==
                                             item.quantity_requested;
-                                        const isPartial =
-                                            item.quantity_approved !== null &&
-                                            item.quantity_approved !==
-                                                item.quantity_requested;
 
-                                        return (
-                                            <tr
-                                                key={item.id}
-                                                className={
-                                                    idx % 2 === 0
-                                                        ? "bg-white"
-                                                        : "bg-gray-50"
-                                                }
-                                            >
-                                                <Td>{idx + 1}</Td>
-                                                <Td bold>
+                                    return (
+                                        <tr key={item.id}>
+                                            <Td align="center">{idx + 1}</Td>
+                                            <Td align="left">
+                                                <span className="font-semibold text-gray-800">
                                                     {item.product?.med_name ??
                                                         "—"}
-                                                </Td>
-                                                <Td>
+                                                </span>
+                                                <span className="block text-xs text-gray-500">
                                                     {item.product?.dose ?? "—"}
                                                     {item.product?.form
                                                         ? ` / ${item.product.form}`
                                                         : ""}
-                                                </Td>
-                                                <Td>
-                                                    {item.product?.brand_name ??
-                                                        "—"}
-                                                </Td>
-                                                <Td mono>{item.lot_number}</Td>
-                                                <Td>
-                                                    {formatDate(item.expiry)}
-                                                </Td>
-                                                <Td align="right">
-                                                    <span className="font-bold">
-                                                        {qty}
+                                                    {item.product?.brand_name
+                                                        ? ` — ${item.product.brand_name}`
+                                                        : ""}
+                                                </span>
+                                            </Td>
+                                            <Td align="center" mono>
+                                                {item.lot_number ?? "—"}
+                                            </Td>
+                                            <Td align="center">
+                                                {formatDate(item.expiry)}
+                                            </Td>
+                                            <Td align="center">
+                                                {item.product?.unit ?? "—"}
+                                            </Td>
+                                            <Td align="right">
+                                                <span className="font-bold">
+                                                    {qty}
+                                                </span>
+                                                {isPartial && (
+                                                    <span className="text-[10px] text-yellow-700 block">
+                                                        of{" "}
+                                                        {
+                                                            item.quantity_requested
+                                                        }{" "}
+                                                        req.
                                                     </span>
-                                                    {isPartial && (
-                                                        <span className="text-[10px] text-yellow-600 block">
-                                                            of{" "}
-                                                            {
-                                                                item.quantity_requested
-                                                            }{" "}
-                                                            req.
-                                                        </span>
-                                                    )}
-                                                </Td>
-                                            </tr>
-                                        );
-                                    })}
-                                </tbody>
-                                <tfoot>
-                                    <tr className="border-t-2 border-gray-300 bg-gray-100">
-                                        <td
-                                            colSpan={6}
-                                            className="px-3 py-2 text-xs font-semibold
-                                                text-gray-600 uppercase tracking-wide text-right"
-                                        >
-                                            Total units transferred
-                                        </td>
-                                        <td
-                                            className="px-3 py-2 text-right font-bold
-                                            text-gray-900 text-base"
-                                        >
-                                            {totalQty}
-                                        </td>
+                                                )}
+                                            </Td>
+                                        </tr>
+                                    );
+                                })}
+
+                                {/* Blank filler rows for a consistent printed block, like a pre-printed pad */}
+                                {Array.from({
+                                    length: Math.max(
+                                        0,
+                                        4 - (transfer.items?.length ?? 0),
+                                    ),
+                                }).map((_, i) => (
+                                    <tr key={`blank-${i}`}>
+                                        <Td>&nbsp;</Td>
+                                        <Td />
+                                        <Td />
+                                        <Td />
+                                        <Td />
+                                        <Td />
                                     </tr>
-                                </tfoot>
-                            </table>
-                        </div>
+                                ))}
+                            </tbody>
+                            <tfoot>
+                                <tr>
+                                    <td
+                                        colSpan={5}
+                                        className="border border-gray-800 px-3 py-2 text-xs font-semibold
+                                            text-gray-700 uppercase tracking-wide text-right"
+                                    >
+                                        Total units transferred
+                                    </td>
+                                    <td className="border border-gray-800 px-3 py-2 text-right font-bold text-gray-900 text-base">
+                                        {totalQty}
+                                    </td>
+                                </tr>
+                            </tfoot>
+                        </table>
 
                         {/* ── SIGNATURES ──────────────────────────── */}
-                        <div className="grid grid-cols-2 gap-8 pt-4">
+                        <div className="grid grid-cols-3 gap-6 mt-8">
                             <SignatureBox
                                 label="Prepared / Issued by"
                                 name={transfer.requester?.name}
                                 sublabel={transfer.from_branch?.branch_name}
+                            />
+                            <SignatureBox
+                                label="Approved by"
+                                name={transfer.approver?.name}
+                                sublabel={
+                                    transfer.approved_at
+                                        ? formatDate(transfer.approved_at)
+                                        : null
+                                }
                             />
                             <SignatureBox
                                 label="Received by"
@@ -275,8 +283,13 @@ export default function TransferSlip({ transfer }) {
                             />
                         </div>
 
+                        <p className="text-xs text-gray-500 italic mt-4">
+                            Received the above stock in good order and
+                            condition.
+                        </p>
+
                         {/* ── FOOTER ──────────────────────────────── */}
-                        <div className="border-t border-gray-200 pt-4">
+                        <div className="border-t border-gray-300 mt-6 pt-3">
                             <p className="text-[10px] text-gray-400 text-center">
                                 This slip is system-generated ·{" "}
                                 {transfer.transfer_no} · Westpoint Pharmacy
@@ -294,24 +307,25 @@ export default function TransferSlip({ transfer }) {
 // Small internal components
 // ─────────────────────────────────────────────────────────────────────
 
-function Row({ label, value, capitalize }) {
+function FieldLine({ label, value, capitalize }) {
     return (
-        <div className="flex items-baseline justify-between gap-2">
-            <span className="text-gray-400 flex-shrink-0">{label}</span>
+        <div className="flex items-baseline gap-1.5">
+            <span className="text-gray-500 whitespace-nowrap">{label}:</span>
             <span
-                className={`font-medium text-gray-700 text-right ${capitalize ? "capitalize" : ""}`}
+                className={`flex-1 border-b border-dotted border-gray-400 pb-0.5
+                    text-gray-900 font-medium ${capitalize ? "capitalize" : ""}`}
             >
-                {value}
+                {value || "\u00A0"}
             </span>
         </div>
     );
 }
 
-function Th({ children, align = "left" }) {
+function Th({ children, align = "center", className = "" }) {
     return (
         <th
-            className={`px-3 py-2.5 text-xs font-semibold uppercase tracking-wide
-            border border-gray-700 text-${align}`}
+            className={`border border-gray-800 px-3 py-2 text-xs font-semibold
+            uppercase tracking-wide text-${align} ${className}`}
         >
             {children}
         </th>
@@ -321,7 +335,7 @@ function Th({ children, align = "left" }) {
 function Td({ children, align = "left", bold, mono }) {
     return (
         <td
-            className={`px-3 py-2.5 border border-gray-200 text-${align}
+            className={`border border-gray-300 px-3 py-2 h-8 text-${align}
             ${bold ? "font-semibold text-gray-800" : "text-gray-600"}
             ${mono ? "font-mono text-xs" : "text-sm"}`}
         >
@@ -333,25 +347,21 @@ function Td({ children, align = "left", bold, mono }) {
 function SignatureBox({ label, name, sublabel, blank }) {
     return (
         <div className="space-y-2">
-            <p className="text-[10px] uppercase tracking-widest text-gray-400">
-                {label}
-            </p>
-            {/* Signature line */}
-            <div className="border-b-2 border-gray-400 h-10" />
-            <div className="text-xs text-gray-600 space-y-0.5">
+            <div className="border-b-2 border-gray-500 h-10" />
+            <div className="text-xs text-gray-600 space-y-0.5 text-center">
                 {!blank && name && (
-                    <p className="font-semibold text-gray-800">{name}</p>
-                )}
-                {!blank && sublabel && (
-                    <p className="text-gray-400">{sublabel}</p>
+                    <p className="font-semibold text-gray-800 uppercase">
+                        {name}
+                    </p>
                 )}
                 {blank && (
                     <p className="text-gray-300 italic">Signature above</p>
                 )}
+                <p className="text-[10px] uppercase tracking-widest text-gray-400">
+                    {label}
+                </p>
+                {sublabel && <p className="text-gray-400">{sublabel}</p>}
             </div>
-            <p className="text-[10px] text-gray-400">
-                Date: ___________________
-            </p>
         </div>
     );
 }

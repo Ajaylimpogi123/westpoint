@@ -271,7 +271,7 @@ class DashboardController extends Controller
                 DB::raw("COALESCE(NULLIF(TRIM(tbl_products.form), ''), 'Uncategorized') as category"),
                 DB::raw('SUM(tbl_sales_items.total_price) as revenue'),
             ])
-            ->groupByRaw("COALESCE(NULLIF(TRIM(tbl_products.form), ''), 'Uncategorized')")
+            ->groupBy("tbl_products.form")
             ->orderByDesc('revenue')
             ->get();
 
