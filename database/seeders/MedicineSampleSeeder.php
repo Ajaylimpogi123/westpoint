@@ -47,6 +47,7 @@ class MedicineSampleSeeder extends Seeder
                         'quantity' => $batch['quantity'],
                         'status' => 'Active',
                         'expiry' => $batch['expiry'],
+                        'shelf_number' => $batch['shelf_number'] ?? $this->shelfForLotNumber($batch['lot_number']),
                     ]
                 );
             }
@@ -117,5 +118,12 @@ class MedicineSampleSeeder extends Seeder
             ['med_name' => 'Phenylephrine', 'dose' => '10mg', 'form' => 'Tablet', 'brand_name' => 'Sudafed', 'category' => 'Decongestant', 'is_generic' => true, 'pack_size' => 10, 'retail_price' => 5.50, 'wholesale_price' => 46.00, 'batches' => [['lot_number' => $lot(54), 'quantity' => 8, 'expiry' => $exp(12)]]],
             ['med_name' => 'Hydrocortisone', 'dose' => '1%', 'form' => 'Cream', 'brand_name' => 'Hytone', 'category' => 'Dermatologic', 'is_generic' => true, 'pack_size' => 1, 'retail_price' => 78.00, 'wholesale_price' => 65.00, 'batches' => [['lot_number' => $lot(55), 'quantity' => 5, 'expiry' => $exp(10)]]],
         ];
+    }
+
+    private function shelfForLotNumber(string $lotNumber): string
+    {
+        $n = (int) preg_replace('/\D/', '', $lotNumber) ?: 1;
+
+        return sprintf('%s-%02d', chr(65 + intdiv($n - 1, 10)), (($n - 1) % 10) + 1);
     }
 }
