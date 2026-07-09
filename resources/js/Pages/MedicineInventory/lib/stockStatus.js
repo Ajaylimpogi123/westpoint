@@ -16,10 +16,9 @@ export function isPastExpiry(expiry) {
     return expiryDate < today;
 }
 
-export function getMedicineStockStatus(totalStock, packSize) {
+export function getMedicineStockStatus(totalStock, stockThreshold) {
     const stock = Number(totalStock) || 0;
-    const pack = Number(packSize) || 1;
-    const lowThreshold = pack * 2;
+    const lowThreshold = Number(stockThreshold ?? 10) || 10;
 
     if (stock === 0) {
         return { label: "Out of Stock", tone: "danger" };

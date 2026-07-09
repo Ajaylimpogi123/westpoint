@@ -6,6 +6,7 @@ const emptyDraft = () => ({
     batch_number: "",
     expiry_date: "",
     quantity_received: 1,
+    shelf_number: "",
 });
 
 export default function useStockIn({ branchId, products }) {
@@ -77,6 +78,7 @@ export default function useStockIn({ branchId, products }) {
                 batch_number: draft.batch_number.trim(),
                 expiry_date: draft.expiry_date,
                 quantity_received: Number(draft.quantity_received),
+                shelf_number: draft.shelf_number.trim(),
             },
         ]);
         setDraft(emptyDraft());

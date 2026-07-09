@@ -23,6 +23,7 @@ class MedicineProduct extends Model
         'pack_size',
         'brand_name',
         'retail_price',
+        'stock_threshold',
         'wholesale_price',
         'status',
     ];
@@ -33,6 +34,7 @@ class MedicineProduct extends Model
             'pack_size' => 'integer',
             'retail_price' => 'decimal:2',
             'wholesale_price' => 'decimal:2',
+            'stock_threshold' => 'integer',
             'is_generic' => 'boolean',
         ];
     }
@@ -80,12 +82,14 @@ class MedicineProduct extends Model
 
         $stockSql = '(SELECT COALESCE(SUM(quantity), 0) FROM products_qty pq WHERE pq.product_id = tbl_products.id AND pq.status != \'Deleted\')';
 
+        $thresholdSql = 'COALESCE(tbl_products.stock_threshold, 10)';
+
         return match ($level) {
             'out_of_stock' => $query->whereRaw("{$stockSql} = 0"),
             'low_stock' => $query
                 ->whereRaw("{$stockSql} > 0")
-                ->whereRaw("{$stockSql} <= (tbl_products.pack_size * 2)"),
-            'in_stock' => $query->whereRaw("{$stockSql} > (tbl_products.pack_size * 2)"),
+                ->whereRaw("{$stockSql} <= {$thresholdSql}"),
+            'in_stock' => $query->whereRaw("{$stockSql} > {$thresholdSql}"),
             'has_expired' => $query->whereHas('batches', function ($batchQuery) {
                 $batchQuery
                     ->where('status', '!=', 'Deleted')

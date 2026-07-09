@@ -14,7 +14,7 @@ import BatchTable from "./BatchTable";
 import StockStatusBadge from "./StockStatusBadge";
 import { getMedicineStockStatus } from "../lib/stockStatus";
 
-const COLUMN_COUNT = 8;
+const COLUMN_COUNT = 9;
 
 export default function MedicineRow({
     medicine,
@@ -26,7 +26,7 @@ export default function MedicineRow({
 
     const stockStatus = getMedicineStockStatus(
         medicine.total_stock,
-        medicine.pack_size,
+        medicine.stock_threshold,
     );
 
     const formatPrice = (value) => {
@@ -89,6 +89,9 @@ export default function MedicineRow({
                 </TableCell>
                 <TableCell onClick={onToggle}>
                     {medicine.form || "-"}
+                </TableCell>
+                <TableCell onClick={onToggle}>
+                    {medicine.pack_size ?? "-"}
                 </TableCell>
                 <TableCell onClick={onToggle}>
                     {formatPrice(medicine.retail_price)}

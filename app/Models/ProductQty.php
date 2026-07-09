@@ -18,6 +18,7 @@ class ProductQty extends Model
         'status',
         'lot_number',
         'expiry',
+        'shelf_number',
     ];
 
     protected function casts(): array

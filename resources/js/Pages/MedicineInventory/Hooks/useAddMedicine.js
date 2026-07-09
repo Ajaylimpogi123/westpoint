@@ -11,6 +11,7 @@ export default function useAddMedicine() {
         pack_size: 1,
         brand_name: "",
         retail_price: "",
+        stock_threshold: 10,
         wholesale_price: "",
     });
 

@@ -236,7 +236,7 @@ export default function StockInModal({
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
                                     <div className="grid gap-2">
                                         <Label htmlFor="batch_number">
                                             Lot Number
@@ -283,6 +283,22 @@ export default function StockInModal({
                                                     event.target.value,
                                                 )
                                             }
+                                        />
+                                    </div>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="shelf_number">
+                                            Shelf Number
+                                        </Label>
+                                        <Input
+                                            id="shelf_number"
+                                            value={draft.shelf_number}
+                                            onChange={(event) =>
+                                                updateDraft(
+                                                    "shelf_number",
+                                                    event.target.value,
+                                                )
+                                            }
+                                            placeholder="e.g. A-12"
                                         />
                                     </div>
                                 </div>
@@ -332,6 +348,9 @@ export default function StockInModal({
                                                                 {
                                                                     item.quantity_received
                                                                 }
+                                                                {item.shelf_number
+                                                                    ? ` · Shelf ${item.shelf_number}`
+                                                                    : ""}
                                                             </p>
                                                         </div>
                                                         <Button
@@ -368,6 +387,13 @@ export default function StockInModal({
                                                         name={`items[${index}][quantity_received]`}
                                                         value={
                                                             item.quantity_received
+                                                        }
+                                                    />
+                                                    <input
+                                                        type="hidden"
+                                                        name={`items[${index}][shelf_number]`}
+                                                        value={
+                                                            item.shelf_number
                                                         }
                                                     />
 

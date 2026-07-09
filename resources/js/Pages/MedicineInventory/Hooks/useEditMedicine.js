@@ -11,6 +11,7 @@ export default function useEditMedicine(medicine) {
         pack_size: 1,
         brand_name: "",
         retail_price: "",
+        stock_threshold: 10,
         wholesale_price: "",
     });
 
@@ -24,6 +25,7 @@ export default function useEditMedicine(medicine) {
             pack_size: medicine.pack_size || 1,
             brand_name: medicine.brand_name || "",
             retail_price: medicine.retail_price || "",
+            stock_threshold: medicine.stock_threshold ?? 10,
             wholesale_price: medicine.wholesale_price || "",
         });
     }, [medicine, open]);

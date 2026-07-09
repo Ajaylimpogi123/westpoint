@@ -9,6 +9,7 @@ export default function useAddStock(medicine) {
         boxes_received: 1,
         lot_number: "",
         expiry: "",
+        shelf_number: "",
     });
 
     useEffect(() => {
@@ -19,6 +20,7 @@ export default function useAddStock(medicine) {
             boxes_received: 1,
             lot_number: "",
             expiry: "",
+            shelf_number: "",
         });
     }, [medicine, open]);
 

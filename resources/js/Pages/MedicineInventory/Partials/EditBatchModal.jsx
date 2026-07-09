@@ -101,6 +101,24 @@ export default function EditBatchModal({ batch, medicine, children }) {
                                     <InputError message={errors.expiry} />
                                 </div>
                             </div>
+
+                            <div className="grid gap-3">
+                                <Label htmlFor="edit_shelf_number">
+                                    Shelf Number
+                                </Label>
+                                <Input
+                                    id="edit_shelf_number"
+                                    value={data.shelf_number}
+                                    onChange={(e) =>
+                                        setData(
+                                            "shelf_number",
+                                            e.target.value,
+                                        )
+                                    }
+                                    placeholder="e.g. A-12"
+                                />
+                                <InputError message={errors.shelf_number} />
+                            </div>
                         </div>
 
                         <DialogFooter className="mt-4">

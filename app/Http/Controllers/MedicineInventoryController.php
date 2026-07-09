@@ -23,6 +23,7 @@ class MedicineInventoryController extends Controller
         'pack_size',
         'brand_name',
         'retail_price',
+        'stock_threshold',
         'wholesale_price',
     ];
 
@@ -45,7 +46,7 @@ class MedicineInventoryController extends Controller
                         $batchQuery
                             ->where('status', '!=', 'Deleted')
                             ->orderBy('expiry')
-                            ->select(['id', 'product_id', 'lot_number', 'expiry', 'quantity', 'status']);
+                            ->select(['id', 'product_id', 'lot_number', 'expiry', 'shelf_number', 'quantity', 'status']);
                     }]);
             })
             ->when($search, function ($query, $search) {
@@ -77,7 +78,7 @@ class MedicineInventoryController extends Controller
                         ->where('status', 'Active')
                         ->where('quantity', '>', 0)
                         ->orderBy('expiry')
-                        ->select(['id', 'product_id', 'lot_number', 'expiry', 'quantity']);
+                        ->select(['id', 'product_id', 'lot_number', 'expiry', 'shelf_number', 'quantity']);
                 }])
                 ->orderBy('med_name')
                 ->get([
@@ -89,6 +90,7 @@ class MedicineInventoryController extends Controller
                     'retail_price',
                     'wholesale_price',
                     'pack_size',
+                    'stock_threshold',
                 ])
             : collect();
 
@@ -174,6 +176,7 @@ class MedicineInventoryController extends Controller
             'pack_size' => ['required', 'integer', 'min:1'],
             'brand_name' => ['nullable', 'string', 'max:244'],
             'retail_price' => ['required', 'numeric', 'min:0'],
+            'stock_threshold' => ['nullable', 'integer', 'min:0'],
             'wholesale_price' => ['required', 'numeric', 'min:0'],
         ]);
 
@@ -216,6 +219,7 @@ class MedicineInventoryController extends Controller
             'pack_size' => ['required', 'integer', 'min:1'],
             'brand_name' => ['nullable', 'string', 'max:244'],
             'retail_price' => ['required', 'numeric', 'min:0'],
+            'stock_threshold' => ['nullable', 'integer', 'min:0'],
             'wholesale_price' => ['required', 'numeric', 'min:0'],
         ]);
 
@@ -281,6 +285,7 @@ class MedicineInventoryController extends Controller
             'boxes_received' => ['required', 'integer', 'min:1'],
             'lot_number' => ['nullable', 'string', 'max:100'],
             'expiry' => ['nullable', 'date'],
+            'shelf_number' => ['nullable', 'string', 'max:50'],
         ]);
 
         $medicine = MedicineProduct::active()
@@ -294,6 +299,7 @@ class MedicineInventoryController extends Controller
             'status' => 'Active',
             'lot_number' => $validated['lot_number'] ?? null,
             'expiry' => $validated['expiry'] ?? null,
+            'shelf_number' => $validated['shelf_number'] ?? null,
         ]);
 
         InventoryMovementLogger::log(
@@ -321,28 +327,32 @@ class MedicineInventoryController extends Controller
             'lot_number' => ['nullable', 'string', 'max:100'],
             'expiry' => ['nullable', 'date'],
             'boxes_received' => ['required', 'integer', 'min:0'],
+            'shelf_number' => ['nullable', 'string', 'max:50'],
         ]);
 
         $medicine = MedicineProduct::findOrFail($batch->product_id);
         $quantityInPieces = $validated['boxes_received'] * $medicine->pack_size;
 
-        $batchFields = ['lot_number', 'expiry', 'quantity'];
+        $batchFields = ['lot_number', 'expiry', 'quantity', 'shelf_number'];
         $before = [
             'lot_number' => $batch->lot_number,
             'expiry' => $batch->expiry?->format('Y-m-d'),
             'quantity' => $batch->quantity,
+            'shelf_number' => $batch->shelf_number,
         ];
 
         $batch->update([
             'lot_number' => $validated['lot_number'] ?? null,
             'expiry' => $validated['expiry'] ?? null,
             'quantity' => $quantityInPieces,
+            'shelf_number' => $validated['shelf_number'] ?? null,
         ]);
 
         $after = [
             'lot_number' => $batch->lot_number,
             'expiry' => $batch->expiry?->format('Y-m-d'),
             'quantity' => $batch->quantity,
+            'shelf_number' => $batch->shelf_number,
         ];
 
         $changes = InventoryMovementLogger::diffFields($before, $after, $batchFields);

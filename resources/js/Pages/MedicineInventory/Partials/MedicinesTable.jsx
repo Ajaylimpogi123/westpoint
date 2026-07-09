@@ -164,6 +164,7 @@ export default function MedicinesTable({
                                 <TableHead>Brand</TableHead>
                                 <TableHead>Dose</TableHead>
                                 <TableHead>Form</TableHead>
+                                <TableHead>Pack Size</TableHead>
                                 <TableHead>Price (pc)</TableHead>
                                 <TableHead>Branch Stock (pcs)</TableHead>
                                 <TableHead className="text-right">
@@ -185,7 +186,7 @@ export default function MedicinesTable({
                             ) : (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={8}
+                                        colSpan={9}
                                         className="h-24 text-center"
                                     >
                                         No medicines found.

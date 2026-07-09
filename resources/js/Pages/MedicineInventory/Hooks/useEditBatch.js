@@ -8,6 +8,7 @@ export default function useEditBatch(batch, medicine) {
         lot_number: "",
         expiry: "",
         boxes_received: 0,
+        shelf_number: "",
     });
 
     useEffect(() => {
@@ -21,6 +22,7 @@ export default function useEditBatch(batch, medicine) {
             lot_number: batch.lot_number || "",
             expiry: batch.expiry ? batch.expiry.slice(0, 10) : "",
             boxes_received: boxes,
+            shelf_number: batch.shelf_number || "",
         });
     }, [batch, medicine, open]);
 

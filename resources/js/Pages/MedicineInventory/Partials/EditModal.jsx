@@ -176,6 +176,25 @@ export default function EditModal({ medicine, children }) {
                                     />
                                 </div>
                             </div>
+
+                            <div className="grid gap-3">
+                                <Label htmlFor="edit_stock_threshold">
+                                    Stock Threshold
+                                </Label>
+                                <Input
+                                    id="edit_stock_threshold"
+                                    type="number"
+                                    min="0"
+                                    value={data.stock_threshold}
+                                    onChange={(e) =>
+                                        setData(
+                                            "stock_threshold",
+                                            e.target.value,
+                                        )
+                                    }
+                                />
+                                <InputError message={errors.stock_threshold} />
+                            </div>
                         </div>
 
                         <DialogFooter>

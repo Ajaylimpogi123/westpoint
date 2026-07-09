@@ -187,6 +187,26 @@ export default function AddModal({ children }) {
                                     <InputError message={errors.wholesale_price} />
                                 </div>
                             </div>
+
+                            <div className="grid gap-3">
+                                <Label htmlFor="stock_threshold">
+                                    Stock Threshold
+                                </Label>
+                                <Input
+                                    id="stock_threshold"
+                                    type="number"
+                                    min="0"
+                                    value={data.stock_threshold}
+                                    onChange={(e) =>
+                                        setData(
+                                            "stock_threshold",
+                                            e.target.value,
+                                        )
+                                    }
+                                    placeholder="e.g. 10"
+                                />
+                                <InputError message={errors.stock_threshold} />
+                            </div>
                         </div>
 
                         <DialogFooter className="mt-4">

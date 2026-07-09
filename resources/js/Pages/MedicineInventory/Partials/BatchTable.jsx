@@ -69,6 +69,7 @@ export default function BatchTable({ medicine, batches, canEditMedicine = false 
                         <TableRow>
                             <TableHead>Lot Number</TableHead>
                             <TableHead>Expiry</TableHead>
+                            <TableHead>Shelf Number</TableHead>
                             <TableHead>Batch Pieces</TableHead>
                             <TableHead>Stock Status</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
@@ -89,6 +90,9 @@ export default function BatchTable({ medicine, batches, canEditMedicine = false 
                                     </TableCell>
                                     <TableCell>
                                         {formatDate(batch.expiry)}
+                                    </TableCell>
+                                    <TableCell>
+                                        {batch.shelf_number || "-"}
                                     </TableCell>
                                     <TableCell>{batch.quantity}</TableCell>
                                     <TableCell>
@@ -132,7 +136,7 @@ export default function BatchTable({ medicine, batches, canEditMedicine = false 
                         ) : (
                             <TableRow>
                                 <TableCell
-                                    colSpan={5}
+                                    colSpan={6}
                                     className="h-16 text-center text-sm text-muted-foreground"
                                 >
                                     No batches for this branch yet.

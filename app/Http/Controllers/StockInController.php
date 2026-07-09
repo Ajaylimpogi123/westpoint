@@ -31,6 +31,7 @@ class StockInController extends Controller
             'items.*.batch_number' => ['required', 'string', 'max:100'],
             'items.*.expiry_date' => ['required', 'date'],
             'items.*.quantity_received' => ['required', 'integer', 'min:1'],
+            'items.*.shelf_number' => ['nullable', 'string', 'max:50'],
         ]);
 
         if ((int) $validated['branch_id'] !== $branchId) {
@@ -71,6 +72,10 @@ class StockInController extends Controller
 
                     if ($existingBatch) {
                         $existingBatch->increment('quantity', $item['quantity_received']);
+
+                        if (! empty($item['shelf_number'])) {
+                            $existingBatch->update(['shelf_number' => $item['shelf_number']]);
+                        }
                     } else {
                         ProductQty::create([
                             'product_id' => $medicine->id,
@@ -78,6 +83,7 @@ class StockInController extends Controller
                             'status' => 'Active',
                             'lot_number' => $item['batch_number'],
                             'expiry' => $item['expiry_date'],
+                            'shelf_number' => $item['shelf_number'] ?? null,
                         ]);
                     }
 
