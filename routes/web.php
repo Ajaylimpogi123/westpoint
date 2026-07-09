@@ -40,3 +40,4 @@ require __DIR__ . '/movement-logs.php';
 require __DIR__ . '/pos.php';
 require __DIR__ . '/stocktransfer.php';
 require __DIR__ . '/quotation.php';
+require __DIR__ . '/customer-management.php';

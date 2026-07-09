@@ -71,6 +71,11 @@ export function AppSidebar({ ...props }) {
             icon: Pill,
         },
         {
+            title: "Customer Management",
+            url: route("customer-management.index"),
+            icon: UsersIcon,
+        },
+        {
             title: "Point of Sale",
             url: route("pos.index"),
             icon: ShoppingCart,
@@ -151,6 +156,11 @@ export function AppSidebar({ ...props }) {
                         title: "Medicine Inventory",
                         url: route("medicine-inventory.index"),
                         icon: Pill,
+                    },
+                    {
+                        title: "Customer Management",
+                        url: route("customer-management.index"),
+                        icon: UsersIcon,
                     },
                     {
                         title: "Point of Sale",
