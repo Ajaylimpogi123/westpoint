@@ -1,8 +1,5 @@
 add search stock in
 
-pwd senior 20%
-single mother 10%
-
 Add reference id gcash and card
 
 adress on stock out, tin and everything
@@ -16,8 +13,5 @@ add invoice on pos
 stock out paper print
 
 total income for the day gross and net from - to
-
-
-
 
 add when stock is zero automatically soft deletes on
