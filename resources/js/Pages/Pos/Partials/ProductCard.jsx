@@ -2,10 +2,12 @@ import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/componen
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import StockStatusBadge from "./StockStatusBadge";
-import { formatCurrency } from "../lib/pricing";
+import { canAddToCart, formatCurrency } from "../lib/pricing";
 
-export default function ProductCard({ product, onAddToCart }) {
+export default function ProductCard({ product, cartItems, onAddToCart }) {
     const totalStock = Number(product.total_stock) || 0;
+    const canAddPiece = canAddToCart(product, "Piece", cartItems);
+    const canAddBox = canAddToCart(product, "Box", cartItems);
 
     return (
         <Card className="flex flex-col transition-shadow hover:shadow-md">
@@ -61,6 +63,7 @@ export default function ProductCard({ product, onAddToCart }) {
                     variant="outline"
                     size="sm"
                     onClick={() => onAddToCart(product, "Piece")}
+                    disabled={!canAddPiece}
                 >
                     <Plus className="mr-1 h-3 w-3" />
                     Piece
@@ -68,6 +71,7 @@ export default function ProductCard({ product, onAddToCart }) {
                 <Button
                     size="sm"
                     onClick={() => onAddToCart(product, "Box")}
+                    disabled={!canAddBox}
                 >
                     <Plus className="mr-1 h-3 w-3" />
                     Box

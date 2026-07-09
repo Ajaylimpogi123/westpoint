@@ -50,6 +50,7 @@ export default function ProductCatalog({
     pagination,
     onPageChange,
     onAddToCart,
+    cartItems,
 }) {
     const [showFilters, setShowFilters] = useState(false);
 
@@ -278,6 +279,7 @@ export default function ProductCatalog({
                             <ProductCard
                                 key={product.id}
                                 product={product}
+                                cartItems={cartItems}
                                 onAddToCart={onAddToCart}
                             />
                         ))}

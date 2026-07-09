@@ -73,7 +73,7 @@ class PosController extends Controller
             'unit_type' => ['required', 'string', 'in:Piece,Box'],
         ]);
 
-        MedicineProduct::active()
+        $product = MedicineProduct::active()
             ->forBranch($branchId)
             ->findOrFail($validated['product_id']);
 
@@ -84,6 +84,22 @@ class PosController extends Controller
             ->where('product_id', $validated['product_id'])
             ->where('unit_type', $validated['unit_type'])
             ->first();
+
+        $newQuantity = $existing
+            ? (int) $existing->quantity_sold + 1
+            : 1;
+
+        $stockError = $this->cartStockValidationError(
+            $product,
+            $cart->id,
+            $validated['unit_type'],
+            $newQuantity,
+            $existing?->id
+        );
+
+        if ($stockError) {
+            return response()->json(['message' => $stockError], 422);
+        }
 
         if ($existing) {
             $existing->increment('quantity_sold');
@@ -103,6 +119,7 @@ class PosController extends Controller
     {
         $branchId = $this->branchIdOrFail();
         $this->assertCartItemAccess($cartItem, $branchId);
+        $cartItem->loadMissing('product');
 
         $validated = $request->validate([
             'quantity_sold' => ['sometimes', 'integer', 'min:1'],
@@ -110,12 +127,28 @@ class PosController extends Controller
         ]);
 
         if (isset($validated['unit_type']) && $validated['unit_type'] !== $cartItem->unit_type) {
-            $this->changeCartItemUnitType($cartItem, $validated['unit_type']);
+            $stockError = $this->changeCartItemUnitType($cartItem, $validated['unit_type']);
+
+            if ($stockError) {
+                return response()->json(['message' => $stockError], 422);
+            }
 
             return response()->json($this->serializeActiveCart($branchId));
         }
 
         if (isset($validated['quantity_sold'])) {
+            $stockError = $this->cartStockValidationError(
+                $cartItem->product,
+                $cartItem->cart_id,
+                $cartItem->unit_type,
+                (int) $validated['quantity_sold'],
+                $cartItem->id
+            );
+
+            if ($stockError) {
+                return response()->json(['message' => $stockError], 422);
+            }
+
             $cartItem->update(['quantity_sold' => $validated['quantity_sold']]);
         }
 
@@ -290,8 +323,10 @@ class PosController extends Controller
         }
     }
 
-    private function changeCartItemUnitType(PosCartItem $cartItem, string $unitType): void
+    private function changeCartItemUnitType(PosCartItem $cartItem, string $unitType): ?string
     {
+        $cartItem->loadMissing('product');
+
         $existing = PosCartItem::query()
             ->where('cart_id', $cartItem->cart_id)
             ->where('product_id', $cartItem->product_id)
@@ -300,15 +335,43 @@ class PosController extends Controller
             ->first();
 
         if ($existing) {
+            $mergedQuantity = (int) $existing->quantity_sold + (int) $cartItem->quantity_sold;
+
+            $stockError = $this->cartStockValidationError(
+                $cartItem->product,
+                $cartItem->cart_id,
+                $unitType,
+                $mergedQuantity,
+                $existing->id
+            );
+
+            if ($stockError) {
+                return $stockError;
+            }
+
             $existing->update([
-                'quantity_sold' => $existing->quantity_sold + $cartItem->quantity_sold,
+                'quantity_sold' => $mergedQuantity,
             ]);
             $cartItem->delete();
 
-            return;
+            return null;
+        }
+
+        $stockError = $this->cartStockValidationError(
+            $cartItem->product,
+            $cartItem->cart_id,
+            $unitType,
+            (int) $cartItem->quantity_sold,
+            $cartItem->id
+        );
+
+        if ($stockError) {
+            return $stockError;
         }
 
         $cartItem->update(['unit_type' => $unitType]);
+
+        return null;
     }
 
     /**
@@ -333,6 +396,7 @@ class PosController extends Controller
                 $product = $item->product;
                 $unitType = $item->unit_type;
                 $quantity = (int) $item->quantity_sold;
+                $totalStock = $this->getProductStock($product->id);
 
                 $priceUsed = $unitType === 'Box'
                     ? (float) $product->wholesale_price
@@ -341,7 +405,9 @@ class PosController extends Controller
                 return [
                     'id' => $item->id,
                     'key' => "{$item->product_id}-{$unitType}",
-                    'product' => $product,
+                    'product' => array_merge($product->toArray(), [
+                        'total_stock' => $totalStock,
+                    ]),
                     'unitType' => $unitType,
                     'quantity' => $quantity,
                     'priceUsed' => $priceUsed,
@@ -379,6 +445,67 @@ class PosController extends Controller
         }
 
         return $query;
+    }
+
+    private function getProductStock(int $productId): int
+    {
+        return (int) ProductQty::query()
+            ->where('product_id', $productId)
+            ->where('status', 'Active')
+            ->where('quantity', '>', 0)
+            ->sum('quantity');
+    }
+
+    private function piecesForCartLine(MedicineProduct $product, string $unitType, int $quantitySold): int
+    {
+        return $unitType === 'Box'
+            ? $quantitySold * (int) $product->pack_size
+            : $quantitySold;
+    }
+
+    /**
+     * @param  array<int>  $excludeItemIds
+     */
+    private function piecesInCartForProduct(
+        int $cartId,
+        int $productId,
+        array $excludeItemIds = []
+    ): int {
+        $items = PosCartItem::query()
+            ->where('cart_id', $cartId)
+            ->where('product_id', $productId)
+            ->when($excludeItemIds !== [], function ($query) use ($excludeItemIds) {
+                $query->whereNotIn('id', $excludeItemIds);
+            })
+            ->with('product')
+            ->get();
+
+        return (int) $items->sum(function (PosCartItem $item) {
+            return $this->piecesForCartLine(
+                $item->product,
+                $item->unit_type,
+                (int) $item->quantity_sold
+            );
+        });
+    }
+
+    private function cartStockValidationError(
+        MedicineProduct $product,
+        int $cartId,
+        string $unitType,
+        int $newQuantity,
+        ?int $excludeItemId = null
+    ): ?string {
+        $excludeItemIds = $excludeItemId ? [$excludeItemId] : [];
+        $available = $this->getProductStock($product->id);
+        $otherPieces = $this->piecesInCartForProduct($cartId, $product->id, $excludeItemIds);
+        $newPieces = $this->piecesForCartLine($product, $unitType, $newQuantity);
+
+        if ($otherPieces + $newPieces > $available) {
+            return "Insufficient Stock for {$product->med_name}.";
+        }
+
+        return null;
     }
 
     private function assertSufficientBranchStock(

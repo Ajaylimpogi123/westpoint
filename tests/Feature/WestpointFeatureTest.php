@@ -152,6 +152,36 @@ class WestpointFeatureTest extends TestCase
         $this->assertSame(98, (int) ProductQty::find($this->batch->id)->quantity);
     }
 
+    public function test_pos_cart_rejects_quantity_above_stock(): void
+    {
+        $cartResponse = $this->actingAsWithSession($this->staff)
+            ->postJson('/pos/cart/items', [
+                'product_id' => $this->product->id,
+                'unit_type' => 'Piece',
+            ]);
+
+        $cartResponse->assertOk();
+        $itemId = $cartResponse->json('items.0.id');
+
+        $this->actingAsWithSession($this->staff)
+            ->patchJson("/pos/cart/items/{$itemId}", ['quantity_sold' => 101])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Insufficient Stock for Paracetamol.');
+
+        $this->actingAsWithSession($this->staff)
+            ->patchJson("/pos/cart/items/{$itemId}", ['quantity_sold' => 100])
+            ->assertOk()
+            ->assertJsonPath('items.0.quantity', 100);
+
+        $this->actingAsWithSession($this->staff)
+            ->postJson('/pos/cart/items', [
+                'product_id' => $this->product->id,
+                'unit_type' => 'Piece',
+            ])
+            ->assertStatus(422)
+            ->assertJsonPath('message', 'Insufficient Stock for Paracetamol.');
+    }
+
     public function test_pos_rejects_insufficient_payment(): void
     {
         $cart = PosCart::create([

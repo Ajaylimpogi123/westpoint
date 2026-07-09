@@ -5,6 +5,7 @@ import {
     removeCartItem,
     updateCartItem,
 } from "../lib/posCartApi";
+import { canAddToCart, getMaxQuantity, normalizeCartQuantityInput } from "../lib/pricing";
 
 function resolveCartError(error) {
     return (
@@ -51,9 +52,15 @@ export function usePosCart(initialActiveCart, branchId) {
 
     const addToCart = useCallback(
         async (product, unitType = "Piece") => {
+            if (!canAddToCart(product, unitType, cartItems)) {
+                toast.error(`Insufficient stock for ${product.med_name}.`);
+
+                return;
+            }
+
             await syncCart(() => addCartItem(product.id, unitType));
         },
-        [syncCart],
+        [cartItems, syncCart],
     );
 
     const removeFromCart = useCallback(
@@ -77,11 +84,62 @@ export function usePosCart(initialActiveCart, branchId) {
                 return;
             }
 
-            const quantity = Math.max(1, item.quantity + change);
+            const maxQty = getMaxQuantity(
+                item.product,
+                item.unitType,
+                cartItems,
+                key,
+            );
+            const quantity = Math.max(1, Math.min(item.quantity + change, maxQty));
 
             if (quantity <= 0) {
                 await syncCart(() => removeCartItem(item.id));
 
+                return;
+            }
+
+            if (quantity === item.quantity) {
+                if (change > 0) {
+                    toast.error(
+                        `Insufficient stock for ${item.product.med_name}.`,
+                    );
+                }
+
+                return;
+            }
+
+            await syncCart(() =>
+                updateCartItem(item.id, { quantity_sold: quantity }),
+            );
+        },
+        [cartItems, syncCart],
+    );
+
+    const setQuantity = useCallback(
+        async (key, rawQuantity) => {
+            const item = cartItems.find((entry) => entry.key === key);
+
+            if (!item?.id) {
+                return;
+            }
+
+            const maxQty = getMaxQuantity(
+                item.product,
+                item.unitType,
+                cartItems,
+                key,
+            );
+            const trimmed = String(rawQuantity ?? "").trim();
+            const parsed = Math.floor(Number(trimmed));
+            const quantity = normalizeCartQuantityInput(rawQuantity, maxQty);
+
+            if (Number.isFinite(parsed) && parsed > maxQty) {
+                toast.error(
+                    `Insufficient stock for ${item.product.med_name}.`,
+                );
+            }
+
+            if (quantity === item.quantity) {
                 return;
             }
 
@@ -136,6 +194,7 @@ export function usePosCart(initialActiveCart, branchId) {
         addToCart,
         removeFromCart,
         updateQuantity,
+        setQuantity,
         updateUnitType,
         clearCart,
     };

@@ -16,6 +16,7 @@ export default function CartPanel({
     syncing,
     onRemove,
     onUpdateQuantity,
+    onSetQuantity,
     onUpdateUnitType,
     onCheckoutSuccess,
 }) {
@@ -38,6 +39,7 @@ export default function CartPanel({
                     syncing={syncing}
                     onRemove={onRemove}
                     onUpdateQuantity={onUpdateQuantity}
+                    onSetQuantity={onSetQuantity}
                     onUpdateUnitType={onUpdateUnitType}
                 />
 

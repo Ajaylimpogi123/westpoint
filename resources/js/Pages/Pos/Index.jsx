@@ -32,6 +32,7 @@ export default function Index({ branchId, activeCart }) {
         addToCart,
         removeFromCart,
         updateQuantity,
+        setQuantity,
         updateUnitType,
         clearCart,
     } = usePosCart(activeCart, branchId);
@@ -81,6 +82,7 @@ export default function Index({ branchId, activeCart }) {
                             pagination={pagination}
                             onPageChange={goToPage}
                             onAddToCart={handleAddToCart}
+                            cartItems={cartItems}
                         />
 
                         <CartPanel
@@ -93,6 +95,7 @@ export default function Index({ branchId, activeCart }) {
                             syncing={syncing}
                             onRemove={removeFromCart}
                             onUpdateQuantity={updateQuantity}
+                            onSetQuantity={setQuantity}
                             onUpdateUnitType={updateUnitType}
                             onCheckoutSuccess={clearCart}
                         />

@@ -1,4 +1,6 @@
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
     Select,
     SelectContent,
@@ -15,13 +17,64 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Minus, Plus, Trash2 } from "lucide-react";
-import { formatCurrency } from "../lib/pricing";
+import { formatCurrency, getMaxQuantity, normalizeCartQuantityInput } from "../lib/pricing";
+
+function CartQuantityInput({
+    itemKey,
+    quantity,
+    maxQty,
+    syncing,
+    onSetQuantity,
+}) {
+    const [draft, setDraft] = useState(String(quantity));
+
+    useEffect(() => {
+        setDraft(String(quantity));
+    }, [quantity]);
+
+    const applyNormalizedDraft = (rawValue) => {
+        const normalized = normalizeCartQuantityInput(rawValue, maxQty);
+
+        setDraft(String(normalized));
+
+        return normalized;
+    };
+
+    const handleInputChange = (event) => {
+        applyNormalizedDraft(event.target.value);
+    };
+
+    const commitDraft = () => {
+        const normalized = applyNormalizedDraft(draft);
+
+        onSetQuantity(itemKey, normalized);
+    };
+
+    return (
+        <Input
+            type="number"
+            min={1}
+            max={maxQty}
+            value={draft}
+            onChange={handleInputChange}
+            onBlur={commitDraft}
+            onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                    event.currentTarget.blur();
+                }
+            }}
+            disabled={syncing}
+            className="h-7 w-14 px-1 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+        />
+    );
+}
 
 export default function CartTable({
     cartItems,
     syncing,
     onRemove,
     onUpdateQuantity,
+    onSetQuantity,
     onUpdateUnitType,
 }) {
     if (cartItems.length === 0) {
@@ -46,7 +99,15 @@ export default function CartTable({
                     </TableRow>
                 </TableHeader>
                 <TableBody>
-                    {cartItems.map((item) => (
+                    {cartItems.map((item) => {
+                        const maxQty = getMaxQuantity(
+                            item.product,
+                            item.unitType,
+                            cartItems,
+                            item.key,
+                        );
+
+                        return (
                         <TableRow key={item.key}>
                             <TableCell>
                                 <div className="font-medium">
@@ -90,9 +151,13 @@ export default function CartTable({
                                     >
                                         <Minus className="h-3 w-3" />
                                     </Button>
-                                    <span className="w-8 text-center text-sm font-medium">
-                                        {item.quantity}
-                                    </span>
+                                    <CartQuantityInput
+                                        itemKey={item.key}
+                                        quantity={item.quantity}
+                                        maxQty={maxQty}
+                                        syncing={syncing}
+                                        onSetQuantity={onSetQuantity}
+                                    />
                                     <Button
                                         variant="outline"
                                         size="icon"
@@ -100,7 +165,9 @@ export default function CartTable({
                                         onClick={() =>
                                             onUpdateQuantity(item.key, 1)
                                         }
-                                        disabled={syncing}
+                                        disabled={
+                                            syncing || item.quantity >= maxQty
+                                        }
                                     >
                                         <Plus className="h-3 w-3" />
                                     </Button>
@@ -124,7 +191,8 @@ export default function CartTable({
                                 </Button>
                             </TableCell>
                         </TableRow>
-                    ))}
+                        );
+                    })}
                 </TableBody>
             </Table>
         </div>
