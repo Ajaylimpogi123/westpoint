@@ -8,16 +8,15 @@ import {
     SelectTrigger,
     SelectValue,
 } from "@/components/ui/select";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "@/components/ui/table";
 import { Minus, Plus, Trash2 } from "lucide-react";
-import { formatCurrency, getMaxQuantity, normalizeCartQuantityInput } from "../lib/pricing";
+import {
+    formatCurrency,
+    getMaxQuantity,
+    normalizeCartQuantityInput,
+} from "../lib/pricing";
+
+const CART_ROW_GRID =
+    "grid grid-cols-[2fr_1.2fr_1.5fr_1fr_1fr] items-center gap-1";
 
 function CartQuantityInput({
     itemKey,
@@ -64,7 +63,7 @@ function CartQuantityInput({
                 }
             }}
             disabled={syncing}
-            className="h-7 w-14 px-1 text-center [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
+            className="h-6 w-10 px-0.5 text-center text-xs [appearance:textfield] [&::-webkit-inner-spin-button]:appearance-none [&::-webkit-outer-spin-button]:appearance-none"
         />
     );
 }
@@ -86,40 +85,56 @@ export default function CartTable({
     }
 
     return (
-        <div className="max-h-[360px] overflow-y-auto rounded-md border">
-            <Table>
-                <TableHeader>
-                    <TableRow>
-                        <TableHead>Product</TableHead>
-                        <TableHead>Unit</TableHead>
-                        <TableHead className="text-center">Qty</TableHead>
-                        <TableHead className="text-right">Price</TableHead>
-                        <TableHead className="text-right">Total</TableHead>
-                        <TableHead className="w-10" />
-                    </TableRow>
-                </TableHeader>
-                <TableBody>
-                    {cartItems.map((item) => {
-                        const maxQty = getMaxQuantity(
-                            item.product,
-                            item.unitType,
-                            cartItems,
-                            item.key,
-                        );
+        <div className="max-h-[360px] overflow-x-hidden overflow-y-auto rounded-md border">
+            <div className="min-w-0">
+                <div
+                    className={`${CART_ROW_GRID} border-b bg-muted/50 px-2 py-2 text-xs font-medium text-muted-foreground`}
+                >
+                    <div className="min-w-0 truncate">Product</div>
+                    <div>Unit</div>
+                    <div className="text-center">Qty</div>
+                    <div className="text-right">Price</div>
+                    <div className="text-right">Total</div>
+                </div>
 
-                        return (
-                        <TableRow key={item.key}>
-                            <TableCell>
-                                <div className="font-medium">
-                                    {item.product.med_name}
-                                </div>
-                                {item.product.brand_name && (
-                                    <div className="text-xs text-muted-foreground">
-                                        {item.product.brand_name}
+                {cartItems.map((item) => {
+                    const maxQty = getMaxQuantity(
+                        item.product,
+                        item.unitType,
+                        cartItems,
+                        item.key,
+                    );
+
+                    return (
+                        <div
+                            key={item.key}
+                            className={`${CART_ROW_GRID} border-b px-2 py-2 text-xs last:border-b-0`}
+                        >
+                            <div className="min-w-0">
+                                <div className="flex items-start justify-between gap-0.5">
+                                    <div className="min-w-0">
+                                        <div className="truncate font-medium">
+                                            {item.product.med_name}
+                                        </div>
+                                        {item.product.brand_name && (
+                                            <div className="truncate text-muted-foreground">
+                                                {item.product.brand_name}
+                                            </div>
+                                        )}
                                     </div>
-                                )}
-                            </TableCell>
-                            <TableCell>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 shrink-0 text-muted-foreground hover:text-red-600"
+                                        onClick={() => onRemove(item.key)}
+                                        disabled={syncing}
+                                    >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="min-w-0">
                                 <Select
                                     value={item.unitType}
                                     onValueChange={(value) =>
@@ -127,7 +142,7 @@ export default function CartTable({
                                     }
                                     disabled={syncing}
                                 >
-                                    <SelectTrigger className="h-8 w-[100px]">
+                                    <SelectTrigger className="h-7 w-full min-w-0 px-2 text-xs">
                                         <SelectValue />
                                     </SelectTrigger>
                                     <SelectContent>
@@ -137,13 +152,14 @@ export default function CartTable({
                                         <SelectItem value="Box">Box</SelectItem>
                                     </SelectContent>
                                 </Select>
-                            </TableCell>
-                            <TableCell>
-                                <div className="flex items-center justify-center gap-1">
+                            </div>
+
+                            <div className="min-w-0">
+                                <div className="flex items-center justify-center gap-0.5">
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="h-7 w-7"
+                                        className="h-6 w-6"
                                         onClick={() =>
                                             onUpdateQuantity(item.key, -1)
                                         }
@@ -161,7 +177,7 @@ export default function CartTable({
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="h-7 w-7"
+                                        className="h-6 w-6"
                                         onClick={() =>
                                             onUpdateQuantity(item.key, 1)
                                         }
@@ -172,29 +188,18 @@ export default function CartTable({
                                         <Plus className="h-3 w-3" />
                                     </Button>
                                 </div>
-                            </TableCell>
-                            <TableCell className="text-right">
+                            </div>
+
+                            <div className="truncate text-right tabular-nums">
                                 {formatCurrency(item.priceUsed)}
-                            </TableCell>
-                            <TableCell className="text-right font-medium">
+                            </div>
+                            <div className="truncate text-right font-medium tabular-nums">
                                 {formatCurrency(item.totalPrice)}
-                            </TableCell>
-                            <TableCell>
-                                <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8 text-muted-foreground hover:text-red-600"
-                                    onClick={() => onRemove(item.key)}
-                                    disabled={syncing}
-                                >
-                                    <Trash2 className="h-4 w-4" />
-                                </Button>
-                            </TableCell>
-                        </TableRow>
-                        );
-                    })}
-                </TableBody>
-            </Table>
+                            </div>
+                        </div>
+                    );
+                })}
+            </div>
         </div>
     );
 }

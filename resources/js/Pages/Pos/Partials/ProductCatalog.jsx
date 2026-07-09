@@ -81,7 +81,7 @@ export default function ProductCatalog({
             : "No products in stock for your branch.";
 
     return (
-        <div className="flex h-full flex-col space-y-4">
+        <div className="flex h-full min-w-0 flex-col space-y-4">
             {/* Search bar + filter toggle */}
             <div className="flex gap-2">
                 <div className="relative flex-1">

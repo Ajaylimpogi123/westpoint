@@ -51,7 +51,7 @@ export default function Index({ branchId, activeCart }) {
             <Head title="Point of Sale" />
 
             <div className="relative z-10 py-8">
-                <div className="mx-auto max-w-[1600px] space-y-6 px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto w-full min-w-0 max-w-full space-y-6 px-4 sm:px-6 lg:px-8">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-white">
                             Point of Sale
@@ -68,37 +68,41 @@ export default function Index({ branchId, activeCart }) {
                         )}
                     </div>
 
-                    <div className="grid gap-6 lg:grid-cols-[1fr_420px] xl:grid-cols-[1fr_480px]">
-                        <ProductCatalog
-                            products={products}
-                            searchInput={searchInput}
-                            onSearchInputChange={setSearchInput}
-                            filters={filters}
-                            onFilterChange={updateFilter}
-                            onSearch={executeSearch}
-                            searchDisabled={searchDisabled}
-                            loading={loading}
-                            hasSearched={hasSearched}
-                            pagination={pagination}
-                            onPageChange={goToPage}
-                            onAddToCart={handleAddToCart}
-                            cartItems={cartItems}
-                        />
+                    <div className="grid w-full grid-cols-1 items-start gap-6 xl:grid-cols-[1fr_380px]">
+                        <div className="min-w-0">
+                            <ProductCatalog
+                                products={products}
+                                searchInput={searchInput}
+                                onSearchInputChange={setSearchInput}
+                                filters={filters}
+                                onFilterChange={updateFilter}
+                                onSearch={executeSearch}
+                                searchDisabled={searchDisabled}
+                                loading={loading}
+                                hasSearched={hasSearched}
+                                pagination={pagination}
+                                onPageChange={goToPage}
+                                onAddToCart={handleAddToCart}
+                                cartItems={cartItems}
+                            />
+                        </div>
 
-                        <CartPanel
-                            cartId={cartId}
-                            cartItems={cartItems}
-                            discount={discount}
-                            setDiscount={setDiscount}
-                            grossTotal={grossTotal}
-                            netTotal={netTotal}
-                            syncing={syncing}
-                            onRemove={removeFromCart}
-                            onUpdateQuantity={updateQuantity}
-                            onSetQuantity={setQuantity}
-                            onUpdateUnitType={updateUnitType}
-                            onCheckoutSuccess={clearCart}
-                        />
+                        <div className="min-w-0 w-full max-w-full">
+                            <CartPanel
+                                cartId={cartId}
+                                cartItems={cartItems}
+                                discount={discount}
+                                setDiscount={setDiscount}
+                                grossTotal={grossTotal}
+                                netTotal={netTotal}
+                                syncing={syncing}
+                                onRemove={removeFromCart}
+                                onUpdateQuantity={updateQuantity}
+                                onSetQuantity={setQuantity}
+                                onUpdateUnitType={updateUnitType}
+                                onCheckoutSuccess={clearCart}
+                            />
+                        </div>
                     </div>
                 </div>
             </div>

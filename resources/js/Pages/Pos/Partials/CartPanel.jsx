@@ -23,7 +23,7 @@ export default function CartPanel({
     const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
     return (
-        <Card className="flex h-full flex-col">
+        <Card className="flex h-full w-full max-w-full flex-col overflow-hidden">
             <CardHeader className="border-b pb-4">
                 <div className="flex items-center justify-between">
                     <CardTitle>Cart</CardTitle>
@@ -33,7 +33,7 @@ export default function CartPanel({
                 </div>
             </CardHeader>
 
-            <CardContent className="flex flex-1 flex-col gap-4 pt-4">
+            <CardContent className="flex min-w-0 flex-1 flex-col gap-4 overflow-hidden pt-4">
                 <CartTable
                     cartItems={cartItems}
                     syncing={syncing}
