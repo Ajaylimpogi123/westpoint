@@ -1,13 +1,19 @@
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import GenericBadge from "./GenericBadge";
 import StockStatusBadge from "./StockStatusBadge";
 import { canAddToCart, formatCurrency } from "../lib/pricing";
+
+function isGenericProduct(product) {
+    return Boolean(product?.is_generic);
+}
 
 export default function ProductCard({ product, cartItems, onAddToCart }) {
     const totalStock = Number(product.total_stock) || 0;
     const canAddPiece = canAddToCart(product, "Piece", cartItems);
     const canAddBox = canAddToCart(product, "Box", cartItems);
+    const isGeneric = isGenericProduct(product);
 
     return (
         <Card className="flex flex-col transition-shadow hover:shadow-md">
@@ -16,10 +22,13 @@ export default function ProductCard({ product, cartItems, onAddToCart }) {
                     <CardTitle className="text-base leading-tight">
                         {product.med_name}
                     </CardTitle>
-                    <StockStatusBadge
-                        totalStock={totalStock}
-                        packSize={product.pack_size}
-                    />
+                    <div className="flex shrink-0 flex-col items-end gap-1">
+                        {isGeneric && <GenericBadge />}
+                        <StockStatusBadge
+                            totalStock={totalStock}
+                            packSize={product.pack_size}
+                        />
+                    </div>
                 </div>
                 {product.brand_name && (
                     <p className="text-xs font-semibold text-foreground">

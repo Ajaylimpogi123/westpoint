@@ -10,6 +10,7 @@ export default function useAddMedicine() {
         form: "",
         pack_size: 1,
         brand_name: "",
+        is_generic: false,
         retail_price: "",
         stock_threshold: 10,
         wholesale_price: "",

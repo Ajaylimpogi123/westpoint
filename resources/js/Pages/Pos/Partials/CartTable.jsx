@@ -9,6 +9,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { Minus, Plus, Trash2 } from "lucide-react";
+import GenericBadge from "./GenericBadge";
 import {
     formatCurrency,
     getMaxQuantity,
@@ -113,8 +114,13 @@ export default function CartTable({
                             <div className="min-w-0">
                                 <div className="flex items-start justify-between gap-0.5">
                                     <div className="min-w-0">
-                                        <div className="truncate font-medium">
-                                            {item.product.med_name}
+                                        <div className="flex items-center gap-1.5">
+                                            <div className="truncate font-medium">
+                                                {item.product.med_name}
+                                            </div>
+                                            {item.product.is_generic && (
+                                                <GenericBadge className="shrink-0 px-1.5 py-0.5 text-[10px]" />
+                                            )}
                                         </div>
                                         {item.product.brand_name && (
                                             <div className="truncate text-muted-foreground">

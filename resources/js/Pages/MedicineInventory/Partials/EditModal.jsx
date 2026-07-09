@@ -9,6 +9,7 @@ import {
     DialogTitle,
     DialogDescription,
 } from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import InputError from "@/Components/InputError";
@@ -175,6 +176,23 @@ export default function EditModal({ medicine, children }) {
                                         message={errors.wholesale_price}
                                     />
                                 </div>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                <Checkbox
+                                    id="edit_is_generic"
+                                    checked={data.is_generic}
+                                    onCheckedChange={(checked) =>
+                                        setData("is_generic", checked === true)
+                                    }
+                                />
+                                <Label
+                                    htmlFor="edit_is_generic"
+                                    className="cursor-pointer font-normal"
+                                >
+                                    Generic medicine
+                                </Label>
+                                <InputError message={errors.is_generic} />
                             </div>
 
                             <div className="grid gap-3">
