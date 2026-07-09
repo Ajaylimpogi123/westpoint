@@ -17,4 +17,6 @@ Route::middleware('auth')->group(function () {
         ->name('pos.cart.items.update');
     Route::delete('/pos/cart/items/{cartItem}', [PosController::class, 'destroyCartItem'])
         ->name('pos.cart.items.destroy');
+    Route::get('/pos/cart/checkout-preview', [PosController::class, 'previewCheckout'])
+        ->name('pos.cart.checkout-preview');
 });

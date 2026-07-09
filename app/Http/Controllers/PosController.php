@@ -165,6 +165,58 @@ class PosController extends Controller
         return response()->json($this->serializeActiveCart($branchId));
     }
 
+    public function previewCheckout(): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        $cart = $this->activeCartQuery($branchId)
+            ->with(['items.product'])
+            ->first();
+
+        if (! $cart || $cart->items->isEmpty()) {
+            return response()->json(['items' => []]);
+        }
+
+        $allocatedByBatch = [];
+        $items = [];
+
+        foreach ($cart->items as $item) {
+            $product = $item->product;
+            $unitType = $item->unit_type;
+            $quantity = (int) $item->quantity_sold;
+            $piecesNeeded = $this->piecesForCartLine($product, $unitType, $quantity);
+
+            $priceUsed = $unitType === 'Box'
+                ? (float) $product->wholesale_price
+                : (float) $product->retail_price;
+
+            $items[] = [
+                'cart_item_id' => $item->id,
+                'product' => [
+                    'id' => $product->id,
+                    'med_name' => $product->med_name,
+                    'brand_name' => $product->brand_name,
+                    'dose' => $product->dose,
+                    'form' => $product->form,
+                    'pack_size' => (int) $product->pack_size,
+                    'is_generic' => (bool) $product->is_generic,
+                ],
+                'unitType' => $unitType,
+                'quantity' => $quantity,
+                'pieces' => $piecesNeeded,
+                'priceUsed' => $priceUsed,
+                'totalPrice' => round($priceUsed * $quantity, 2),
+                'batches' => $this->previewStockFefo(
+                    $product->id,
+                    $piecesNeeded,
+                    $allocatedByBatch
+                ),
+            ];
+        }
+
+        return response()->json(['items' => $items]);
+    }
+
     public function store(Request $request): RedirectResponse
     {
         $branchId = $this->branchIdOrFail();
@@ -538,6 +590,52 @@ class PosController extends Controller
     /**
      * @return array<int, array{batch_id: int, pieces: int}>
      */
+    /**
+     * @param  array<int, int>  $allocatedByBatch
+     * @return array<int, array{batch_id: int, lot_number: ?string, expiry: ?string, shelf_number: ?string, pieces: int}>
+     */
+    private function previewStockFefo(int $productId, int $piecesNeeded, array &$allocatedByBatch): array
+    {
+        $batches = ProductQty::query()
+            ->where('product_id', $productId)
+            ->where('status', 'Active')
+            ->where('quantity', '>', 0)
+            ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('expiry')
+            ->get();
+
+        $allocations = [];
+        $remaining = $piecesNeeded;
+
+        foreach ($batches as $batch) {
+            if ($remaining <= 0) {
+                break;
+            }
+
+            $alreadyAllocated = $allocatedByBatch[$batch->id] ?? 0;
+            $available = max((int) $batch->quantity - $alreadyAllocated, 0);
+
+            if ($available <= 0) {
+                continue;
+            }
+
+            $take = min($available, $remaining);
+            $allocatedByBatch[$batch->id] = $alreadyAllocated + $take;
+
+            $allocations[] = [
+                'batch_id' => $batch->id,
+                'lot_number' => $batch->lot_number,
+                'expiry' => $batch->expiry?->format('Y-m-d'),
+                'shelf_number' => $batch->shelf_number,
+                'pieces' => $take,
+            ];
+
+            $remaining -= $take;
+        }
+
+        return $allocations;
+    }
+
     private function deductStockFefo(int $productId, int $branchId, int $piecesNeeded, string $productName): array
     {
         $belongsToBranch = MedicineProduct::query()

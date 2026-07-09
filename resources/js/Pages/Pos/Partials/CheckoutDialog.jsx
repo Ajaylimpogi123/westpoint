@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
+import CheckoutReview from "./CheckoutReview";
+import { fetchCheckoutPreview } from "../lib/posCartApi";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -36,6 +38,49 @@ export default function CheckoutDialog({
     const [amountReceived, setAmountReceived] = useState("");
     const [customerName, setCustomerName] = useState("");
     const [processing, setProcessing] = useState(false);
+    const [reviewItems, setReviewItems] = useState([]);
+    const [reviewLoading, setReviewLoading] = useState(false);
+    const [reviewError, setReviewError] = useState("");
+
+    useEffect(() => {
+        if (!open || !cartId || cartItems.length === 0) {
+            setReviewItems([]);
+            setReviewError("");
+            return;
+        }
+
+        let cancelled = false;
+
+        const loadReview = async () => {
+            setReviewLoading(true);
+            setReviewError("");
+
+            try {
+                const data = await fetchCheckoutPreview();
+                if (!cancelled) {
+                    setReviewItems(data.items ?? []);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    setReviewItems([]);
+                    setReviewError(
+                        error?.response?.data?.message ||
+                            "Failed to load medicine review.",
+                    );
+                }
+            } finally {
+                if (!cancelled) {
+                    setReviewLoading(false);
+                }
+            }
+        };
+
+        loadReview();
+
+        return () => {
+            cancelled = true;
+        };
+    }, [open, cartId, cartItems]);
 
     const received = Number(amountReceived) || 0;
     const changeDue =
@@ -103,15 +148,22 @@ export default function CheckoutDialog({
             }}
         >
             <DialogTrigger asChild>{children}</DialogTrigger>
-            <DialogContent className="sm:max-w-md">
+            <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
                 <DialogHeader>
                     <DialogTitle>Checkout</DialogTitle>
                     <DialogDescription>
-                        Confirm payment details to complete this sale.
+                        Review medicines and confirm payment to complete this
+                        sale.
                     </DialogDescription>
                 </DialogHeader>
 
-                <div className="space-y-4 py-2">
+                <div className="space-y-4 overflow-y-auto py-2 pr-1">
+                    <CheckoutReview
+                        items={reviewItems}
+                        loading={reviewLoading}
+                        error={reviewError}
+                    />
+
                     <div className="rounded-lg bg-muted/50 p-4 text-sm">
                         <div className="flex justify-between">
                             <span>Gross Total</span>

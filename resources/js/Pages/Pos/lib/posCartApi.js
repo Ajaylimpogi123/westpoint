@@ -25,3 +25,9 @@ export async function removeCartItem(cartItemId) {
 
     return data;
 }
+
+export async function fetchCheckoutPreview() {
+    const { data } = await axios.get(route("pos.cart.checkout-preview"));
+
+    return data;
+}

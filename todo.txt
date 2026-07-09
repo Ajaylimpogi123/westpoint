@@ -1,9 +1,23 @@
-create a feature for specific lot number and expiry for POS
+add search stock in
 
-unified stock management
+pwd senior 20%
+single mother 10%
 
-ask when wholesale price gets lower when many ir ordered
+Add reference id gcash and card
 
-Remove box POS whole sale will be on a different page
+adress on stock out, tin and everything
 
-add backend pagination for POS, make sure to work on client side loading architecture
+add Costumers management
+
+add dropdown on quotation on medicine unit price is open field
+
+add invoice on pos
+
+stock out paper print
+
+total income for the day gross and net from - to
+
+
+
+
+add when stock is zero automatically soft deletes on
