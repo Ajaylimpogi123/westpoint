@@ -22,6 +22,12 @@ export default function CartPanel({
 }) {
     const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
 
+    const applyPercentDiscount = (percent) => {
+        const amount =
+            Math.round(grossTotal * (percent / 100) * 100) / 100;
+        setDiscount(Math.min(amount, grossTotal));
+    };
+
     return (
         <Card className="flex h-full w-full max-w-full flex-col overflow-hidden">
             <CardHeader className="border-b pb-4">
@@ -75,6 +81,27 @@ export default function CartPanel({
                                 }
                                 className="max-w-[140px] text-right"
                             />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={syncing || grossTotal <= 0}
+                                onClick={() => applyPercentDiscount(20)}
+                            >
+                                PWD / Senior 20%
+                            </Button>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                disabled={syncing || grossTotal <= 0}
+                                onClick={() => applyPercentDiscount(10)}
+                            >
+                                Single Mother 10%
+                            </Button>
                         </div>
 
                         <div className="flex items-center justify-between border-t pt-3">
