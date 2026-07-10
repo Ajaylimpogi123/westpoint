@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import InputError from "@/Components/InputError";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import useStockOut from "../Hooks/useStockOut";
+import MedicineSearchSelect from "./MedicineSearchSelect";
 
 function formatExpiry(value) {
     if (!value) {
@@ -192,32 +193,15 @@ export default function StockOutModal({
                                     <Label htmlFor="product_select">
                                         Medicine
                                     </Label>
-                                    <select
+                                    <MedicineSearchSelect
                                         id="product_select"
+                                        products={productList}
                                         value={draft.pd_id}
-                                        onChange={(event) =>
-                                            updateDraft(
-                                                "pd_id",
-                                                event.target.value,
-                                            )
+                                        onChange={(productId) =>
+                                            updateDraft("pd_id", productId)
                                         }
-                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                    >
-                                        <option value="">
-                                            Select a medicine
-                                        </option>
-                                        {productList.map((product) => (
-                                            <option
-                                                key={product.id}
-                                                value={product.id}
-                                            >
-                                                {product.med_name}
-                                                {product.brand_name
-                                                    ? ` (${product.brand_name})`
-                                                    : ""}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        placeholder="Search medicine..."
+                                    />
                                 </div>
 
                                 {selectedProduct && (

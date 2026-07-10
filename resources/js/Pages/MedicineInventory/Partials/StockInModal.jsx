@@ -13,6 +13,7 @@ import { Label } from "@/components/ui/label";
 import InputError from "@/Components/InputError";
 import { Plus, Trash2 } from "lucide-react";
 import useStockIn from "../Hooks/useStockIn";
+import MedicineSearchSelect from "./MedicineSearchSelect";
 
 function formatCurrency(value) {
     const amount = Number(value) || 0;
@@ -157,39 +158,15 @@ export default function StockInModal({
 
                                 <div className="grid gap-3">
                                     <Label htmlFor="product_select">Medicine</Label>
-                                    <select
+                                    <MedicineSearchSelect
                                         id="product_select"
+                                        products={products}
                                         value={draft.pd_id}
-                                        onChange={(event) =>
-                                            updateDraft(
-                                                "pd_id",
-                                                event.target.value,
-                                            )
+                                        onChange={(productId) =>
+                                            updateDraft("pd_id", productId)
                                         }
-                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                    >
-                                        <option value="">Select a medicine</option>
-                                        {products.map((product) => (
-                                            <option
-                                                key={product.id}
-                                                value={product.id}
-                                                data-brand={product.brand_name ?? ""}
-                                                data-dose={product.dose ?? ""}
-                                                data-form={product.form ?? ""}
-                                                data-retail-price={
-                                                    product.retail_price ?? 0
-                                                }
-                                                data-wholesale-price={
-                                                    product.wholesale_price ?? 0
-                                                }
-                                            >
-                                                {product.med_name}
-                                                {product.brand_name
-                                                    ? ` (${product.brand_name})`
-                                                    : ""}
-                                            </option>
-                                        ))}
-                                    </select>
+                                        placeholder="Search medicine..."
+                                    />
                                 </div>
 
                                 {selectedProduct && (
