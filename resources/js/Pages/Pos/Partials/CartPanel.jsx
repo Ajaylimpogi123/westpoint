@@ -4,6 +4,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import CartTable from "./CartTable";
 import CheckoutDialog from "./CheckoutDialog";
+import CustomerSearchSelect from "./CustomerSearchSelect";
+import NewCustomerModal from "./NewCustomerModal";
 import { formatCurrency } from "../lib/pricing";
 
 export default function CartPanel({
@@ -11,9 +13,18 @@ export default function CartPanel({
     cartItems,
     discount,
     setDiscount,
+    discountPreset,
+    togglePercentDiscount,
+    selectedCustomer,
+    onSelectCustomer,
+    onClearCustomer,
     grossTotal,
     netTotal,
     syncing,
+    branchId,
+    branchName,
+    branches,
+    roleId,
     onRemove,
     onUpdateQuantity,
     onSetQuantity,
@@ -21,12 +32,7 @@ export default function CartPanel({
     onCheckoutSuccess,
 }) {
     const itemCount = cartItems.reduce((sum, item) => sum + item.quantity, 0);
-
-    const applyPercentDiscount = (percent) => {
-        const amount =
-            Math.round(grossTotal * (percent / 100) * 100) / 100;
-        setDiscount(Math.min(amount, grossTotal));
-    };
+    const showBranch = roleId === 2;
 
     return (
         <Card className="flex h-full w-full max-w-full flex-col overflow-hidden">
@@ -50,7 +56,29 @@ export default function CartPanel({
                 />
 
                 {cartItems.length > 0 && (
-                    <div className="mt-auto space-y-3 rounded-lg bg-muted/50 p-4">
+                    <>
+                        <div className="space-y-2">
+                            <Label>Customer</Label>
+                            <div className="flex items-center gap-2">
+                                <CustomerSearchSelect
+                                    value={selectedCustomer}
+                                    onChange={onSelectCustomer}
+                                    onClear={onClearCustomer}
+                                    showBranch={showBranch}
+                                    disabled={syncing}
+                                />
+                                <NewCustomerModal
+                                    branchId={branchId}
+                                    branchName={branchName}
+                                    branches={branches}
+                                    roleId={roleId}
+                                    onCustomerCreated={onSelectCustomer}
+                                    disabled={syncing}
+                                />
+                            </div>
+                        </div>
+
+                        <div className="mt-auto space-y-3 rounded-lg bg-muted/50 p-4">
                         <div className="flex items-center justify-between">
                             <span className="text-sm text-muted-foreground">
                                 Gross Total
@@ -86,19 +114,23 @@ export default function CartPanel({
                         <div className="grid grid-cols-2 gap-2">
                             <Button
                                 type="button"
-                                variant="outline"
+                                variant={
+                                    discountPreset === 20 ? "default" : "outline"
+                                }
                                 size="sm"
                                 disabled={syncing || grossTotal <= 0}
-                                onClick={() => applyPercentDiscount(20)}
+                                onClick={() => togglePercentDiscount(20)}
                             >
                                 PWD / Senior 20%
                             </Button>
                             <Button
                                 type="button"
-                                variant="outline"
+                                variant={
+                                    discountPreset === 10 ? "default" : "outline"
+                                }
                                 size="sm"
                                 disabled={syncing || grossTotal <= 0}
-                                onClick={() => applyPercentDiscount(10)}
+                                onClick={() => togglePercentDiscount(10)}
                             >
                                 Single Mother 10%
                             </Button>
@@ -119,13 +151,15 @@ export default function CartPanel({
                             discount={discount}
                             grossTotal={grossTotal}
                             netTotal={netTotal}
+                            selectedCustomer={selectedCustomer}
                             onCheckoutSuccess={onCheckoutSuccess}
                         >
                             <Button className="w-full" size="lg" disabled={syncing}>
                                 Checkout {formatCurrency(netTotal)}
                             </Button>
                         </CheckoutDialog>
-                    </div>
+                        </div>
+                    </>
                 )}
             </CardContent>
         </Card>

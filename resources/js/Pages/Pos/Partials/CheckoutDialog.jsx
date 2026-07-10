@@ -23,6 +23,7 @@ import {
     SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency } from "../lib/pricing";
+import { formatCustomerName } from "../lib/customerDiscount";
 
 export default function CheckoutDialog({
     children,
@@ -31,12 +32,12 @@ export default function CheckoutDialog({
     discount,
     grossTotal,
     netTotal,
+    selectedCustomer,
     onCheckoutSuccess,
 }) {
     const [open, setOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState("cash");
     const [amountReceived, setAmountReceived] = useState("");
-    const [customerName, setCustomerName] = useState("");
     const [processing, setProcessing] = useState(false);
     const [reviewItems, setReviewItems] = useState([]);
     const [reviewLoading, setReviewLoading] = useState(false);
@@ -103,7 +104,10 @@ export default function CheckoutDialog({
             route("pos.store"),
             {
                 cart_id: cartId,
-                customer_name: customerName.trim() || null,
+                customer_id: selectedCustomer?.customer_id ?? null,
+                customer_name: selectedCustomer
+                    ? formatCustomerName(selectedCustomer)
+                    : null,
                 items: cartItems.map((item) => ({
                     product_id: item.product.id,
                     unit_type: item.unitType,
@@ -120,7 +124,6 @@ export default function CheckoutDialog({
                 onSuccess: () => {
                     setOpen(false);
                     setAmountReceived("");
-                    setCustomerName("");
                     setPaymentMethod("cash");
                     onCheckoutSuccess?.();
                 },
@@ -140,12 +143,7 @@ export default function CheckoutDialog({
     return (
         <Dialog
             open={open}
-            onOpenChange={(nextOpen) => {
-                setOpen(nextOpen);
-                if (!nextOpen) {
-                    setCustomerName("");
-                }
-            }}
+            onOpenChange={setOpen}
         >
             <DialogTrigger asChild>{children}</DialogTrigger>
             <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
@@ -182,21 +180,26 @@ export default function CheckoutDialog({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="customer_name">
-                            Customer Name{" "}
-                            <span className="text-muted-foreground">
-                                (optional)
-                            </span>
-                        </Label>
-                        <Input
-                            id="customer_name"
-                            value={customerName}
-                            onChange={(event) =>
-                                setCustomerName(event.target.value)
-                            }
-                            placeholder="Walk-in customer"
-                            maxLength={255}
-                        />
+                        <Label>Customer</Label>
+                        {selectedCustomer ? (
+                            <div className="rounded-lg border bg-muted/30 p-3 text-sm">
+                                <div className="font-medium">
+                                    {formatCustomerName(selectedCustomer)}
+                                </div>
+                                <div className="mt-1 text-muted-foreground">
+                                    {[
+                                        selectedCustomer.phone_number,
+                                        selectedCustomer.customer_type,
+                                    ]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                </div>
+                            </div>
+                        ) : (
+                            <p className="rounded-lg border border-dashed p-3 text-sm text-muted-foreground">
+                                Walk-in customer
+                            </p>
+                        )}
                     </div>
 
                     <div className="space-y-2">

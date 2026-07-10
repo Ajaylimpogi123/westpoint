@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Branch;
+use App\Models\BranchCustomer;
 use App\Models\MedicineProduct;
 use App\Models\PosCart;
 use App\Models\PosCartItem;
@@ -20,9 +22,18 @@ class PosController extends Controller
     public function index(): Response
     {
         $branchId = $this->branchIdOrFail();
+        $roleId = $this->roleId();
+        $canFilterBranches = $roleId === 2;
+        $branchName = Branch::query()
+            ->whereKey($branchId)
+            ->value('branch_name');
 
         return Inertia::render('Pos/Index', [
             'branchId' => $branchId,
+            'branchName' => $branchName,
+            'branches' => $canFilterBranches
+                ? Branch::orderBy('branch_name')->get(['id', 'branch_name'])
+                : [],
             'activeCart' => $this->serializeActiveCart($branchId),
         ]);
     }
@@ -62,6 +73,70 @@ class PosController extends Controller
             ->paginate(50);
 
         return response()->json($products);
+    }
+
+    public function searchCustomers(Request $request): JsonResponse
+    {
+        $this->branchIdOrFail();
+
+        $validated = $request->validate([
+            'search' => ['required', 'string', 'min:1', 'max:255'],
+        ]);
+
+        $search = trim($validated['search']);
+        $roleId = $this->roleId();
+        $canFilterBranches = $roleId === 2;
+
+        $customers = BranchCustomer::query()
+            ->with('branch:id,branch_name')
+            ->where('status', 'active')
+            ->when(! $canFilterBranches, fn ($query) => $query->forBranch($this->branchIdOrFail()))
+            ->where(function ($query) use ($search) {
+                $query->where('first_name', 'like', "%{$search}%")
+                    ->orWhere('last_name', 'like', "%{$search}%")
+                    ->orWhere('phone_number', 'like', "%{$search}%");
+            })
+            ->orderBy('last_name')
+            ->orderBy('first_name')
+            ->limit(20)
+            ->get()
+            ->map(fn (BranchCustomer $customer) => $this->serializeCustomer($customer));
+
+        return response()->json(['customers' => $customers]);
+    }
+
+    public function storeCustomer(Request $request): JsonResponse
+    {
+        $roleId = $this->roleId();
+        $canAssignBranch = $roleId === 2;
+
+        $validated = $request->validate([
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'phone_number' => ['required', 'digits:11'],
+            'customer_type' => ['required', 'string', 'in:Regular,Senior Citizen,PWD'],
+            'branch_id' => [$canAssignBranch ? 'required' : 'nullable', 'integer', 'exists:branches,id'],
+        ]);
+
+        $branchId = $canAssignBranch
+            ? (int) $validated['branch_id']
+            : $this->branchIdOrFail();
+
+        $customer = BranchCustomer::create([
+            'branch_id' => $branchId,
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
+            'phone_number' => $validated['phone_number'],
+            'customer_type' => $validated['customer_type'],
+            'status' => 'active',
+            'created_by' => auth()->id(),
+        ]);
+
+        $customer->load('branch:id,branch_name');
+
+        return response()->json([
+            'customer' => $this->serializeCustomer($customer),
+        ], 201);
     }
 
     public function storeCartItem(Request $request): JsonResponse
@@ -109,6 +184,47 @@ class PosController extends Controller
                 'product_id' => $validated['product_id'],
                 'unit_type' => $validated['unit_type'],
                 'quantity_sold' => 1,
+            ]);
+        }
+
+        return response()->json($this->serializeActiveCart($branchId));
+    }
+
+    public function updateCart(Request $request): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        $validated = $request->validate([
+            'customer_id' => ['nullable', 'integer', 'exists:tbl_customers,customer_id'],
+        ]);
+
+        $cart = $this->getOrCreateActiveCart($branchId);
+        $customerId = $validated['customer_id'] ?? null;
+
+        if ($customerId) {
+            $roleId = $this->roleId();
+            $canFilterBranches = $roleId === 2;
+
+            $customer = BranchCustomer::query()
+                ->where('customer_id', $customerId)
+                ->where('status', 'active')
+                ->when(! $canFilterBranches, fn ($query) => $query->forBranch($branchId))
+                ->first();
+
+            if (! $customer) {
+                return response()->json([
+                    'message' => 'Selected customer was not found for your branch.',
+                ], 422);
+            }
+
+            $cart->update([
+                'customer_id' => $customer->customer_id,
+                'customer_name' => trim("{$customer->first_name} {$customer->last_name}"),
+            ]);
+        } else {
+            $cart->update([
+                'customer_id' => null,
+                'customer_name' => null,
             ]);
         }
 
@@ -231,6 +347,7 @@ class PosController extends Controller
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'amount_received' => ['required', 'numeric', 'min:0'],
             'customer_name' => ['nullable', 'string', 'max:255'],
+            'customer_id' => ['nullable', 'integer', 'exists:tbl_customers,customer_id'],
         ]);
 
         $cart = PosCart::query()
@@ -248,9 +365,26 @@ class PosController extends Controller
         $customerName = isset($validated['customer_name'])
             ? trim($validated['customer_name'])
             : null;
+        $customerId = isset($validated['customer_id'])
+            ? (int) $validated['customer_id']
+            : null;
 
         if ($customerName === '') {
             $customerName = null;
+        }
+
+        if ($customerId) {
+            $customer = BranchCustomer::query()
+                ->where('customer_id', $customerId)
+                ->where('status', 'active')
+                ->first();
+
+            if (! $customer) {
+                return redirect()->back()
+                    ->with('error', 'Selected customer was not found.');
+            }
+
+            $customerName = trim("{$customer->first_name} {$customer->last_name}");
         }
 
         try {
@@ -312,6 +446,7 @@ class PosController extends Controller
                 'branch_id' => $branchId,
                 'user_id' => auth()->id(),
                 'customer_name' => $customerName,
+                'customer_id' => $customerId,
                 'gross_amount' => $grossAmount,
                 'discount_amount' => $discountAmount,
                 'net_amount' => $netAmount,
@@ -427,23 +562,31 @@ class PosController extends Controller
     }
 
     /**
-     * @return array{id: int|null, items: array<int, array<string, mixed>>}
+     * @return array{
+     *     id: int|null,
+     *     customer: array<string, mixed>|null,
+     *     items: array<int, array<string, mixed>>
+     * }
      */
     private function serializeActiveCart(int $branchId): array
     {
         $cart = $this->activeCartQuery($branchId)
-            ->with(['items.product'])
+            ->with(['items.product', 'customer.branch'])
             ->first();
 
         if (! $cart) {
             return [
                 'id' => null,
+                'customer' => null,
                 'items' => [],
             ];
         }
 
         return [
             'id' => $cart->id,
+            'customer' => $cart->customer
+                ? $this->serializeCustomer($cart->customer)
+                : null,
             'items' => $cart->items->map(function (PosCartItem $item) {
                 $product = $item->product;
                 $unitType = $item->unit_type;
@@ -746,6 +889,33 @@ class PosController extends Controller
         $branchId = session('branch_id');
 
         return $branchId ? (int) $branchId : null;
+    }
+
+    private function roleId(): int
+    {
+        return (int) session('role_id');
+    }
+
+    /**
+     * @return array{
+     *     customer_id: int,
+     *     first_name: string,
+     *     last_name: string,
+     *     phone_number: ?string,
+     *     customer_type: string,
+     *     branch_name: ?string
+     * }
+     */
+    private function serializeCustomer(BranchCustomer $customer): array
+    {
+        return [
+            'customer_id' => $customer->customer_id,
+            'first_name' => $customer->first_name,
+            'last_name' => $customer->last_name,
+            'phone_number' => $customer->phone_number,
+            'customer_type' => $customer->customer_type,
+            'branch_name' => $customer->branch?->branch_name,
+        ];
     }
 
     private function branchIdOrFail(): int

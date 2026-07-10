@@ -16,6 +16,8 @@ class PosCart extends Model
     protected $fillable = [
         'branch_id',
         'user_id',
+        'customer_name',
+        'customer_id',
     ];
 
     public function branch(): BelongsTo
@@ -26,6 +28,11 @@ class PosCart extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(BranchCustomer::class, 'customer_id', 'customer_id');
     }
 
     public function items(): HasMany

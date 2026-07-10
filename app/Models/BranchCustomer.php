@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class BranchCustomer extends Model
 {
@@ -34,6 +35,11 @@ class BranchCustomer extends Model
     public function createdBy(): BelongsTo
     {
         return $this->belongsTo(User::class, 'created_by');
+    }
+
+    public function sales(): HasMany
+    {
+        return $this->hasMany(Sale::class, 'customer_id', 'customer_id');
     }
 
     public function scopeForBranch($query, int $branchId)

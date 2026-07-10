@@ -1,5 +1,5 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Head } from "@inertiajs/react";
+import { Head, usePage } from "@inertiajs/react";
 import { useCallback } from "react";
 import ProductCatalog from "./Partials/ProductCatalog";
 import CartPanel from "./Partials/CartPanel";
@@ -7,7 +7,9 @@ import { usePosCart } from "./Hooks/usePosCart";
 import { usePosProducts } from "./Hooks/usePosProducts";
 import { usePosAlerts } from "./Hooks/usePosAlerts";
 
-export default function Index({ branchId, activeCart }) {
+export default function Index({ branchId, branchName, branches = [], activeCart }) {
+    const { auth } = usePage().props;
+    const roleId = auth?.user?.role_id;
     const {
         searchInput,
         setSearchInput,
@@ -26,6 +28,11 @@ export default function Index({ branchId, activeCart }) {
         cartItems,
         discount,
         setDiscount,
+        discountPreset,
+        togglePercentDiscount,
+        selectedCustomer,
+        selectCustomer,
+        clearSelectedCustomer,
         grossTotal,
         netTotal,
         syncing,
@@ -93,9 +100,18 @@ export default function Index({ branchId, activeCart }) {
                                 cartItems={cartItems}
                                 discount={discount}
                                 setDiscount={setDiscount}
+                                discountPreset={discountPreset}
+                                togglePercentDiscount={togglePercentDiscount}
+                                selectedCustomer={selectedCustomer}
+                                onSelectCustomer={selectCustomer}
+                                onClearCustomer={clearSelectedCustomer}
                                 grossTotal={grossTotal}
                                 netTotal={netTotal}
                                 syncing={syncing}
+                                branchId={branchId}
+                                branchName={branchName}
+                                branches={branches}
+                                roleId={roleId}
                                 onRemove={removeFromCart}
                                 onUpdateQuantity={updateQuantity}
                                 onSetQuantity={setQuantity}

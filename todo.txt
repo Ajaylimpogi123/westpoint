@@ -1,10 +1,7 @@
-add search stock in
 
 Add reference id gcash and card
 
 adress on stock out, tin and everything
-
-add Costumers management
 
 add dropdown on quotation on medicine unit price is open field
 

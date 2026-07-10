@@ -18,6 +18,7 @@ class Sale extends Model
         'branch_id',
         'user_id',
         'customer_name',
+        'customer_id',
         'gross_amount',
         'discount_amount',
         'net_amount',
@@ -41,6 +42,11 @@ class Sale extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class, 'user_id');
+    }
+
+    public function customer(): BelongsTo
+    {
+        return $this->belongsTo(BranchCustomer::class, 'customer_id', 'customer_id');
     }
 
     public function items(): HasMany

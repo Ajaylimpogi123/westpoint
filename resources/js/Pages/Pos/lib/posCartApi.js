@@ -9,6 +9,14 @@ export async function addCartItem(productId, unitType) {
     return data;
 }
 
+export async function updateCartCustomer(customerId) {
+    const { data } = await axios.patch(route("pos.cart.update"), {
+        customer_id: customerId,
+    });
+
+    return data;
+}
+
 export async function updateCartItem(cartItemId, payload) {
     const { data } = await axios.patch(
         route("pos.cart.items.update", cartItemId),

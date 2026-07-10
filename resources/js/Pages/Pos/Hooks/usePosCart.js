@@ -1,10 +1,15 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
     addCartItem,
     removeCartItem,
+    updateCartCustomer,
     updateCartItem,
 } from "../lib/posCartApi";
+import {
+    isDiscountEligible,
+    percentDiscountAmount,
+} from "../lib/customerDiscount";
 import { canAddToCart, getMaxQuantity, normalizeCartQuantityInput } from "../lib/pricing";
 
 function resolveCartError(error) {
@@ -14,15 +19,139 @@ function resolveCartError(error) {
     );
 }
 
+function initialGrossTotal(items) {
+    return (items ?? []).reduce(
+        (sum, item) => sum + Number(item.totalPrice || 0),
+        0,
+    );
+}
+
 export function usePosCart(initialActiveCart, branchId) {
+    const initialCustomer = initialActiveCart?.customer ?? null;
+    const initialItems = initialActiveCart?.items ?? [];
+    const initialGross = initialGrossTotal(initialItems);
+    const initialPreset =
+        initialCustomer && isDiscountEligible(initialCustomer) ? 20 : null;
+
     const [cartId, setCartId] = useState(initialActiveCart?.id ?? null);
-    const [cartItems, setCartItems] = useState(initialActiveCart?.items ?? []);
-    const [discount, setDiscount] = useState(0);
+    const [cartItems, setCartItems] = useState(initialItems);
+    const [discount, setDiscount] = useState(() => {
+        if (initialPreset === 20) {
+            return percentDiscountAmount(initialGross, 20);
+        }
+
+        return 0;
+    });
+    const [discountPreset, setDiscountPreset] = useState(initialPreset);
+    const [selectedCustomer, setSelectedCustomer] = useState(initialCustomer);
     const [syncing, setSyncing] = useState(false);
+
+    const grossTotal = useMemo(
+        () =>
+            cartItems.reduce(
+                (sum, item) => sum + Number(item.totalPrice || 0),
+                0,
+            ),
+        [cartItems],
+    );
 
     const applyCartResponse = useCallback((data) => {
         setCartId(data.id);
         setCartItems(data.items ?? []);
+        setSelectedCustomer(data.customer ?? null);
+    }, []);
+
+    useEffect(() => {
+        if (!selectedCustomer || !isDiscountEligible(selectedCustomer)) {
+            return;
+        }
+
+        if (discountPreset === 20) {
+            setDiscount(percentDiscountAmount(grossTotal, 20));
+        }
+    }, [grossTotal, selectedCustomer, discountPreset]);
+
+    useEffect(() => {
+        if (discountPreset === 10) {
+            setDiscount(percentDiscountAmount(grossTotal, 10));
+        }
+    }, [grossTotal, discountPreset]);
+
+    const persistCartCustomer = useCallback(
+        async (customer) => {
+            if (!branchId) {
+                toast.error("No branch assigned to your session.");
+                return false;
+            }
+
+            setSyncing(true);
+
+            try {
+                const data = await updateCartCustomer(
+                    customer?.customer_id ?? null,
+                );
+                applyCartResponse(data);
+
+                return true;
+            } catch (error) {
+                toast.error(resolveCartError(error));
+
+                return false;
+            } finally {
+                setSyncing(false);
+            }
+        },
+        [applyCartResponse, branchId],
+    );
+
+    const selectCustomer = useCallback(
+        async (customer) => {
+            const saved = await persistCartCustomer(customer);
+
+            if (!saved) {
+                return;
+            }
+
+            if (isDiscountEligible(customer)) {
+                setDiscount(percentDiscountAmount(grossTotal, 20));
+                setDiscountPreset(20);
+                return;
+            }
+
+            setDiscount(0);
+            setDiscountPreset(null);
+        },
+        [grossTotal, persistCartCustomer],
+    );
+
+    const clearSelectedCustomer = useCallback(async () => {
+        const saved = await persistCartCustomer(null);
+
+        if (!saved) {
+            return;
+        }
+
+        setDiscount(0);
+        setDiscountPreset(null);
+    }, [persistCartCustomer]);
+
+    const togglePercentDiscount = useCallback(
+        (percent) => {
+            if (discountPreset === percent) {
+                setDiscount(0);
+                setDiscountPreset(null);
+                return;
+            }
+
+            setDiscount(percentDiscountAmount(grossTotal, percent));
+            setDiscountPreset(percent);
+        },
+        [discountPreset, grossTotal],
+    );
+
+    const setDiscountManual = useCallback((value) => {
+        setDiscount(value);
+        setDiscountPreset(null);
     }, []);
 
     const syncCart = useCallback(
@@ -167,16 +296,9 @@ export function usePosCart(initialActiveCart, branchId) {
         setCartId(null);
         setCartItems([]);
         setDiscount(0);
+        setDiscountPreset(null);
+        setSelectedCustomer(null);
     }, []);
-
-    const grossTotal = useMemo(
-        () =>
-            cartItems.reduce(
-                (sum, item) => sum + Number(item.totalPrice || 0),
-                0,
-            ),
-        [cartItems],
-    );
 
     const netTotal = useMemo(
         () => Math.max(grossTotal - (Number(discount) || 0), 0),
@@ -187,7 +309,12 @@ export function usePosCart(initialActiveCart, branchId) {
         cartId,
         cartItems,
         discount,
-        setDiscount,
+        setDiscount: setDiscountManual,
+        discountPreset,
+        togglePercentDiscount,
+        selectedCustomer,
+        selectCustomer,
+        clearSelectedCustomer,
         grossTotal,
         netTotal,
         syncing,
