@@ -1,5 +1,5 @@
 import { useForm } from "@inertiajs/react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
     addItem,
     calculateTotal,
@@ -9,8 +9,10 @@ import {
 } from "../lib/quotationItems";
 
 export default function useAddQuotation() {
+    const [selectedCustomer, setSelectedCustomer] = useState(null);
+
     const form = useForm({
-        cust_id: "",
+        customer_id: "",
         sid_no: "",
         qt_date: "",
         address: "",
@@ -33,12 +35,17 @@ export default function useAddQuotation() {
     );
 
     function selectCustomer(customer) {
+        setSelectedCustomer(customer);
         form.setData({
             ...form.data,
-            cust_id: customer.cust_id,
-            // don't clobber an address the user already typed
+            customer_id: customer.customer_id,
             address: form.data.address || customer.address || "",
         });
+    }
+
+    function clearCustomer() {
+        setSelectedCustomer(null);
+        form.setData("customer_id", "");
     }
 
     function submit(e) {
@@ -48,11 +55,13 @@ export default function useAddQuotation() {
 
     return {
         form,
+        selectedCustomer,
         addItem: handleAddItem,
         removeItem: handleRemoveItem,
         updateItem: handleUpdateItem,
         total,
         selectCustomer,
+        clearCustomer,
         submit,
     };
 }

@@ -2,6 +2,7 @@ import { Head, Link, router } from "@inertiajs/react";
 import { useState } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import StatusBadge from "./Partials/StatusBadge";
+import { formatCustomerName } from "./lib/customerName";
 import { formatCurrency } from "./lib/quotationStatus";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -112,7 +113,7 @@ export default function Index({ quotations, filters }) {
                                         </Link>
                                     </td>
                                     <td className="px-4 py-3 text-slate-600">
-                                        {q.customer?.cust_name ?? "—"}
+                                        {formatCustomerName(q.customer) || "—"}
                                     </td>
                                     <td className="px-4 py-3 text-slate-600">
                                         {q.qt_date?.slice(0, 10)}

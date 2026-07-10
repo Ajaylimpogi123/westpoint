@@ -9,15 +9,17 @@ const inputCls =
     "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
 const labelCls = "mb-1 block text-sm font-medium text-slate-700";
 
-export default function Edit({ quotation, customers }) {
+export default function Edit({ quotation }) {
     const isDraft = quotation.status === "draft";
     const {
         form,
+        selectedCustomer,
         addItem,
         removeItem,
         updateItem,
         total,
         selectCustomer,
+        clearCustomer,
         submit,
     } = useEditQuotation(quotation);
     const { data, setData, processing, errors } = form;
@@ -64,10 +66,11 @@ export default function Edit({ quotation, customers }) {
                                 <div>
                                     <label className={labelCls}>Customer</label>
                                     <CustomerSearchSelect
-                                        customers={customers}
-                                        value={data.cust_id}
+                                        value={selectedCustomer}
                                         onChange={selectCustomer}
-                                        error={errors.cust_id}
+                                        onClear={clearCustomer}
+                                        error={errors.customer_id}
+                                        disabled={!isDraft}
                                     />
                                 </div>
 

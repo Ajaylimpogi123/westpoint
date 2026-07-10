@@ -42,6 +42,11 @@ class BranchCustomer extends Model
         return $this->hasMany(Sale::class, 'customer_id', 'customer_id');
     }
 
+    public function quotations(): HasMany
+    {
+        return $this->hasMany(Quotation::class, 'customer_id', 'customer_id');
+    }
+
     public function scopeForBranch($query, int $branchId)
     {
         return $query->where('branch_id', $branchId);

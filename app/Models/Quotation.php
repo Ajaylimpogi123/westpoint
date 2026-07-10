@@ -11,7 +11,7 @@ class Quotation extends Model
     protected $table = 'tbl_quotation';
 
     protected $fillable = [
-        'cust_id',
+        'customer_id',
         'qt_no',
         'sid_no',
         'qt_date',
@@ -38,7 +38,7 @@ class Quotation extends Model
 
     public function customer(): BelongsTo
     {
-        return $this->belongsTo(Customer::class, 'cust_id', 'cust_id');
+        return $this->belongsTo(BranchCustomer::class, 'customer_id', 'customer_id');
     }
 
     public function items(): HasMany

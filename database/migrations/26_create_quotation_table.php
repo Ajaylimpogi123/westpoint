@@ -12,10 +12,10 @@ return new class extends Migration
             $table->id();
 
             // ── Customer ──────────────────────────────────────────
-            $table->unsignedBigInteger('cust_id');
-            $table->foreign('cust_id')
-                  ->references('cust_id')
-                  ->on('tbl_customer')
+            $table->unsignedBigInteger('customer_id');
+            $table->foreign('customer_id')
+                  ->references('customer_id')
+                  ->on('tbl_customers')
                   ->cascadeOnDelete();
 
             // ── Quotation identifiers ─────────────────────────────

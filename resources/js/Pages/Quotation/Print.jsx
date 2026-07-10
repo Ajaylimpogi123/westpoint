@@ -1,5 +1,6 @@
 import { Head } from "@inertiajs/react";
 import { formatCurrency } from "./lib/quotationStatus";
+import { formatCustomerName } from "./lib/customerName";
 
 export default function Print({ quotation }) {
     const itemCount = quotation.items?.length ?? 0;
@@ -82,19 +83,9 @@ export default function Print({ quotation }) {
                                     Customer:
                                 </span>
                                 <span className="flex-1 border-b border-dotted border-slate-400 font-medium">
-                                    {quotation.customer?.cust_name}
+                                    {formatCustomerName(quotation.customer)}
                                 </span>
                             </div>
-                            {quotation.customer?.tin && (
-                                <div className="flex gap-2">
-                                    <span className="w-20 text-slate-500">
-                                        TIN:
-                                    </span>
-                                    <span className="flex-1 border-b border-dotted border-slate-400">
-                                        {quotation.customer.tin}
-                                    </span>
-                                </div>
-                            )}
                             <div className="flex gap-2">
                                 <span className="w-20 text-slate-500">
                                     Address:

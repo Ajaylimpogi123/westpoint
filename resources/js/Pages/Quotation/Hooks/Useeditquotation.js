@@ -1,5 +1,5 @@
 import { useForm } from "@inertiajs/react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
     addItem,
     calculateTotal,
@@ -8,8 +8,12 @@ import {
 } from "../lib/quotationItems";
 
 export default function useEditQuotation(quotation) {
+    const [selectedCustomer, setSelectedCustomer] = useState(
+        quotation.customer ?? null,
+    );
+
     const form = useForm({
-        cust_id: quotation.cust_id,
+        customer_id: quotation.customer_id,
         sid_no: quotation.sid_no,
         qt_date: quotation.qt_date?.slice(0, 10) ?? "",
         address: quotation.address,
@@ -39,7 +43,17 @@ export default function useEditQuotation(quotation) {
     );
 
     function selectCustomer(customer) {
-        form.setData({ ...form.data, cust_id: customer.cust_id });
+        setSelectedCustomer(customer);
+        form.setData({
+            ...form.data,
+            customer_id: customer.customer_id,
+            address: form.data.address || customer.address || "",
+        });
+    }
+
+    function clearCustomer() {
+        setSelectedCustomer(null);
+        form.setData("customer_id", "");
     }
 
     function submit(e) {
@@ -49,11 +63,13 @@ export default function useEditQuotation(quotation) {
 
     return {
         form,
+        selectedCustomer,
         addItem: handleAddItem,
         removeItem: handleRemoveItem,
         updateItem: handleUpdateItem,
         total,
         selectCustomer,
+        clearCustomer,
         submit,
     };
 }

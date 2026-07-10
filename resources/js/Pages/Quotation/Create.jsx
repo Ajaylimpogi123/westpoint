@@ -9,14 +9,16 @@ const inputCls =
     "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
 const labelCls = "mb-1 block text-sm font-medium text-slate-700";
 
-export default function Create({ customers, nextQtNo }) {
+export default function Create({ nextQtNo }) {
     const {
         form,
+        selectedCustomer,
         addItem,
         removeItem,
         updateItem,
         total,
         selectCustomer,
+        clearCustomer,
         submit,
     } = useAddQuotation();
     const { data, setData, processing, errors } = form;
@@ -48,10 +50,10 @@ export default function Create({ customers, nextQtNo }) {
                             <div>
                                 <label className={labelCls}>Customer</label>
                                 <CustomerSearchSelect
-                                    customers={customers}
-                                    value={data.cust_id}
+                                    value={selectedCustomer}
                                     onChange={selectCustomer}
-                                    error={errors.cust_id}
+                                    onClear={clearCustomer}
+                                    error={errors.customer_id}
                                 />
                             </div>
 

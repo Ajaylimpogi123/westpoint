@@ -6,8 +6,10 @@ import {
     STATUS_TRANSITIONS,
     formatCurrency,
 } from "./lib/quotationStatus";
+import { formatCustomerName } from "./lib/customerName";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
+
 export default function Show({ quotation }) {
     function setStatus(status) {
         if (!confirm(STATUS_CONFIRMATIONS[status])) return;
@@ -36,7 +38,7 @@ export default function Show({ quotation }) {
                             <StatusBadge status={quotation.status} />
                         </div>
                         <p className="text-md text-white">
-                            {quotation.customer?.cust_name}
+                            {formatCustomerName(quotation.customer)}
                         </p>
                     </div>
                     <Link href={route("quotations.index")}>

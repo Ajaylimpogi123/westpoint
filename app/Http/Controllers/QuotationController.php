@@ -2,12 +2,13 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Customer;
+use App\Models\BranchCustomer;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -25,11 +26,12 @@ class QuotationController extends Controller
         $quotations = Quotation::with(['customer', 'items'])
             ->when($search, function ($q) use ($search) {
                 $q->where('qt_no', 'like', "%{$search}%")
-                  ->orWhereHas('customer', fn($c) =>
-                        $c->where('cust_name', 'like', "%{$search}%")
+                  ->orWhereHas('customer', fn ($c) =>
+                        $c->where('first_name', 'like', "%{$search}%")
+                          ->orWhere('last_name', 'like', "%{$search}%")
                   );
             })
-            ->when($status !== 'all', fn($q) => $q->where('status', $status))
+            ->when($status !== 'all', fn ($q) => $q->where('status', $status))
             ->orderBy('created_at', 'desc')
             ->paginate(15)
             ->withQueryString();
@@ -47,9 +49,7 @@ class QuotationController extends Controller
     public function create(): Response
     {
         return Inertia::render('Quotation/Create', [
-            'customers' => Customer::orderBy('cust_name')
-                                   ->get(['cust_id', 'cust_name', 'address', 'tin']),
-            'nextQtNo'  => Quotation::generateQtNo(),
+            'nextQtNo' => Quotation::generateQtNo(),
         ]);
     }
 
@@ -60,7 +60,7 @@ class QuotationController extends Controller
     public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate([
-            'cust_id'                      => 'required|exists:tbl_customer,cust_id',
+            'customer_id'                  => ['required', 'integer', $this->customerExistsRule()],
             'sid_no'                       => 'nullable|string|max:100',
             'qt_date'                      => 'required|date',
             'address'                      => 'nullable|string|max:255',
@@ -81,7 +81,7 @@ class QuotationController extends Controller
 
         DB::transaction(function () use ($validated) {
             $quotation = Quotation::create([
-                'cust_id'       => $validated['cust_id'],
+                'customer_id'   => $validated['customer_id'],
                 'qt_no'         => Quotation::generateQtNo(),
                 'sid_no'        => $validated['sid_no'] ?? null,
                 'qt_date'       => $validated['qt_date'],
@@ -91,7 +91,7 @@ class QuotationController extends Controller
                 'checked_by'    => $validated['checked_by'] ?? null,
                 'prepared_by'   => $validated['prepared_by'] ?? null,
                 'status'        => 'draft',
-                'total_amount'  => 0, // recalculated after items are saved
+                'total_amount'  => 0,
             ]);
 
             foreach ($validated['items'] as $index => $item) {
@@ -104,10 +104,8 @@ class QuotationController extends Controller
                     'expiry_date'    => $item['expiry_date'] ?? null,
                     'qt_unit_price'  => $item['qt_unit_price'],
                     'sort_order'     => $index,
-                    // amount is auto-computed in QuotationItem::boot()
                 ]);
             }
-            // total_amount is auto-recalculated via QuotationItem::saved() observer
         });
 
         return redirect()->route('quotations.index')
@@ -137,8 +135,6 @@ class QuotationController extends Controller
 
         return Inertia::render('Quotation/Edit', [
             'quotation' => $quotation,
-            'customers' => Customer::orderBy('cust_name')
-                                   ->get(['cust_id', 'cust_name', 'address', 'tin']),
         ]);
     }
 
@@ -148,13 +144,12 @@ class QuotationController extends Controller
 
     public function update(Request $request, Quotation $quotation): RedirectResponse
     {
-        // Only draft quotations can be edited
         if (! $quotation->isDraft()) {
             return back()->withErrors(['status' => 'Only draft quotations can be edited.']);
         }
 
         $validated = $request->validate([
-            'cust_id'                => 'required|exists:tbl_customer,cust_id',
+            'customer_id'            => ['required', 'integer', $this->customerExistsRule()],
             'sid_no'                 => 'nullable|string|max:100',
             'qt_date'                => 'required|date',
             'address'                => 'nullable|string|max:255',
@@ -172,9 +167,8 @@ class QuotationController extends Controller
         ]);
 
         DB::transaction(function () use ($validated, $quotation) {
-            // Update header
             $quotation->update([
-                'cust_id'       => $validated['cust_id'],
+                'customer_id'   => $validated['customer_id'],
                 'sid_no'        => $validated['sid_no'] ?? null,
                 'qt_date'       => $validated['qt_date'],
                 'address'       => $validated['address'] ?? null,
@@ -184,7 +178,6 @@ class QuotationController extends Controller
                 'prepared_by'   => $validated['prepared_by'] ?? null,
             ]);
 
-            // Replace all items (delete old, insert new)
             $quotation->items()->delete();
 
             foreach ($validated['items'] as $index => $item) {
@@ -215,7 +208,6 @@ class QuotationController extends Controller
             return back()->withErrors(['status' => 'Only draft quotations can be deleted.']);
         }
 
-        // Items cascade-delete via foreign key onDelete('cascade')
         $quotation->delete();
 
         return redirect()->route('quotations.index')
@@ -230,7 +222,6 @@ class QuotationController extends Controller
     {
         $quotation->load(['customer', 'items']);
 
-        // Record who printed it and when
         $quotation->update([
             'printed_by'   => auth()->user()->name,
             'time_printed' => now()->format('m-d-Y h:i A'),
@@ -256,5 +247,40 @@ class QuotationController extends Controller
         $label = ucfirst($validated['status']);
 
         return back()->with('success', "Quotation marked as {$label}.");
+    }
+
+    private function roleId(): int
+    {
+        return (int) session('role_id');
+    }
+
+    private function branchId(): ?int
+    {
+        $branchId = session('branch_id');
+
+        return $branchId ? (int) $branchId : null;
+    }
+
+    private function branchIdOrFail(): int
+    {
+        $branchId = $this->branchId();
+
+        if (! $branchId) {
+            abort(403, 'No branch assigned to your session.');
+        }
+
+        return $branchId;
+    }
+
+    private function customerExistsRule(): Rule
+    {
+        $rule = Rule::exists('tbl_customers', 'customer_id')
+            ->where('status', 'active');
+
+        if ($this->roleId() !== 2) {
+            $rule->where('branch_id', $this->branchIdOrFail());
+        }
+
+        return $rule;
     }
 }
