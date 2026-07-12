@@ -17,6 +17,10 @@ export default function Edit({ quotation }) {
         addItem,
         removeItem,
         updateItem,
+        selectMedicine,
+        setItemUnit,
+        setItemLot,
+        clearMedicine,
         total,
         selectCustomer,
         clearCustomer,
@@ -204,6 +208,10 @@ export default function Edit({ quotation }) {
                                 updateItem={updateItem}
                                 addItem={addItem}
                                 removeItem={removeItem}
+                                onSelectMedicine={selectMedicine}
+                                onUnitChange={setItemUnit}
+                                onLotChange={setItemLot}
+                                onClearMedicine={clearMedicine}
                                 total={total}
                             />
                             {errors.items && (

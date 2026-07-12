@@ -3,12 +3,16 @@
 namespace App\Http\Controllers;
 
 use App\Models\BranchCustomer;
+use App\Models\MedicineProduct;
+use App\Models\ProductQty;
 use App\Models\Quotation;
 use App\Models\QuotationItem;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Rules\Exists;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -233,6 +237,63 @@ class QuotationController extends Controller
     }
 
     // ──────────────────────────────────────────────────────
+    // MEDICINE SEARCH — branch-scoped product lookup for item rows
+    // ──────────────────────────────────────────────────────
+
+    public function searchMedicines(Request $request): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        $validated = $request->validate([
+            'search' => ['required', 'string', 'min:1', 'max:255'],
+        ]);
+
+        $search = trim($validated['search']);
+
+        $products = $this->branchMedicinesQuery($branchId)
+            ->where(function ($query) use ($search) {
+                $query->where('med_name', 'like', "%{$search}%")
+                    ->orWhere('brand_name', 'like', "%{$search}%")
+                    ->orWhere('dose', 'like', "%{$search}%")
+                    ->orWhere('form', 'like', "%{$search}%");
+            })
+            ->orderBy('med_name')
+            ->limit(20)
+            ->get([
+                'id',
+                'med_name',
+                'brand_name',
+                'dose',
+                'form',
+            ])
+            ->map(fn (MedicineProduct $product) => $this->serializeMedicineSummary($product));
+
+        return response()->json(['products' => $products]);
+    }
+
+    public function showMedicine(MedicineProduct $product): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $product->branch_id !== $branchId || $product->status !== 'Active') {
+            abort(404);
+        }
+
+        if (! $product->batches()->available()->exists()) {
+            abort(404);
+        }
+
+        $product->load(['batches' => function ($query) {
+            $query->available()
+                ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('expiry')
+                ->select(['id', 'product_id', 'lot_number', 'expiry', 'quantity']);
+        }]);
+
+        return response()->json($this->serializeMedicineForQuotation($product));
+    }
+
+    // ──────────────────────────────────────────────────────
     // UPDATE STATUS — send / approve / cancel
     // ──────────────────────────────────────────────────────
 
@@ -272,7 +333,7 @@ class QuotationController extends Controller
         return $branchId;
     }
 
-    private function customerExistsRule(): Rule
+    private function customerExistsRule(): Exists
     {
         $rule = Rule::exists('tbl_customers', 'customer_id')
             ->where('status', 'active');
@@ -282,5 +343,76 @@ class QuotationController extends Controller
         }
 
         return $rule;
+    }
+
+    private function branchMedicinesQuery(int $branchId)
+    {
+        return MedicineProduct::query()
+            ->active()
+            ->forBranch($branchId)
+            ->whereHas('batches', function ($batchQuery) {
+                $batchQuery->available();
+            });
+    }
+
+    private function serializeMedicineSummary(MedicineProduct $product): array
+    {
+        return [
+            'id' => $product->id,
+            'med_name' => $product->med_name,
+            'brand_name' => $product->brand_name,
+            'dose' => $product->dose,
+            'form' => $product->form,
+            'label' => $this->formatMedicineDescription($product),
+        ];
+    }
+
+    private function serializeMedicineForQuotation(MedicineProduct $product): array
+    {
+        $lots = $product->batches
+            ->map(fn (ProductQty $batch) => [
+                'id' => $batch->id,
+                'lot_number' => $batch->lot_number,
+                'expiry' => $batch->expiry?->toDateString(),
+                'quantity' => (int) $batch->quantity,
+            ])
+            ->values()
+            ->all();
+
+        $primaryLot = $lots[0] ?? null;
+
+        return [
+            'id' => $product->id,
+            'med_name' => $product->med_name,
+            'brand_name' => $product->brand_name,
+            'dose' => $product->dose,
+            'form' => $product->form,
+            'pack_size' => (int) $product->pack_size,
+            'retail_price' => (string) $product->retail_price,
+            'wholesale_price' => (string) $product->wholesale_price,
+            'description' => $this->formatMedicineDescription($product),
+            'default_unit' => 'PIECE',
+            'default_price' => (string) $product->retail_price,
+            'lots' => $lots,
+            'primary_lot' => $primaryLot,
+        ];
+    }
+
+    private function formatMedicineDescription(MedicineProduct $product): string
+    {
+        $namePart = trim(implode(' ', array_filter([
+            $product->med_name,
+            $product->dose,
+        ])));
+
+        $description = $product->form
+            ? "{$product->form} - {$namePart}"
+            : $namePart;
+
+        if ($product->brand_name) {
+            $description .= " ({$product->brand_name})";
+        }
+
+        return $description;
     }
 }

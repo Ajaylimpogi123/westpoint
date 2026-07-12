@@ -10,6 +10,10 @@ Route::middleware(['auth'])->group(function () {
 
     Route::prefix('quotations')->name('quotations.')->group(function () {
 
+        // Medicine search for item rows (must be before /{quotation})
+        Route::get('/medicines/search',    [QuotationController::class, 'searchMedicines'])->name('medicines.search');
+        Route::get('/medicines/{product}', [QuotationController::class, 'showMedicine'])  ->name('medicines.show');
+
         // Standard CRUD
         Route::get('/',                    [QuotationController::class, 'index'])   ->name('index');
         Route::get('/create',              [QuotationController::class, 'create'])  ->name('create');

@@ -13,22 +13,23 @@ import { Button } from "@/components/ui/button";
 import { Plus, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { calculateAmount } from "../lib/quotationItems";
 import { formatCurrency } from "../lib/quotationStatus";
+import MedicineSearchSelect from "./MedicineSearchSelect";
 
 const EMPTY_ERRORS = {};
 const ITEMS_PER_PAGE = 10;
+const inputCls =
+    "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
 
-// One row, memoized. As long as `item` keeps the same object reference
-// (i.e. the parent's updateItem only replaces the row that actually
-// changed, not the whole array) and `updateItem`/`removeItem` are stable
-// (wrapped in useCallback in the parent), editing one row will not
-// re-render any of the others — this is what keeps a few hundred rows
-// fast to type into.
 const ItemRow = memo(function ItemRow({
     item,
     index,
     rowErrors,
     updateItem,
     removeItem,
+    onSelectMedicine,
+    onUnitChange,
+    onLotChange,
+    onClearMedicine,
     canRemove,
 }) {
     const handleChange = useCallback(
@@ -45,6 +46,13 @@ const ItemRow = memo(function ItemRow({
         () => calculateAmount(item),
         [item.qt_qty, item.qt_unit_price],
     );
+
+    const hasLinkedProduct = Boolean(item.product_id);
+    const lots = item._medicineMeta?.lots ?? [];
+    const hasMultipleLots = lots.length > 1;
+    const selectedLotId = lots.find(
+        (lot) => lot.lot_number === item.lot_number,
+    )?.id;
 
     return (
         <TableRow>
@@ -63,42 +71,82 @@ const ItemRow = memo(function ItemRow({
                 )}
             </TableCell>
             <TableCell className="align-top">
-                <Input
-                    type="text"
-                    value={item.qt_unit ?? ""}
-                    onChange={handleChange("qt_unit")}
-                    placeholder="BXS"
-                    className="w-24"
-                />
+                {hasLinkedProduct ? (
+                    <select
+                        value={item.qt_unit || "PIECE"}
+                        onChange={(e) => onUnitChange(index, e.target.value)}
+                        className={`${inputCls} w-24`}
+                    >
+                        <option value="PIECE">PIECE</option>
+                        <option value="BXS">BXS</option>
+                    </select>
+                ) : (
+                    <Input
+                        type="text"
+                        value={item.qt_unit ?? ""}
+                        onChange={handleChange("qt_unit")}
+                        placeholder="BXS"
+                        className="w-24"
+                    />
+                )}
             </TableCell>
             <TableCell className="min-w-[220px] align-top">
-                <Input
-                    type="text"
+                <MedicineSearchSelect
                     value={item.qt_description}
-                    onChange={handleChange("qt_description")}
-                    placeholder="Item description"
+                    onSelect={(product) => onSelectMedicine(index, product)}
+                    onClear={
+                        hasLinkedProduct
+                            ? () => onClearMedicine(index)
+                            : undefined
+                    }
+                    error={rowErrors.qt_description}
                 />
-                {rowErrors.qt_description && (
-                    <p className="mt-1 text-xs text-red-500">
-                        {rowErrors.qt_description}
-                    </p>
+            </TableCell>
+            <TableCell className="align-top">
+                {hasMultipleLots ? (
+                    <select
+                        value={selectedLotId ?? ""}
+                        onChange={(e) => {
+                            const lot = lots.find(
+                                (entry) =>
+                                    String(entry.id) === e.target.value,
+                            );
+                            if (lot) onLotChange(index, lot);
+                        }}
+                        className={`${inputCls} w-32`}
+                    >
+                        {lots.map((lot) => (
+                            <option key={lot.id} value={lot.id}>
+                                {lot.lot_number || "—"}
+                            </option>
+                        ))}
+                    </select>
+                ) : (
+                    <Input
+                        type="text"
+                        value={item.lot_number ?? ""}
+                        onChange={handleChange("lot_number")}
+                        readOnly={hasLinkedProduct}
+                        className="w-32"
+                    />
                 )}
             </TableCell>
             <TableCell className="align-top">
-                <Input
-                    type="text"
-                    value={item.lot_number ?? ""}
-                    onChange={handleChange("lot_number")}
-                    className="w-32"
-                />
-            </TableCell>
-            <TableCell className="align-top">
-                <Input
-                    type="date"
-                    value={item.expiry_date ?? ""}
-                    onChange={handleChange("expiry_date")}
-                    className="w-36"
-                />
+                {hasLinkedProduct ? (
+                    <Input
+                        type="date"
+                        value={item.expiry_date ?? ""}
+                        readOnly
+                        className="w-36"
+                    />
+                ) : (
+                    <Input
+                        type="date"
+                        value={item.expiry_date ?? ""}
+                        onChange={handleChange("expiry_date")}
+                        className="w-36"
+                    />
+                )}
             </TableCell>
             <TableCell className="align-top">
                 <Input
@@ -139,11 +187,12 @@ export default function ItemsTable({
     updateItem,
     addItem,
     removeItem,
+    onSelectMedicine,
+    onUnitChange,
+    onLotChange,
+    onClearMedicine,
     total,
 }) {
-    // Split "items.3.qt_qty": "..." style Inertia errors into
-    // { 3: { qt_qty: "..." } } once per render, instead of re-scanning
-    // the whole errors object inside every single row.
     const errorsByIndex = useMemo(() => {
         const map = {};
         for (const key in errors) {
@@ -158,9 +207,6 @@ export default function ItemsTable({
     const [page, setPage] = useState(1);
     const totalPages = Math.max(1, Math.ceil(items.length / ITEMS_PER_PAGE));
 
-    // If rows get removed and the current page no longer exists (e.g. you
-    // were on page 3 and deleted your way down to 1 page), snap back to
-    // the last valid page instead of showing an empty table.
     useEffect(() => {
         if (page > totalPages) setPage(totalPages);
     }, [page, totalPages]);
@@ -170,8 +216,6 @@ export default function ItemsTable({
         .slice(startIndex, startIndex + ITEMS_PER_PAGE)
         .map((item, i) => ({ item, index: startIndex + i }));
 
-    // New rows are appended to the end of `items` by the parent — jump to
-    // whichever page that lands on so the row you just added is visible.
     function handleAddItem() {
         addItem();
         setPage(Math.ceil((items.length + 1) / ITEMS_PER_PAGE));
@@ -201,13 +245,7 @@ export default function ItemsTable({
                         <TableBody>
                             {visibleItems.map(({ item, index }) => (
                                 <ItemRow
-                                    // Prefer a stable id over the array index as the key.
-                                    // If `addItem` in the parent doesn't already stamp new
-                                    // rows with one, give each new item a client-side id
-                                    // (e.g. crypto.randomUUID()) — otherwise removing a
-                                    // row in the middle reshuffles every key below it and
-                                    // React ends up reusing the wrong row's DOM/input state.
-                                    key={item.id ?? index}
+                                    key={item._clientId ?? item.id ?? index}
                                     item={item}
                                     index={index}
                                     rowErrors={
@@ -215,6 +253,10 @@ export default function ItemsTable({
                                     }
                                     updateItem={updateItem}
                                     removeItem={removeItem}
+                                    onSelectMedicine={onSelectMedicine}
+                                    onUnitChange={onUnitChange}
+                                    onLotChange={onLotChange}
+                                    onClearMedicine={onClearMedicine}
                                     canRemove={items.length > 1}
                                 />
                             ))}
