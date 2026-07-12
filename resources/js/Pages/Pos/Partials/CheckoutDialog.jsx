@@ -37,6 +37,7 @@ export default function CheckoutDialog({
 }) {
     const [open, setOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState("cash");
+    const [referenceNumber, setReferenceNumber] = useState("");
     const [amountReceived, setAmountReceived] = useState("");
     const [processing, setProcessing] = useState(false);
     const [reviewItems, setReviewItems] = useState([]);
@@ -87,9 +88,12 @@ export default function CheckoutDialog({
     const changeDue =
         paymentMethod === "cash" ? Math.max(received - netTotal, 0) : 0;
 
+    const requiresReferenceNumber =
+        paymentMethod === "gcash" || paymentMethod === "card";
+
     const canConfirm =
         cartId &&
-        (paymentMethod === "gcash" ||
+        ((requiresReferenceNumber && referenceNumber.trim() !== "") ||
             (paymentMethod === "cash" && received >= netTotal));
 
     const handleConfirm = () => {
@@ -114,9 +118,11 @@ export default function CheckoutDialog({
                     quantity_sold: item.quantity,
                 })),
                 payment_method: paymentMethod,
+                reference_number: requiresReferenceNumber
+                    ? referenceNumber.trim()
+                    : null,
                 discount_amount: discount,
-                amount_received:
-                    paymentMethod === "gcash" ? netTotal : received,
+                amount_received: requiresReferenceNumber ? netTotal : received,
             },
             {
                 preserveScroll: true,
@@ -124,6 +130,7 @@ export default function CheckoutDialog({
                 onSuccess: () => {
                     setOpen(false);
                     setAmountReceived("");
+                    setReferenceNumber("");
                     setPaymentMethod("cash");
                     onCheckoutSuccess?.();
                 },
@@ -208,10 +215,12 @@ export default function CheckoutDialog({
                             value={paymentMethod}
                             onValueChange={(value) => {
                                 setPaymentMethod(value);
-                                if (value === "gcash") {
+                                if (value === "gcash" || value === "card") {
                                     setAmountReceived(String(netTotal));
+                                    setReferenceNumber("");
                                 } else {
                                     setAmountReceived("");
+                                    setReferenceNumber("");
                                 }
                             }}
                         >
@@ -221,9 +230,27 @@ export default function CheckoutDialog({
                             <SelectContent>
                                 <SelectItem value="cash">Cash</SelectItem>
                                 <SelectItem value="gcash">GCash</SelectItem>
+                                <SelectItem value="card">Card</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
+
+                    {requiresReferenceNumber && (
+                        <div className="space-y-2">
+                            <Label htmlFor="reference_number">
+                                Reference Number
+                            </Label>
+                            <Input
+                                id="reference_number"
+                                type="text"
+                                value={referenceNumber}
+                                onChange={(event) =>
+                                    setReferenceNumber(event.target.value)
+                                }
+                                placeholder="Enter transaction reference"
+                            />
+                        </div>
+                    )}
 
                     {paymentMethod === "cash" && (
                         <>

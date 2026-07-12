@@ -181,6 +181,13 @@ export default function ReceiptPrint({ sale }) {
                     <span>Payment Method:</span>
                     <span className="capitalize">{sale.payment_method}</span>
                 </div>
+                {sale.reference_number &&
+                    String(sale.reference_number).trim() !== "" && (
+                        <div>
+                            <span>Reference #:</span>
+                            <span>{sale.reference_number}</span>
+                        </div>
+                    )}
             </div>
 
             <div className="footer">

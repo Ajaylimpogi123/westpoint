@@ -14,6 +14,7 @@ export default function Index({ sales = [] }) {
         discount_amount: sale.discount_amount,
         net_amount: sale.net_amount,
         payment_method: sale.payment_method,
+        reference_number: sale.reference_number,
     }));
 
     return (

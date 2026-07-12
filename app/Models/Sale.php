@@ -23,6 +23,7 @@ class Sale extends Model
         'discount_amount',
         'net_amount',
         'payment_method',
+        'reference_number',
     ];
 
     protected function casts(): array

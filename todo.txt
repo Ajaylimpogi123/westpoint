@@ -1,9 +1,5 @@
 
-Add reference id gcash and card
-
 adress on stock out, tin and everything
-
-add dropdown on quotation on medicine unit price is open field
 
 add invoice on pos
 
@@ -11,4 +7,3 @@ stock out paper print
 
 total income for the day gross and net from - to
 
-add when stock is zero automatically soft deletes on

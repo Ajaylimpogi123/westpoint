@@ -30,6 +30,7 @@ class OrderHistoryController extends Controller
                 'discount_amount',
                 'net_amount',
                 'payment_method',
+                'reference_number',
             ]);
 
         return Inertia::render('History/Index', [
@@ -66,6 +67,7 @@ class OrderHistoryController extends Controller
                 'discount_amount' => $sale->discount_amount,
                 'net_amount' => $sale->net_amount,
                 'payment_method' => $sale->payment_method,
+                'reference_number' => $sale->reference_number,
             ],
             'items' => $sale->items->map(function ($item) {
                 return [

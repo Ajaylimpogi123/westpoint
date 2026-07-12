@@ -124,6 +124,19 @@ export default function ViewModal({ saleId, children }) {
                                         {details.sale.payment_method}
                                     </span>
                                 </div>
+                                {details.sale.reference_number &&
+                                    String(
+                                        details.sale.reference_number,
+                                    ).trim() !== "" && (
+                                        <div>
+                                            <span className="text-muted-foreground">
+                                                Reference Number:
+                                            </span>{" "}
+                                            <span className="font-medium">
+                                                {details.sale.reference_number}
+                                            </span>
+                                        </div>
+                                    )}
                             </div>
 
                             <div className="rounded-md border">
