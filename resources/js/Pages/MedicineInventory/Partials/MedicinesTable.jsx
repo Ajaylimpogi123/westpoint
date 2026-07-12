@@ -90,6 +90,14 @@ export default function MedicinesTable({
                     </div>
                 )}
 
+                {branchId && (
+                    <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
+                        Empty or deactivated lots are hidden from the batch
+                        breakdown. Lots that reach zero stock are automatically
+                        marked inactive.
+                    </div>
+                )}
+
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                     <Input
                         placeholder="Search medicines..."

@@ -8,6 +8,7 @@ use App\Models\StockOut;
 use App\Models\StockOutItem;
 use App\Models\InventoryMovementLog;
 use App\Services\InventoryMovementLogger;
+use App\Services\InventoryStockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -73,9 +74,7 @@ class StockOutController extends Controller
 
                     $batch->decrement('quantity', $item['quantity_deducted']);
 
-                    if ($batch->fresh()->quantity <= 0) {
-                        $batch->update(['status' => 'Out of Stock']);
-                    }
+                    InventoryStockService::afterBatchQuantityChange($batch->fresh());
 
                     StockOutItem::create([
                         'stock_out_id' => $stockOut->stock_out_id,

@@ -8,6 +8,7 @@ use App\Models\ProductQty;
 use App\Models\StockTransfer;
 use App\Models\StockTransferItem;
 use App\Models\StockTransferLog;
+use App\Services\InventoryStockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -53,8 +54,7 @@ class StockTransferController extends Controller
 
         if (! $isAdmin) {
             $products = MedicineProduct::with(['productsQty' => function ($q) {
-                    $q->where('status', 'Active')
-                      ->where('quantity', '>', 0)
+                    $q->available()
                       ->where('expiry', '>', now())
                       ->orderBy('expiry', 'asc');
                 }])
@@ -314,11 +314,8 @@ private function moveStock(StockTransfer $stockTransfer): void
         // ── STEP 1: Deduct from SOURCE lot ────────────────────────────
         $sourceLot = ProductQty::findOrFail($item->products_qty_id);
         $sourceLot->decrement('quantity', $qtyToMove);
- 
-        // Deactivate source lot if it hits zero
-        if ($sourceLot->fresh()->quantity <= 0) {
-            $sourceLot->update(['status' => 'Inactive']);
-        }
+
+        InventoryStockService::afterBatchQuantityChange($sourceLot->fresh());
  
         // ── STEP 2: Find or CREATE product in DESTINATION branch ──────
         // If the medicine doesn't exist yet in the destination branch,

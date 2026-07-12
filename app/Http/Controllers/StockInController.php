@@ -8,6 +8,7 @@ use App\Models\StockIn;
 use App\Models\StockInItem;
 use App\Models\InventoryMovementLog;
 use App\Services\InventoryMovementLogger;
+use App\Services\InventoryStockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -76,8 +77,10 @@ class StockInController extends Controller
                         if (! empty($item['shelf_number'])) {
                             $existingBatch->update(['shelf_number' => $item['shelf_number']]);
                         }
+
+                        InventoryStockService::afterStockAdded($existingBatch->fresh());
                     } else {
-                        ProductQty::create([
+                        $batch = ProductQty::create([
                             'product_id' => $medicine->id,
                             'quantity' => $item['quantity_received'],
                             'status' => 'Active',
@@ -85,6 +88,8 @@ class StockInController extends Controller
                             'expiry' => $item['expiry_date'],
                             'shelf_number' => $item['shelf_number'] ?? null,
                         ]);
+
+                        InventoryStockService::afterStockAdded($batch);
                     }
 
                     InventoryMovementLogger::log(

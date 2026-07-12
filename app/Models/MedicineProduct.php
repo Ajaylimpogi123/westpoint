@@ -80,7 +80,7 @@ class MedicineProduct extends Model
             return $query;
         }
 
-        $stockSql = '(SELECT COALESCE(SUM(quantity), 0) FROM products_qty pq WHERE pq.product_id = tbl_products.id AND pq.status != \'Deleted\')';
+        $stockSql = '(SELECT COALESCE(SUM(quantity), 0) FROM products_qty pq WHERE pq.product_id = tbl_products.id AND pq.status = \'Active\' AND pq.quantity > 0)';
 
         $thresholdSql = 'COALESCE(tbl_products.stock_threshold, 10)';
 
@@ -92,15 +92,13 @@ class MedicineProduct extends Model
             'in_stock' => $query->whereRaw("{$stockSql} > {$thresholdSql}"),
             'has_expired' => $query->whereHas('batches', function ($batchQuery) {
                 $batchQuery
-                    ->where('status', '!=', 'Deleted')
-                    ->where('quantity', '>', 0)
+                    ->available()
                     ->whereNotNull('expiry')
                     ->whereDate('expiry', '<', now()->toDateString());
             }),
             'expiring_soon' => $query->whereHas('batches', function ($batchQuery) {
                 $batchQuery
-                    ->where('status', '!=', 'Deleted')
-                    ->where('quantity', '>', 0)
+                    ->available()
                     ->whereNotNull('expiry')
                     ->whereDate('expiry', '>=', now()->toDateString())
                     ->whereDate('expiry', '<=', now()->addDays(30)->toDateString());
@@ -112,5 +110,10 @@ class MedicineProduct extends Model
     public function softDelete(): void
     {
         $this->update(['status' => 'Deleted']);
+    }
+
+    public function reactivate(): void
+    {
+        $this->update(['status' => 'Active']);
     }
 }

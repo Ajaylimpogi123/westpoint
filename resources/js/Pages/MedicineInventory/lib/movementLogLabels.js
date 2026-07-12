@@ -2,6 +2,8 @@ const MOVEMENT_TYPE_LABELS = {
     medicine_added: "Medicine Added",
     medicine_updated: "Medicine Updated",
     medicine_deleted: "Medicine Deleted",
+    medicine_auto_deleted: "Auto-Deactivated (Zero Stock)",
+    medicine_reactivated: "Medicine Reactivated",
     stock_in: "Stock In",
     stock_out: "Stock Out",
     add_stock: "Add Stock",

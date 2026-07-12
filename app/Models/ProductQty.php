@@ -33,4 +33,11 @@ class ProductQty extends Model
     {
         return $this->belongsTo(MedicineProduct::class, 'product_id');
     }
+
+    public function scopeAvailable($query)
+    {
+        return $query
+            ->where('status', 'Active')
+            ->where('quantity', '>', 0);
+    }
 }

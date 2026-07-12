@@ -6,6 +6,7 @@ import {
     ChevronDown,
     ChevronRight,
     Pencil,
+    RotateCcw,
     Trash2,
 } from "lucide-react";
 import Swal from "sweetalert2";
@@ -22,7 +23,7 @@ export default function MedicineRow({
     onToggle,
     canEditMedicine = false,
 }) {
-    const { delete: destroy } = useForm();
+    const { delete: destroy, patch: restore } = useForm();
 
     const stockStatus = getMedicineStockStatus(
         medicine.total_stock,
@@ -34,6 +35,24 @@ export default function MedicineRow({
         return Number.isFinite(num) ? num.toFixed(2) : "0.00";
     };
 
+    const handleRestore = () => {
+        Swal.fire({
+            title: "Restore Medicine?",
+            text: `"${medicine.med_name}" will be set back to Active.`,
+            icon: "question",
+            showCancelButton: true,
+            confirmButtonColor: "#16a34a",
+            cancelButtonColor: "#6b7280",
+            confirmButtonText: "Restore",
+        }).then((result) => {
+            if (result.isConfirmed) {
+                restore(route("medicine-inventory.restore", medicine.id), {
+                    preserveScroll: true,
+                    only: ["medicines"],
+                });
+            }
+        });
+    };
     const handleDelete = () => {
         Swal.fire({
             title: "Deactivate Medicine?",
@@ -79,7 +98,14 @@ export default function MedicineRow({
                     className="font-medium"
                     onClick={onToggle}
                 >
-                    {medicine.med_name}
+                    <div className="flex flex-col gap-1">
+                        <span>{medicine.med_name}</span>
+                        {medicine.status === "Deleted" && (
+                            <span className="w-fit rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                                Deactivated
+                            </span>
+                        )}
+                    </div>
                 </TableCell>
                 <TableCell onClick={onToggle}>
                     {medicine.brand_name || "-"}
@@ -133,6 +159,23 @@ export default function MedicineRow({
                                     Delete
                                 </Button>
                             )}
+                        </div>
+                    )}
+                    {medicine.status === "Deleted" && canEditMedicine && (
+                        <div className="flex items-center justify-end gap-2">
+                            <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="flex items-center gap-1 text-green-700 hover:text-green-800"
+                                onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleRestore();
+                                }}
+                            >
+                                <RotateCcw className="h-3.5 w-3.5" />
+                                Restore
+                            </Button>
                         </div>
                     )}
                 </TableCell>

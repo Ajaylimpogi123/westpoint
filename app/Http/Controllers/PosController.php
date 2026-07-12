@@ -10,6 +10,7 @@ use App\Models\PosCartItem;
 use App\Models\ProductQty;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Services\InventoryStockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -618,16 +619,12 @@ class PosController extends Controller
             ->active()
             ->forBranch($branchId)
             ->withSum(['batches as total_stock' => function ($batchQuery) {
-                $batchQuery
-                    ->where('status', 'Active')
-                    ->where('quantity', '>', 0);
+                $batchQuery->available();
             }], 'quantity');
 
         if ($inStock) {
             $query->whereHas('batches', function ($batchQuery) {
-                $batchQuery
-                    ->where('status', 'Active')
-                    ->where('quantity', '>', 0);
+                $batchQuery->available();
             });
         }
 
@@ -646,8 +643,7 @@ class PosController extends Controller
     {
         return (int) ProductQty::query()
             ->where('product_id', $productId)
-            ->where('status', 'Active')
-            ->where('quantity', '>', 0)
+            ->available()
             ->sum('quantity');
     }
 
@@ -720,8 +716,7 @@ class PosController extends Controller
 
         $totalAvailable = (int) ProductQty::query()
             ->where('product_id', $productId)
-            ->where('status', 'Active')
-            ->where('quantity', '>', 0)
+            ->available()
             ->lockForUpdate()
             ->sum('quantity');
 
@@ -741,8 +736,7 @@ class PosController extends Controller
     {
         $batches = ProductQty::query()
             ->where('product_id', $productId)
-            ->where('status', 'Active')
-            ->where('quantity', '>', 0)
+            ->available()
             ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
             ->orderBy('expiry')
             ->get();
@@ -792,8 +786,7 @@ class PosController extends Controller
 
         $batches = ProductQty::query()
             ->where('product_id', $productId)
-            ->where('status', 'Active')
-            ->where('quantity', '>', 0)
+            ->available()
             ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
             ->orderBy('expiry')
             ->lockForUpdate()
@@ -815,6 +808,7 @@ class PosController extends Controller
 
             $deduct = min((int) $batch->quantity, $remaining);
             $batch->update(['quantity' => (int) $batch->quantity - $deduct]);
+            InventoryStockService::afterBatchQuantityChange($batch->fresh());
 
             $deductions[] = [
                 'batch_id' => $batch->id,

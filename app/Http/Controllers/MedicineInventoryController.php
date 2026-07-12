@@ -9,6 +9,7 @@ use App\Models\ProductQty;
 use App\Models\StockIn;
 use App\Models\StockOut;
 use App\Services\InventoryMovementLogger;
+use App\Services\InventoryStockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
@@ -41,7 +42,7 @@ class MedicineInventoryController extends Controller
             ->when($branchId, function ($query) {
                 $query
                     ->withSum(['batches as total_stock' => function ($batchQuery) {
-                        $batchQuery->where('status', '!=', 'Deleted');
+                        $batchQuery->available();
                     }], 'quantity')
                     ->with(['batches' => function ($batchQuery) {
                         $batchQuery
@@ -76,8 +77,7 @@ class MedicineInventoryController extends Controller
                 ->forBranch($branchId)
                 ->with(['batches' => function ($batchQuery) {
                     $batchQuery
-                        ->where('status', 'Active')
-                        ->where('quantity', '>', 0)
+                        ->available()
                         ->orderBy('expiry')
                         ->select(['id', 'product_id', 'lot_number', 'expiry', 'shelf_number', 'quantity']);
                 }])
@@ -296,7 +296,7 @@ class MedicineInventoryController extends Controller
             ->findOrFail($validated['product_id']);
         $quantityInPieces = $validated['boxes_received'] * $medicine->pack_size;
 
-        ProductQty::create([
+        $batch = ProductQty::create([
             'product_id' => $medicine->id,
             'quantity' => $quantityInPieces,
             'status' => 'Active',
@@ -304,6 +304,8 @@ class MedicineInventoryController extends Controller
             'expiry' => $validated['expiry'] ?? null,
             'shelf_number' => $validated['shelf_number'] ?? null,
         ]);
+
+        InventoryStockService::afterStockAdded($batch);
 
         InventoryMovementLogger::log(
             branchId: $branchId,
@@ -350,6 +352,10 @@ class MedicineInventoryController extends Controller
             'quantity' => $quantityInPieces,
             'shelf_number' => $validated['shelf_number'] ?? null,
         ]);
+
+        InventoryStockService::afterBatchQuantityChange($batch);
+
+        $batch->refresh();
 
         $after = [
             'lot_number' => $batch->lot_number,
@@ -400,6 +406,37 @@ class MedicineInventoryController extends Controller
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', 'Batch has been removed.');
+    }
+
+    public function restore(int $id): RedirectResponse
+    {
+        $branchId = $this->branchIdOrFail();
+        $medicine = $this->findBranchMedicineOrFail($id, $branchId);
+
+        if ($medicine->status !== 'Deleted') {
+            return redirect()->route('medicine-inventory.index')
+                ->with('error', 'Only deactivated medicines can be restored.');
+        }
+
+        if (InventoryStockService::totalAvailableStock($medicine->id) <= 0) {
+            return redirect()->route('medicine-inventory.index')
+                ->with('error', 'Add stock before restoring this medicine.');
+        }
+
+        $medicine->reactivate();
+
+        InventoryMovementLogger::log(
+            branchId: $branchId,
+            movementType: InventoryMovementLog::TYPE_MEDICINE_REACTIVATED,
+            referenceLabel: "Medicine #{$medicine->id}",
+            referenceId: $medicine->id,
+            pdId: $medicine->id,
+            medicineName: $medicine->med_name,
+            remarks: 'Medicine manually restored.',
+        );
+
+        return redirect()->route('medicine-inventory.index')
+            ->with('success', 'Medicine has been restored.');
     }
 
     private function branchId(): ?int
