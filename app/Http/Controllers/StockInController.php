@@ -3,7 +3,6 @@
 namespace App\Http\Controllers;
 
 use App\Models\MedicineProduct;
-use App\Models\ProductQty;
 use App\Models\StockIn;
 use App\Models\StockInItem;
 use App\Models\InventoryMovementLog;
@@ -66,31 +65,14 @@ class StockInController extends Controller
                         'unit_type' => 'Piece',
                     ]);
 
-                    $existingBatch = ProductQty::query()
-                        ->where('product_id', $medicine->id)
-                        ->where('lot_number', $item['batch_number'])
-                        ->first();
-
-                    if ($existingBatch) {
-                        $existingBatch->increment('quantity', $item['quantity_received']);
-
-                        if (! empty($item['shelf_number'])) {
-                            $existingBatch->update(['shelf_number' => $item['shelf_number']]);
-                        }
-
-                        InventoryStockService::afterStockAdded($existingBatch->fresh());
-                    } else {
-                        $batch = ProductQty::create([
-                            'product_id' => $medicine->id,
-                            'quantity' => $item['quantity_received'],
-                            'status' => 'Active',
-                            'lot_number' => $item['batch_number'],
-                            'expiry' => $item['expiry_date'],
-                            'shelf_number' => $item['shelf_number'] ?? null,
-                        ]);
-
-                        InventoryStockService::afterStockAdded($batch);
-                    }
+                    InventoryStockService::addStock(
+                        productId: $medicine->id,
+                        branchId: $branchId,
+                        quantityInPieces: $item['quantity_received'],
+                        lotNumber: $item['batch_number'],
+                        expiry: $item['expiry_date'],
+                        shelfNumber: $item['shelf_number'] ?? null,
+                    );
 
                     InventoryMovementLogger::log(
                         branchId: $branchId,

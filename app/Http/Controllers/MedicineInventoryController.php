@@ -296,16 +296,14 @@ class MedicineInventoryController extends Controller
             ->findOrFail($validated['product_id']);
         $quantityInPieces = $validated['boxes_received'] * $medicine->pack_size;
 
-        $batch = ProductQty::create([
-            'product_id' => $medicine->id,
-            'quantity' => $quantityInPieces,
-            'status' => 'Active',
-            'lot_number' => $validated['lot_number'] ?? null,
-            'expiry' => $validated['expiry'] ?? null,
-            'shelf_number' => $validated['shelf_number'] ?? null,
-        ]);
-
-        InventoryStockService::afterStockAdded($batch);
+        InventoryStockService::addStock(
+            productId: $medicine->id,
+            branchId: $branchId,
+            quantityInPieces: $quantityInPieces,
+            lotNumber: $validated['lot_number'] ?? null,
+            expiry: $validated['expiry'] ?? null,
+            shelfNumber: $validated['shelf_number'] ?? null,
+        );
 
         InventoryMovementLogger::log(
             branchId: $branchId,
