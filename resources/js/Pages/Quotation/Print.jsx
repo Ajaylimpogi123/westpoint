@@ -27,7 +27,7 @@ export default function Print({ quotation }) {
                         <div className="flex h-28 w-28 shrink-0 items-center justify-center">
                             <img
                                 src="/storage/westpoint_logo.png"
-                                alt="Westpoint Pharmacy & Medical Supplies Trading"
+                                alt="Westpoint Pharmacy & Medical Supplies Distribution"
                                 className="h-30 w-30 object-contain"
                             />
                         </div>

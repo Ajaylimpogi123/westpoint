@@ -8,33 +8,48 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::table('tbl_quotation', function (Blueprint $table) {
-            $table->dropForeign(['cust_id']);
-            $table->dropColumn('cust_id');
-        });
+        // Legacy installs used cust_id → tbl_customer; migration 26 now creates customer_id directly.
+        if (Schema::hasColumn('tbl_quotation', 'cust_id')) {
+            Schema::table('tbl_quotation', function (Blueprint $table) {
+                $table->dropForeign(['cust_id']);
+            });
 
-        Schema::table('tbl_quotation', function (Blueprint $table) {
-            $table->unsignedBigInteger('customer_id')->after('id');
-            $table->foreign('customer_id')
-                  ->references('customer_id')
-                  ->on('tbl_customers')
-                  ->cascadeOnDelete();
-        });
+            Schema::table('tbl_quotation', function (Blueprint $table) {
+                $table->dropColumn('cust_id');
+            });
+        }
+
+        if (! Schema::hasColumn('tbl_quotation', 'customer_id')) {
+            Schema::table('tbl_quotation', function (Blueprint $table) {
+                $table->unsignedBigInteger('customer_id')->after('id');
+                $table->foreign('customer_id')
+                      ->references('customer_id')
+                      ->on('tbl_customers')
+                      ->cascadeOnDelete();
+            });
+        }
     }
 
     public function down(): void
     {
-        Schema::table('tbl_quotation', function (Blueprint $table) {
-            $table->dropForeign(['customer_id']);
-            $table->dropColumn('customer_id');
-        });
+        if (Schema::hasColumn('tbl_quotation', 'customer_id')) {
+            Schema::table('tbl_quotation', function (Blueprint $table) {
+                $table->dropForeign(['customer_id']);
+            });
 
-        Schema::table('tbl_quotation', function (Blueprint $table) {
-            $table->unsignedBigInteger('cust_id')->after('id');
-            $table->foreign('cust_id')
-                  ->references('cust_id')
-                  ->on('tbl_customer')
-                  ->cascadeOnDelete();
-        });
+            Schema::table('tbl_quotation', function (Blueprint $table) {
+                $table->dropColumn('customer_id');
+            });
+        }
+
+        if (! Schema::hasColumn('tbl_quotation', 'cust_id')) {
+            Schema::table('tbl_quotation', function (Blueprint $table) {
+                $table->unsignedBigInteger('cust_id')->after('id');
+                $table->foreign('cust_id')
+                      ->references('cust_id')
+                      ->on('tbl_customer')
+                      ->cascadeOnDelete();
+            });
+        }
     }
 };
