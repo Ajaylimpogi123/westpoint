@@ -25,4 +25,7 @@ Route::middleware('auth')->group(function () {
         ->name('pos.cart.items.destroy');
     Route::get('/pos/cart/checkout-preview', [PosController::class, 'previewCheckout'])
         ->name('pos.cart.checkout-preview');
+
+    Route::get('/pos/sales/{sale}/invoice', [PosController::class, 'printInvoice'])
+        ->name('pos.sales.invoice');
 });

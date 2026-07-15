@@ -104,6 +104,10 @@ export default function CheckoutDialog({
 
         setProcessing(true);
 
+        // Must open synchronously within the click handler so the browser
+        // does not treat it as a blocked popup once the request resolves.
+        const invoiceWindow = window.open("", "_blank");
+
         router.post(
             route("pos.store"),
             {
@@ -127,18 +131,30 @@ export default function CheckoutDialog({
             {
                 preserveScroll: true,
                 preserveState: false,
-                onSuccess: () => {
+                onSuccess: (page) => {
                     setOpen(false);
                     setAmountReceived("");
                     setReferenceNumber("");
                     setPaymentMethod("cash");
                     onCheckoutSuccess?.();
+
+                    const saleId = page?.props?.flash?.sale_id;
+
+                    if (invoiceWindow && saleId) {
+                        invoiceWindow.location = route(
+                            "pos.sales.invoice",
+                            saleId,
+                        );
+                    } else {
+                        invoiceWindow?.close();
+                    }
                 },
                 onError: (errors) => {
                     const message =
                         Object.values(errors)[0] ||
                         "Failed to complete sale. Please try again.";
                     toast.error(message);
+                    invoiceWindow?.close();
                 },
                 onFinish: () => {
                     setProcessing(false);

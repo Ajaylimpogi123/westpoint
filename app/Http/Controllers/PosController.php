@@ -471,7 +471,10 @@ class PosController extends Controller
             DB::commit();
 
             return redirect()->route('pos.index')
-                ->with('success', "Sale completed. Invoice {$sale->invoice_number}");
+                ->with([
+                    'success' => "Sale completed. Invoice {$sale->invoice_number}",
+                    'sale_id' => $sale->id,
+                ]);
         } catch (\RuntimeException $e) {
             DB::rollBack();
 
@@ -483,6 +486,35 @@ class PosController extends Controller
             return redirect()->back()
                 ->with('error', 'Failed to process sale. Please try again.');
         }
+    }
+
+    public function printInvoice(Sale $sale): Response
+    {
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $sale->branch_id !== $branchId) {
+            abort(403, 'Sale is not accessible in your branch session.');
+        }
+
+        $sale->load([
+            'items' => function ($query) {
+                $query->select([
+                    'id',
+                    'sale_id',
+                    'product_id',
+                    'unit_type',
+                    'quantity_sold',
+                    'price_used',
+                    'total_price',
+                ]);
+            },
+            'items.product:id,med_name,dose,form,brand_name',
+            'user:id,name',
+        ]);
+
+        return Inertia::render('Pos/InvoiceReceipt', [
+            'sale' => $sale,
+        ]);
     }
 
     private function getOrCreateActiveCart(int $branchId): PosCart
