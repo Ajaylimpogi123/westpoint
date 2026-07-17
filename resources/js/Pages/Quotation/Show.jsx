@@ -158,7 +158,7 @@ export default function Show({ quotation }) {
                             </Link>
                         )}
 
-                        {transitions.map((t) => (
+                        {/* {transitions.map((t) => (
                             <button
                                 key={t.status}
                                 onClick={() => setStatus(t.status)}
@@ -166,7 +166,7 @@ export default function Show({ quotation }) {
                             >
                                 {t.label}
                             </button>
-                        ))}
+                        ))} */}
 
                         {quotation.status === "draft" && (
                             <button
