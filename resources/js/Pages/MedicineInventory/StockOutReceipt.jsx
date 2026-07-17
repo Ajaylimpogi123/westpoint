@@ -12,6 +12,17 @@ function formatDate(value) {
     });
 }
 
+function formatExpiryShort(value) {
+    if (!value) return "—";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return "—";
+    const month = date
+        .toLocaleDateString("en-US", { month: "short" })
+        .toUpperCase();
+    const year = String(date.getFullYear()).slice(-2);
+    return `${month}-${year}`;
+}
+
 function formatCurrency(amount) {
     return `₱${Number(amount || 0).toLocaleString("en-PH", {
         minimumFractionDigits: 2,
@@ -24,19 +35,97 @@ function receiptNumber(stockOutId) {
 }
 
 function unitLabel(unitType) {
-    return unitType === "box" ? "Box" : "Piece";
+    return unitType === "box" ? "BOX" : "PC";
 }
+
+const ONES = [
+    "",
+    "ONE",
+    "TWO",
+    "THREE",
+    "FOUR",
+    "FIVE",
+    "SIX",
+    "SEVEN",
+    "EIGHT",
+    "NINE",
+    "TEN",
+    "ELEVEN",
+    "TWELVE",
+    "THIRTEEN",
+    "FOURTEEN",
+    "FIFTEEN",
+    "SIXTEEN",
+    "SEVENTEEN",
+    "EIGHTEEN",
+    "NINETEEN",
+];
+const TENS = [
+    "",
+    "",
+    "TWENTY",
+    "THIRTY",
+    "FORTY",
+    "FIFTY",
+    "SIXTY",
+    "SEVENTY",
+    "EIGHTY",
+    "NINETY",
+];
+
+function wordsUnder1000(n) {
+    if (n === 0) return "";
+    if (n < 20) return ONES[n];
+    if (n < 100) {
+        const t = Math.floor(n / 10);
+        const r = n % 10;
+        return r ? `${TENS[t]} ${ONES[r]}` : TENS[t];
+    }
+    const h = Math.floor(n / 100);
+    const r = n % 100;
+    return r
+        ? `${ONES[h]} HUNDRED ${wordsUnder1000(r)}`
+        : `${ONES[h]} HUNDRED`;
+}
+
+function integerToWords(n) {
+    if (n === 0) return "ZERO";
+    let words = "";
+    const millions = Math.floor(n / 1_000_000);
+    const thousands = Math.floor((n % 1_000_000) / 1000);
+    const rest = n % 1000;
+    if (millions) {
+        words += `${wordsUnder1000(millions)} MILLION`;
+    }
+    if (thousands) {
+        words += words ? ` ${wordsUnder1000(thousands)} THOUSAND` : `${wordsUnder1000(thousands)} THOUSAND`;
+    }
+    if (rest) {
+        words += words ? ` ${wordsUnder1000(rest)}` : wordsUnder1000(rest);
+    }
+    return words.trim();
+}
+
+function amountInWords(amount) {
+    const value = Number(amount || 0);
+    const pesos = Math.floor(Math.abs(value));
+    const centavos = Math.round((Math.abs(value) - pesos) * 100);
+    let result = integerToWords(pesos);
+    result += pesos === 1 ? " PESO" : " PESOS";
+    if (centavos > 0) {
+        result += ` AND ${integerToWords(centavos)}`;
+        result += centavos === 1 ? " CENTAVO" : " CENTAVOS";
+    }
+    result += " ONLY";
+    return result;
+}
+
+const MIN_TABLE_ROWS = 14;
 
 /**
  * StockOutReceipt
  * Standalone printable delivery receipt — no AuthenticatedLayout so the nav
  * doesn't appear on print. Accessed via GET /stock-out/{id}/receipt
- *
- * Styled after a classic ledger-style delivery receipt, with Westpoint's
- * own company details in the letterhead (this document is issued by
- * Westpoint when stock leaves branch inventory).
- *
- * Props: stockOut (with branch, items.product)
  */
 export default function StockOutReceipt({ stockOut }) {
     const items = stockOut.items ?? [];
@@ -57,24 +146,37 @@ export default function StockOutReceipt({ stockOut }) {
         }, 0);
     }, [items]);
 
+    const blankRowCount = Math.max(0, MIN_TABLE_ROWS - items.length);
+
     return (
         <>
             <Head title={`Delivery Receipt — #${receiptNumber(stockOut.stock_out_id)}`} />
 
-            {/* ── Print styles ─────────────────────────────────── */}
             <style>{`
                 @media print {
                     .no-print { display: none !important; }
-                    body      { background: white !important; -webkit-print-color-adjust: exact; }
-                    @page     { margin: 1.2cm; size: A4 portrait; }
-                    .slip-card { box-shadow: none !important; border: none !important; }
+                    html, body {
+                        background: white !important;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                    }
+                    @page {
+                        size: letter portrait;
+                        margin: 0.5in;
+                    }
+                    .slip-card {
+                        box-shadow: none !important;
+                        border: none !important;
+                        max-width: none !important;
+                        width: 100% !important;
+                        padding: 0 !important;
+                    }
                 }
                 @media screen {
                     body { background: #f3f4f6; }
                 }
             `}</style>
 
-            {/* ── Toolbar (hidden on print) ─────────────────────── */}
             <div
                 className="no-print flex items-center justify-between px-6 py-3
                 bg-white border-b border-gray-200 sticky top-0 z-10 shadow-sm"
@@ -99,131 +201,141 @@ export default function StockOutReceipt({ stockOut }) {
                 </div>
             </div>
 
-            {/* ── Receipt body ─────────────────────────────────── */}
-            <div className="min-h-screen py-8 px-4 flex justify-center">
+            <div className="min-h-screen py-6 px-4 flex justify-center print:py-0 print:px-0">
                 <div
-                    className="slip-card w-full max-w-3xl bg-white
-                    shadow-lg border border-gray-300 overflow-hidden font-serif"
+                    className="slip-card w-full max-w-[8.5in] bg-white
+                    shadow-lg border border-gray-300 overflow-hidden font-serif text-[11px] text-gray-900
+                    print:shadow-none print:border-0 px-8 py-6 print:px-0 print:py-0"
                 >
-                    <div className="px-8 pt-6 pb-8">
-                        {/* ── LETTERHEAD ──────────────────────────── */}
-                        <div className="flex items-center gap-4 border-b-2 border-gray-800 pb-3 mb-4">
-                            <img
-                                src="/storage/westpoint_logo.png"
-                                alt="Westpoint Pharma and Medical Supplies Distribution"
-                                className="h-20 w-20 shrink-0 object-contain"
-                            />
-                            <div className="flex-1">
-                                <h1 className="text-xl font-bold uppercase tracking-tight text-gray-900">
-                                    Westpoint Pharma and Medical Supplies
-                                    Distribution
-                                </h1>
-                                <p className="text-[11px] text-gray-600 mt-1">
-                                    TIN: 439-169-208-00000
-                                </p>
-                                <p className="text-[11px] text-gray-600">
-                                    Address: 6th Lacson St., Bacolod City,
-                                    Negros Occidental, 6100
-                                </p>
-                                <p className="text-[11px] text-gray-600">
-                                    Bulk/Wholesale Quotations: (034) 479
-                                    2739 / (0992) 989 5971
-                                </p>
-                                <p className="text-[11px] text-gray-600">
-                                    Retail pricing: (034) 454 1118 / (0917)
-                                    162 8332
-                                </p>
-                            </div>
-                        </div>
-
-                        <div className="flex items-start justify-between mb-4">
-                            <h2 className="text-lg font-bold uppercase tracking-wide text-gray-900">
-                                Delivery Receipt
-                            </h2>
-                            <p className="text-sm text-red-600 font-semibold whitespace-nowrap">
-                                No.{" "}
-                                <span className="font-mono">
-                                    {receiptNumber(stockOut.stock_out_id)}
-                                </span>
+                    {/* Letterhead */}
+                    <div className="flex items-start gap-3 border-b-2 border-gray-900 pb-2 mb-1">
+                        <img
+                            src="/storage/westpoint_logo.png"
+                            alt="Westpoint Pharma and Medical Supplies Distribution"
+                            className="h-16 w-16 shrink-0 object-contain"
+                        />
+                        <div className="flex-1 text-center pt-0.5">
+                            <h1 className="text-[15px] font-bold uppercase leading-tight tracking-tight">
+                                Westpoint Pharma and Medical Supplies
+                                Distribution
+                            </h1>
+                            <p className="text-[9px] mt-0.5 leading-snug">
+                                6th Lacson St., Bacolod City, Negros Occidental,
+                                6100
+                            </p>
+                            <p className="text-[9px] leading-snug">
+                                VAT Reg. TIN: 439-169-208-00000
+                            </p>
+                            <p className="text-[9px] leading-snug">
+                                Bulk/Wholesale: (034) 479 2739 / (0992) 989
+                                5971 &nbsp;•&nbsp; Retail: (034) 454 1118 /
+                                (0917) 162 8332
                             </p>
                         </div>
+                        <div className="w-16 shrink-0" aria-hidden="true" />
+                    </div>
 
-                        {/* ── HEADER FIELDS ───────────────────────── */}
-                        <div className="grid grid-cols-2 gap-x-8 gap-y-1.5 text-sm mb-5">
-                            <FieldLine
-                                label="Delivered to"
-                                value={stockOut.delivered_to}
-                            />
-                            <FieldLine
-                                label="Date"
-                                value={formatDate(stockOut.created_at)}
-                            />
-                            <FieldLine
-                                label="Address"
-                                value={stockOut.delivered_to_address}
-                            />
-                            <FieldLine
-                                label="Transaction type"
-                                value={stockOut.transaction_subtype}
-                            />
-                            <FieldLine
-                                label="From"
-                                value={stockOut.branch?.branch_name}
-                            />
-                            <FieldLine
-                                label="Patient / Reference"
-                                value={stockOut.patient_reference}
-                            />
-                            <FieldLine
-                                label="Issued by"
-                                value={stockOut.issued_by}
-                            />
+                    <div className="relative mb-3">
+                        <h2 className="text-center text-sm font-bold uppercase tracking-widest">
+                            Delivery Receipt
+                        </h2>
+                        <p className="absolute right-0 top-0 text-xs font-semibold text-red-600">
+                            №{" "}
+                            <span className="font-mono">
+                                {receiptNumber(stockOut.stock_out_id)}
+                            </span>
+                        </p>
+                    </div>
+
+                    {/* Customer block — matches classic DR form */}
+                    <div className="border border-gray-900 mb-2">
+                        <div className="grid grid-cols-[1fr_140px] border-b border-gray-900">
+                            <HeaderCell label="Delivered to">
+                                {stockOut.delivered_to}
+                            </HeaderCell>
+                            <HeaderCell label="Date" borderedLeft>
+                                {formatDate(stockOut.created_at)}
+                            </HeaderCell>
                         </div>
+                        <div className="grid grid-cols-[1fr_140px] border-b border-gray-900">
+                            <HeaderCell label="TIN" blank />
+                            <HeaderCell label="Terms" borderedLeft blank />
+                        </div>
+                        <div className="grid grid-cols-[1fr_140px]">
+                            <HeaderCell label="Address">
+                                {stockOut.delivered_to_address}
+                            </HeaderCell>
+                            <HeaderCell label="Invoice #" borderedLeft blank />
+                        </div>
+                    </div>
 
-                        {/* Remarks */}
-                        {stockOut.remarks && (
-                            <div className="border border-gray-300 px-3 py-2 mb-5 text-sm">
-                                <span className="text-gray-500">
-                                    Remarks:{" "}
-                                </span>
-                                <span className="text-gray-800">
-                                    {stockOut.remarks}
-                                </span>
-                            </div>
-                        )}
+                    {/* Existing transaction details (unchanged data) */}
+                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mb-2 text-[10px]">
+                        <FieldLine
+                            label="From"
+                            value={stockOut.branch?.branch_name}
+                        />
+                        <FieldLine
+                            label="Transaction type"
+                            value={stockOut.transaction_subtype}
+                        />
+                        <FieldLine
+                            label="Patient / Reference"
+                            value={stockOut.patient_reference}
+                        />
+                        <FieldLine
+                            label="Issued by"
+                            value={stockOut.issued_by}
+                        />
+                    </div>
 
-                        {/* ── ITEMS TABLE ──────────────────────────── */}
-                        <table className="w-full text-sm border-collapse border border-gray-800">
-                            <thead>
-                                <tr>
-                                    <Th className="w-10">No.</Th>
-                                    <Th align="left">Description</Th>
-                                    <Th>Batch No.</Th>
-                                    <Th>Expiry Date</Th>
-                                    <Th>Unit</Th>
-                                    <Th align="right">Qty.</Th>
-                                    <Th align="right">Unit Price</Th>
-                                    <Th align="right">Amount</Th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {items.map((item, idx) => {
-                                    const qty = Number(
-                                        item.quantity_deducted || 0,
-                                    );
-                                    const unitPrice = priceFor(item);
-                                    const amount = unitPrice * qty;
+                    {stockOut.remarks && (
+                        <div className="border border-gray-400 px-2 py-1 mb-2 text-[10px]">
+                            <span className="text-gray-600">Remarks: </span>
+                            <span>{stockOut.remarks}</span>
+                        </div>
+                    )}
 
-                                    return (
-                                        <tr key={item.item_id ?? idx}>
-                                            <Td align="center">{idx + 1}</Td>
-                                            <Td align="left">
-                                                <span className="font-semibold text-gray-800">
-                                                    {item.product?.med_name ??
-                                                        "—"}
-                                                </span>
-                                                <span className="block text-xs text-gray-500">
-                                                    {item.product?.dose ?? "—"}
+                    <table className="w-full border-collapse border border-gray-900 text-[10px]">
+                        <thead>
+                            <tr className="bg-white">
+                                <Th className="w-8">No.</Th>
+                                <Th align="left">Description</Th>
+                                <Th className="w-[72px]">Batch No.</Th>
+                                <Th className="w-[68px]">Expiry Date</Th>
+                                <Th className="w-12">Unit</Th>
+                                <Th className="w-10" align="right">
+                                    Qty.
+                                </Th>
+                                <Th className="w-[72px]" align="right">
+                                    Unit Price
+                                </Th>
+                                <Th className="w-[76px]" align="right">
+                                    Amount
+                                </Th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {items.map((item, idx) => {
+                                const qty = Number(
+                                    item.quantity_deducted || 0,
+                                );
+                                const unitPrice = priceFor(item);
+                                const amount = unitPrice * qty;
+
+                                return (
+                                    <tr key={item.item_id ?? idx}>
+                                        <Td align="center">{idx + 1}</Td>
+                                        <Td align="left">
+                                            <span className="font-semibold">
+                                                {item.product?.med_name ??
+                                                    "—"}
+                                            </span>
+                                            {(item.product?.dose ||
+                                                item.product?.form ||
+                                                item.product?.brand_name) && (
+                                                <span className="block text-[9px] text-gray-600">
+                                                    {item.product?.dose ?? ""}
                                                     {item.product?.form
                                                         ? ` / ${item.product.form}`
                                                         : ""}
@@ -231,35 +343,34 @@ export default function StockOutReceipt({ stockOut }) {
                                                         ? ` — ${item.product.brand_name}`
                                                         : ""}
                                                 </span>
-                                            </Td>
-                                            <Td align="center" mono>
-                                                {item.lot_number ?? "—"}
-                                            </Td>
-                                            <Td align="center">
-                                                {formatDate(item.expiry)}
-                                            </Td>
-                                            <Td align="center">
-                                                {unitLabel(item.unit_type)}
-                                            </Td>
-                                            <Td align="right">
-                                                <span className="font-bold">
-                                                    {qty}
-                                                </span>
-                                            </Td>
-                                            <Td align="right">
-                                                {formatCurrency(unitPrice)}
-                                            </Td>
-                                            <Td align="right">
-                                                {formatCurrency(amount)}
-                                            </Td>
-                                        </tr>
-                                    );
-                                })}
+                                            )}
+                                        </Td>
+                                        <Td align="center" mono>
+                                            {item.lot_number ?? "—"}
+                                        </Td>
+                                        <Td align="center">
+                                            {formatExpiryShort(item.expiry)}
+                                        </Td>
+                                        <Td align="center">
+                                            {unitLabel(item.unit_type)}
+                                        </Td>
+                                        <Td align="right">
+                                            <span className="font-bold">
+                                                {qty}
+                                            </span>
+                                        </Td>
+                                        <Td align="right">
+                                            {formatCurrency(unitPrice)}
+                                        </Td>
+                                        <Td align="right">
+                                            {formatCurrency(amount)}
+                                        </Td>
+                                    </tr>
+                                );
+                            })}
 
-                                {/* Blank filler rows for a consistent printed block, like a pre-printed pad */}
-                                {Array.from({
-                                    length: Math.max(0, 4 - items.length),
-                                }).map((_, i) => (
+                            {Array.from({ length: blankRowCount }).map(
+                                (_, i) => (
                                     <tr key={`blank-${i}`}>
                                         <Td>&nbsp;</Td>
                                         <Td />
@@ -270,74 +381,119 @@ export default function StockOutReceipt({ stockOut }) {
                                         <Td />
                                         <Td />
                                     </tr>
-                                ))}
-                            </tbody>
-                            <tfoot>
-                                <tr>
-                                    <td
-                                        colSpan={7}
-                                        className="border border-gray-800 px-3 py-2 text-xs font-semibold
-                                            text-gray-700 uppercase tracking-wide text-right"
-                                    >
-                                        Total Amount Due
-                                    </td>
-                                    <td className="border border-gray-800 px-3 py-2 text-right font-bold text-gray-900 text-base">
-                                        {formatCurrency(totalAmount)}
-                                    </td>
-                                </tr>
-                            </tfoot>
-                        </table>
+                                ),
+                            )}
+                        </tbody>
+                        <tfoot>
+                            <tr>
+                                <td
+                                    colSpan={5}
+                                    rowSpan={3}
+                                    className="border border-gray-900 align-top p-2"
+                                >
+                                    <p className="text-[9px] font-semibold uppercase mb-1">
+                                        Amount in Words
+                                    </p>
+                                    <p className="text-[10px] font-medium leading-snug min-h-[3rem]">
+                                        {amountInWords(totalAmount)}
+                                    </p>
+                                </td>
+                                <td
+                                    colSpan={2}
+                                    className="border border-gray-900 px-2 py-1 text-right font-semibold uppercase text-[9px]"
+                                >
+                                    Total Sales
+                                </td>
+                                <td className="border border-gray-900 px-2 py-1 text-right">
+                                    {formatCurrency(totalAmount)}
+                                </td>
+                            </tr>
+                            <tr>
+                                <td
+                                    colSpan={2}
+                                    className="border border-gray-900 px-2 py-1 text-right font-semibold uppercase text-[9px]"
+                                >
+                                    Less: Withholding Tax
+                                </td>
+                                <td className="border border-gray-900 px-2 py-1 text-right">
+                                    &nbsp;
+                                </td>
+                            </tr>
+                            <tr>
+                                <td
+                                    colSpan={2}
+                                    className="border border-gray-900 px-2 py-1 text-right font-bold uppercase text-[9px]"
+                                >
+                                    Total Amount Due
+                                </td>
+                                <td className="border border-gray-900 px-2 py-1 text-right font-bold text-xs">
+                                    {formatCurrency(totalAmount)}
+                                </td>
+                            </tr>
+                        </tfoot>
+                    </table>
 
-                        {/* ── SIGNATURES ──────────────────────────── */}
-                        <div className="grid grid-cols-3 gap-6 mt-8">
+                    <div className="mt-6 grid grid-cols-[1fr_200px] gap-4 items-end">
+                        <div className="grid grid-cols-3 gap-3">
                             <SignatureBox
-                                label="Prepared / Issued by"
+                                label="Prepared By"
                                 name={stockOut.issued_by}
-                                sublabel={stockOut.branch?.branch_name}
                             />
-                            <SignatureBox
-                                label="Approved by"
-                                blank
-                            />
-                            <SignatureBox
-                                label="Received by"
-                                sublabel={stockOut.delivered_to}
-                                blank
-                            />
+                            <SignatureBox label="Pre-approved By" blank />
+                            <SignatureBox label="Approved By" blank />
                         </div>
-
-                        <p className="text-xs text-gray-500 italic mt-4">
-                            Received the above merchandise in good order and
-                            condition.
-                        </p>
-
-                        {/* ── FOOTER ──────────────────────────────── */}
-                        <div className="border-t border-gray-300 mt-6 pt-3">
-                            <p className="text-[10px] text-gray-400 text-center">
-                                This document is system-generated · Delivery
-                                Receipt #{receiptNumber(stockOut.stock_out_id)}{" "}
-                                · Westpoint Pharmacy Management System
+                        <div className="text-[9px]">
+                            <p className="italic mb-6 leading-snug">
+                                Received the above merchandise in good order
+                                and condition
+                            </p>
+                            <p>
+                                <span className="font-semibold">By:</span>{" "}
+                                <span className="inline-block min-w-[120px] border-b border-gray-800">
+                                    &nbsp;
+                                </span>
+                            </p>
+                            <p className="text-[8px] text-center mt-0.5 text-gray-600">
+                                Signature Over Printed Name / Date
                             </p>
                         </div>
                     </div>
+
+                    <p className="text-center text-[10px] font-bold uppercase mt-6 tracking-wide">
+                        This document is not valid for claiming of input taxes
+                    </p>
+
+                    <p className="text-[8px] text-gray-400 text-center mt-2">
+                        System-generated · Delivery Receipt #
+                        {receiptNumber(stockOut.stock_out_id)} · Westpoint
+                        Pharmacy Management System
+                    </p>
                 </div>
             </div>
         </>
     );
 }
 
-// ─────────────────────────────────────────────────────────────────────
-// Small internal components
-// ─────────────────────────────────────────────────────────────────────
+function HeaderCell({ label, children, borderedLeft, blank }) {
+    return (
+        <div
+            className={`flex min-h-[26px] items-end gap-1 px-2 py-1 ${
+                borderedLeft ? "border-l border-gray-900" : ""
+            }`}
+        >
+            <span className="shrink-0 font-semibold">{label}</span>
+            <span className="flex-1 border-b border-gray-700 pb-px min-h-[14px]">
+                {blank ? "\u00A0" : children || "\u00A0"}
+            </span>
+        </div>
+    );
+}
 
 function FieldLine({ label, value }) {
     return (
-        <div className="flex items-baseline gap-1.5">
-            <span className="text-gray-500 whitespace-nowrap">{label}:</span>
-            <span
-                className="flex-1 border-b border-dotted border-gray-400 pb-0.5
-                    text-gray-900 font-medium"
-            >
+        <div className="flex items-baseline gap-1">
+            <span className="text-gray-600 whitespace-nowrap">{label}:</span>
+            <span className="flex-1 border-b border-dotted border-gray-500 pb-px text-gray-900">
                 {value || "\u00A0"}
             </span>
         </div>
@@ -345,46 +501,50 @@ function FieldLine({ label, value }) {
 }
 
 function Th({ children, align = "center", className = "" }) {
+    const alignClass =
+        align === "right"
+            ? "text-right"
+            : align === "left"
+              ? "text-left"
+              : "text-center";
     return (
         <th
-            className={`border border-gray-800 px-3 py-2 text-xs font-semibold
-            uppercase tracking-wide text-${align} ${className}`}
+            className={`border border-gray-900 px-1 py-1 text-[9px] font-bold uppercase ${alignClass} ${className}`}
         >
             {children}
         </th>
     );
 }
 
-function Td({ children, align = "left", bold, mono }) {
+function Td({ children, align = "left", mono }) {
+    const alignClass =
+        align === "right"
+            ? "text-right"
+            : align === "center"
+              ? "text-center"
+              : "text-left";
     return (
         <td
-            className={`border border-gray-300 px-3 py-2 h-8 text-${align}
-            ${bold ? "font-semibold text-gray-800" : "text-gray-600"}
-            ${mono ? "font-mono text-xs" : "text-sm"}`}
+            className={`border border-gray-900 px-1 py-0.5 h-6 ${alignClass}
+            text-gray-800 ${mono ? "font-mono text-[9px]" : ""}`}
         >
             {children}
         </td>
     );
 }
 
-function SignatureBox({ label, name, sublabel, blank }) {
+function SignatureBox({ label, name, blank }) {
     return (
-        <div className="space-y-2">
-            <div className="border-b-2 border-gray-500 h-10" />
-            <div className="text-xs text-gray-600 space-y-0.5 text-center">
-                {!blank && name && (
-                    <p className="font-semibold text-gray-800 uppercase">
-                        {name}
-                    </p>
-                )}
-                {blank && (
-                    <p className="text-gray-300 italic">Signature above</p>
-                )}
-                <p className="text-[10px] uppercase tracking-widest text-gray-400">
-                    {label}
+        <div>
+            <div className="border-b border-gray-800 h-8 mb-1" />
+            {!blank && name && (
+                <p className="text-[9px] font-semibold text-center uppercase truncate">
+                    {name}
                 </p>
-                {sublabel && <p className="text-gray-400">{sublabel}</p>}
-            </div>
+            )}
+            <p className="text-[8px] font-bold uppercase text-center tracking-wide">
+                {label}
+            </p>
         </div>
     );
 }
