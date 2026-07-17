@@ -9,7 +9,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { router } from "@inertiajs/react";
-import { Eye } from "lucide-react";
+import { Eye, Printer } from "lucide-react";
 import StockOutViewModal from "./StockOutViewModal";
 
 const PER_PAGE_OPTIONS = [10, 15, 25, 50];
@@ -109,19 +109,42 @@ export default function StockOutHistoryTable({ stockOuts, filters }) {
                                     </TableCell>
                                     <TableCell>{stockOut.issued_by}</TableCell>
                                     <TableCell className="text-right">
-                                        <StockOutViewModal
-                                            stockOutId={stockOut.stock_out_id}
-                                        >
+                                        <div className="flex items-center justify-end gap-2">
+                                            <StockOutViewModal
+                                                stockOutId={
+                                                    stockOut.stock_out_id
+                                                }
+                                            >
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex items-center gap-1"
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                    View
+                                                </Button>
+                                            </StockOutViewModal>
                                             <Button
                                                 type="button"
                                                 variant="outline"
                                                 size="sm"
                                                 className="flex items-center gap-1"
+                                                onClick={() =>
+                                                    window.open(
+                                                        route(
+                                                            "stock-out.receipt",
+                                                            stockOut.stock_out_id,
+                                                        ),
+                                                        "_blank",
+                                                        "noopener,noreferrer",
+                                                    )
+                                                }
                                             >
-                                                <Eye className="h-3.5 w-3.5" />
-                                                View
+                                                <Printer className="h-3.5 w-3.5" />
+                                                Receipt
                                             </Button>
-                                        </StockOutViewModal>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))

@@ -17,12 +17,15 @@ class StockOutItem extends Model
         'pd_id',
         'lot_number',
         'quantity_deducted',
+        'expiry',
+        'unit_type',
     ];
 
     protected function casts(): array
     {
         return [
             'quantity_deducted' => 'integer',
+            'expiry' => 'date',
         ];
     }
 

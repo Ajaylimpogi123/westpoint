@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -107,6 +108,15 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                 </div>
                                 <div>
                                     <span className="text-muted-foreground">
+                                        Delivered To:
+                                    </span>{" "}
+                                    <span className="font-medium">
+                                        {details.stock_out.delivered_to ||
+                                            "—"}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">
                                         Recorded:
                                     </span>{" "}
                                     <span className="font-medium">
@@ -134,6 +144,7 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                             <TableHead>Medicine Name</TableHead>
                                             <TableHead>Brand</TableHead>
                                             <TableHead>Lot</TableHead>
+                                            <TableHead>Unit Type</TableHead>
                                             <TableHead>Qty Deducted</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -153,6 +164,12 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                                         {item.lot_number || "-"}
                                                     </TableCell>
                                                     <TableCell>
+                                                        {item.unit_type ===
+                                                        "box"
+                                                            ? "Box"
+                                                            : "Piece"}
+                                                    </TableCell>
+                                                    <TableCell>
                                                         {item.quantity_deducted}
                                                     </TableCell>
                                                 </TableRow>
@@ -160,7 +177,7 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                         ) : (
                                             <TableRow>
                                                 <TableCell
-                                                    colSpan={4}
+                                                    colSpan={5}
                                                     className="text-center"
                                                 >
                                                     No items found.
@@ -171,7 +188,25 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                 </Table>
                             </div>
 
-                            <div className="flex justify-end">
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    variant="outline"
+                                    className="flex items-center gap-1"
+                                    onClick={() =>
+                                        window.open(
+                                            route(
+                                                "stock-out.receipt",
+                                                details.stock_out
+                                                    .stock_out_id,
+                                            ),
+                                            "_blank",
+                                            "noopener,noreferrer",
+                                        )
+                                    }
+                                >
+                                    <Printer className="h-3.5 w-3.5" />
+                                    Print Receipt
+                                </Button>
                                 <Button
                                     variant="outline"
                                     onClick={() => setOpen(false)}

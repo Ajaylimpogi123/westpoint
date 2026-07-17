@@ -40,6 +40,7 @@ export default function StockOutModal({
 }) {
     const {
         TRANSACTION_SUBTYPES,
+        UNIT_TYPES,
         open,
         openModal,
         closeModal,
@@ -48,6 +49,7 @@ export default function StockOutModal({
         draft,
         updateDraft,
         updateQuantity,
+        normalizeQuantity,
         selectedProduct,
         availableLots,
         selectedLot,
@@ -146,6 +148,46 @@ export default function StockOutModal({
                                     />
                                     <InputError
                                         message={errors.patient_reference}
+                                    />
+                                </div>
+
+                                <div className="grid gap-3">
+                                    <Label htmlFor="delivered_to">
+                                        Delivered To
+                                    </Label>
+                                    <Input
+                                        id="delivered_to"
+                                        value={data.delivered_to}
+                                        onChange={(event) =>
+                                            setData(
+                                                "delivered_to",
+                                                event.target.value,
+                                            )
+                                        }
+                                        placeholder="Recipient name / branch / customer"
+                                    />
+                                    <InputError
+                                        message={errors.delivered_to}
+                                    />
+                                </div>
+
+                                <div className="grid gap-3">
+                                    <Label htmlFor="delivered_to_address">
+                                        Delivered To Address
+                                    </Label>
+                                    <Input
+                                        id="delivered_to_address"
+                                        value={data.delivered_to_address}
+                                        onChange={(event) =>
+                                            setData(
+                                                "delivered_to_address",
+                                                event.target.value,
+                                            )
+                                        }
+                                        placeholder="Delivery address (for the receipt)"
+                                    />
+                                    <InputError
+                                        message={errors.delivered_to_address}
                                     />
                                 </div>
 
@@ -276,7 +318,9 @@ export default function StockOutModal({
                                             onClick={() => updateQuantity(-1)}
                                             disabled={
                                                 !draft.lot_number ||
-                                                draft.quantity_deducted <= 1
+                                                Number(
+                                                    draft.quantity_deducted,
+                                                ) <= 1
                                             }
                                         >
                                             <Minus className="h-4 w-4" />
@@ -293,6 +337,7 @@ export default function StockOutModal({
                                                     event.target.value,
                                                 )
                                             }
+                                            onBlur={normalizeQuantity}
                                             disabled={!draft.lot_number}
                                             className="text-center"
                                         />
@@ -321,6 +366,38 @@ export default function StockOutModal({
                                                 : "s"}
                                         </p>
                                     )}
+                                </div>
+
+                                <div className="grid gap-2">
+                                    <Label htmlFor="unit_type">
+                                        Unit Type
+                                    </Label>
+                                    <select
+                                        id="unit_type"
+                                        value={draft.unit_type}
+                                        onChange={(event) =>
+                                            updateDraft(
+                                                "unit_type",
+                                                event.target.value,
+                                            )
+                                        }
+                                        disabled={!draft.lot_number}
+                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    >
+                                        {UNIT_TYPES.map((unitType) => (
+                                            <option
+                                                key={unitType.value}
+                                                value={unitType.value}
+                                            >
+                                                {unitType.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Determines which price (retail or
+                                        wholesale) is used on the printed
+                                        delivery receipt.
+                                    </p>
                                 </div>
 
                                 <Button
@@ -369,7 +446,12 @@ export default function StockOutModal({
                                                                 · Qty{" "}
                                                                 {
                                                                     item.quantity_deducted
-                                                                }
+                                                                }{" "}
+                                                                ·{" "}
+                                                                {item.unit_type ===
+                                                                "box"
+                                                                    ? "Box / Wholesale"
+                                                                    : "Piece"}
                                                             </p>
                                                         </div>
                                                         <Button

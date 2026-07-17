@@ -9,10 +9,16 @@ const TRANSACTION_SUBTYPES = [
     "Returned to supplier",
 ];
 
+const UNIT_TYPES = [
+    { value: "piece", label: "Piece (retail price)" },
+    { value: "box", label: "Box / Wholesale (wholesale price)" },
+];
+
 const emptyDraft = () => ({
     pd_id: "",
     lot_number: "",
     quantity_deducted: 1,
+    unit_type: "piece",
 });
 
 export default function useStockOut({ branchId, products }) {
@@ -26,6 +32,8 @@ export default function useStockOut({ branchId, products }) {
             patient_reference: "",
             issued_by: "",
             remarks: "",
+            delivered_to: "",
+            delivered_to_address: "",
             items: [],
         });
 
@@ -57,6 +65,8 @@ export default function useStockOut({ branchId, products }) {
             patient_reference: "",
             issued_by: "",
             remarks: "",
+            delivered_to: "",
+            delivered_to_address: "",
             items: [],
         });
         setOpen(true);
@@ -87,16 +97,49 @@ export default function useStockOut({ branchId, products }) {
             }
 
             if (field === "quantity_deducted") {
+                // Allow the field to be temporarily empty while the user is
+                // clearing it to type a new value — don't force it back to
+                // 1 on every keystroke. It gets normalized on blur and is
+                // re-validated before it can be added to the basket.
+                if (value === "") {
+                    next.quantity_deducted = "";
+                    return next;
+                }
+
+                const parsed = Number(value);
+                if (Number.isNaN(parsed)) {
+                    next.quantity_deducted = current.quantity_deducted;
+                    return next;
+                }
+
                 const lots = productMap[current.pd_id]?.batches ?? [];
                 const lot = lots.find(
                     (l) => l.lot_number === current.lot_number,
                 );
                 const max = lot ? Number(lot.quantity) : 1;
-                const parsed = Math.max(1, Number(value) || 1);
-                next.quantity_deducted = Math.min(max, parsed);
+
+                // Clamp the upper bound live so it can never exceed available
+                // stock, but allow 0 transiently so backspacing to a single
+                // remaining digit doesn't get force-corrected mid-edit.
+                next.quantity_deducted = Math.min(max, Math.max(0, parsed));
             }
 
             return next;
+        });
+    };
+
+    const normalizeQuantity = () => {
+        setDraft((current) => {
+            const lots = productMap[current.pd_id]?.batches ?? [];
+            const lot = lots.find((l) => l.lot_number === current.lot_number);
+            const max = lot ? Number(lot.quantity) : 1;
+            const parsed = Number(current.quantity_deducted);
+            const normalized = Math.max(
+                1,
+                Math.min(max, Number.isNaN(parsed) ? 1 : parsed),
+            );
+
+            return { ...current, quantity_deducted: normalized };
         });
     };
 
@@ -105,28 +148,26 @@ export default function useStockOut({ branchId, products }) {
             const lots = productMap[current.pd_id]?.batches ?? [];
             const lot = lots.find((l) => l.lot_number === current.lot_number);
             const max = lot ? Number(lot.quantity) : 1;
-            const next = Math.max(
-                1,
-                Math.min(max, Number(current.quantity_deducted) + delta),
-            );
+            const base = Number(current.quantity_deducted) || 0;
+            const next = Math.max(1, Math.min(max, base + delta));
 
             return { ...current, quantity_deducted: next };
         });
     };
 
     const addItemToBasket = () => {
+        const quantity = Number(draft.quantity_deducted);
+
         if (
             !draft.pd_id ||
             !draft.lot_number ||
-            Number(draft.quantity_deducted) < 1
+            !Number.isFinite(quantity) ||
+            quantity < 1
         ) {
             return;
         }
 
-        if (
-            selectedLot &&
-            Number(draft.quantity_deducted) > Number(selectedLot.quantity)
-        ) {
+        if (selectedLot && quantity > Number(selectedLot.quantity)) {
             return;
         }
 
@@ -135,7 +176,8 @@ export default function useStockOut({ branchId, products }) {
             {
                 pd_id: draft.pd_id,
                 lot_number: draft.lot_number,
-                quantity_deducted: Number(draft.quantity_deducted),
+                quantity_deducted: quantity,
+                unit_type: draft.unit_type,
             },
         ]);
         setDraft(emptyDraft());
@@ -160,6 +202,7 @@ export default function useStockOut({ branchId, products }) {
 
     return {
         TRANSACTION_SUBTYPES,
+        UNIT_TYPES,
         open,
         openModal,
         closeModal,
@@ -168,6 +211,7 @@ export default function useStockOut({ branchId, products }) {
         draft,
         updateDraft,
         updateQuantity,
+        normalizeQuantity,
         selectedProduct,
         availableLots,
         selectedLot,

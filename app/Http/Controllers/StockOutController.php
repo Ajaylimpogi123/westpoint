@@ -14,6 +14,8 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
 use Throwable;
 
 class StockOutController extends Controller
@@ -34,10 +36,13 @@ class StockOutController extends Controller
             'patient_reference' => ['nullable', 'string', 'max:255'],
             'issued_by' => ['required', 'string', 'max:255'],
             'remarks' => ['nullable', 'string', 'max:2000'],
+            'delivered_to' => ['nullable', 'string', 'max:255'],
+            'delivered_to_address' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
             'items.*.lot_number' => ['required', 'string', 'max:100'],
             'items.*.quantity_deducted' => ['required', 'integer', 'min:1'],
+            'items.*.unit_type' => ['required', 'string', Rule::in(['piece', 'box'])],
         ]);
 
         if ((int) $validated['branch_id'] !== $branchId) {
@@ -54,6 +59,8 @@ class StockOutController extends Controller
                     'patient_reference' => $validated['patient_reference'] ?? null,
                     'issued_by' => $validated['issued_by'],
                     'remarks' => $validated['remarks'] ?? null,
+                    'delivered_to' => $validated['delivered_to'] ?? null,
+                    'delivered_to_address' => $validated['delivered_to_address'] ?? null,
                 ]);
 
                 foreach ($validated['items'] as $item) {
@@ -81,6 +88,8 @@ class StockOutController extends Controller
                         'pd_id' => $medicine->id,
                         'lot_number' => $item['lot_number'],
                         'quantity_deducted' => $item['quantity_deducted'],
+                        'expiry' => $batch->expiry,
+                        'unit_type' => $item['unit_type'],
                     ]);
 
                     InventoryMovementLogger::log(
@@ -128,6 +137,8 @@ class StockOutController extends Controller
                     'pd_id',
                     'lot_number',
                     'quantity_deducted',
+                    'expiry',
+                    'unit_type',
                 ]);
             },
             'items.product:id,med_name,brand_name,dose,form',
@@ -140,6 +151,8 @@ class StockOutController extends Controller
                 'patient_reference' => $stockOut->patient_reference,
                 'issued_by' => $stockOut->issued_by,
                 'remarks' => $stockOut->remarks,
+                'delivered_to' => $stockOut->delivered_to,
+                'delivered_to_address' => $stockOut->delivered_to_address,
                 'created_at' => $stockOut->created_at,
             ],
             'items' => $stockOut->items->map(function (StockOutItem $item) {
@@ -147,6 +160,8 @@ class StockOutController extends Controller
                     'item_id' => $item->item_id,
                     'lot_number' => $item->lot_number,
                     'quantity_deducted' => $item->quantity_deducted,
+                    'expiry' => $item->expiry,
+                    'unit_type' => $item->unit_type,
                     'product' => $item->product ? [
                         'med_name' => $item->product->med_name,
                         'brand_name' => $item->product->brand_name,
@@ -155,6 +170,35 @@ class StockOutController extends Controller
                     ] : null,
                 ];
             }),
+        ]);
+    }
+
+    public function receipt(StockOut $stockOut): Response
+    {
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $stockOut->branch_id !== $branchId) {
+            abort(403, 'You do not have access to this stock-out transaction.');
+        }
+
+        $stockOut->load([
+            'branch',
+            'items' => function ($query) {
+                $query->select([
+                    'item_id',
+                    'stock_out_id',
+                    'pd_id',
+                    'lot_number',
+                    'quantity_deducted',
+                    'expiry',
+                    'unit_type',
+                ]);
+            },
+            'items.product:id,med_name,brand_name,dose,form,retail_price,wholesale_price',
+        ]);
+
+        return Inertia::render('MedicineInventory/StockOutReceipt', [
+            'stockOut' => $stockOut,
         ]);
     }
 

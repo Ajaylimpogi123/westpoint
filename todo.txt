@@ -1,13 +1,9 @@
 
 adress on stock out, tin and everything
 
-add invoice on pos
-
 stock out paper print
 
 total income for the day gross and net from - to
-
-
 
 Stock out not yet to sale
 Qoutation no feature for sale
