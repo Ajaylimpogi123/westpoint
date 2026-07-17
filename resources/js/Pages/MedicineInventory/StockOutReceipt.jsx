@@ -83,9 +83,7 @@ function wordsUnder1000(n) {
     }
     const h = Math.floor(n / 100);
     const r = n % 100;
-    return r
-        ? `${ONES[h]} HUNDRED ${wordsUnder1000(r)}`
-        : `${ONES[h]} HUNDRED`;
+    return r ? `${ONES[h]} HUNDRED ${wordsUnder1000(r)}` : `${ONES[h]} HUNDRED`;
 }
 
 function integerToWords(n) {
@@ -98,7 +96,9 @@ function integerToWords(n) {
         words += `${wordsUnder1000(millions)} MILLION`;
     }
     if (thousands) {
-        words += words ? ` ${wordsUnder1000(thousands)} THOUSAND` : `${wordsUnder1000(thousands)} THOUSAND`;
+        words += words
+            ? ` ${wordsUnder1000(thousands)} THOUSAND`
+            : `${wordsUnder1000(thousands)} THOUSAND`;
     }
     if (rest) {
         words += words ? ` ${wordsUnder1000(rest)}` : wordsUnder1000(rest);
@@ -150,7 +150,9 @@ export default function StockOutReceipt({ stockOut }) {
 
     return (
         <>
-            <Head title={`Delivery Receipt — #${receiptNumber(stockOut.stock_out_id)}`} />
+            <Head
+                title={`Delivery Receipt — #${receiptNumber(stockOut.stock_out_id)}`}
+            />
 
             <style>{`
                 @media print {
@@ -212,7 +214,7 @@ export default function StockOutReceipt({ stockOut }) {
                         <img
                             src="/images/logo/Westpoint.png"
                             alt="Westpoint Pharma and Medical Supplies Distribution"
-                            className="h-16 w-16 shrink-0 object-contain"
+                            className="h-28 w-28 shrink-0 object-contain"
                         />
                         <div className="flex-1 text-center pt-0.5">
                             <h1 className="text-[15px] font-bold uppercase leading-tight tracking-tight">
@@ -227,9 +229,9 @@ export default function StockOutReceipt({ stockOut }) {
                                 VAT Reg. TIN: 439-169-208-00000
                             </p>
                             <p className="text-[9px] leading-snug">
-                                Bulk/Wholesale: (034) 479 2739 / (0992) 989
-                                5971 &nbsp;•&nbsp; Retail: (034) 454 1118 /
-                                (0917) 162 8332
+                                Bulk/Wholesale: (034) 479 2739 / (0992) 989 5971
+                                &nbsp;•&nbsp; Retail: (034) 454 1118 / (0917)
+                                162 8332
                             </p>
                         </div>
                         <div className="w-16 shrink-0" aria-hidden="true" />
@@ -317,9 +319,7 @@ export default function StockOutReceipt({ stockOut }) {
                         </thead>
                         <tbody>
                             {items.map((item, idx) => {
-                                const qty = Number(
-                                    item.quantity_deducted || 0,
-                                );
+                                const qty = Number(item.quantity_deducted || 0);
                                 const unitPrice = priceFor(item);
                                 const amount = unitPrice * qty;
 
@@ -328,8 +328,7 @@ export default function StockOutReceipt({ stockOut }) {
                                         <Td align="center">{idx + 1}</Td>
                                         <Td align="left">
                                             <span className="font-semibold">
-                                                {item.product?.med_name ??
-                                                    "—"}
+                                                {item.product?.med_name ?? "—"}
                                             </span>
                                             {(item.product?.dose ||
                                                 item.product?.form ||
@@ -444,8 +443,8 @@ export default function StockOutReceipt({ stockOut }) {
                         </div>
                         <div className="text-[9px]">
                             <p className="italic mb-6 leading-snug">
-                                Received the above merchandise in good order
-                                and condition
+                                Received the above merchandise in good order and
+                                condition
                             </p>
                             <p>
                                 <span className="font-semibold">By:</span>{" "}
