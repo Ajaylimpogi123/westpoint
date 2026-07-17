@@ -70,7 +70,7 @@ export default function TransferSlip({ transfer }) {
                         {/* ── LETTERHEAD ──────────────────────────── */}
                         <div className="flex items-center justify-between gap-4 border-b-2 border-gray-800 pb-3 mb-4">
                             <img
-                                src="/storage/westpoint_logo.png"
+                                src="/images/logo/Westpoint.png"
                                 alt="Westpoint Pharmacy & Medical Supplies Distribution"
                                 className="h-28 w-28 shrink-0 object-contain"
                             />

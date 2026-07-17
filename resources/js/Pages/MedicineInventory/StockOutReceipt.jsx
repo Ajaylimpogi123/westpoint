@@ -210,7 +210,7 @@ export default function StockOutReceipt({ stockOut }) {
                     {/* Letterhead */}
                     <div className="flex items-start gap-3 border-b-2 border-gray-900 pb-2 mb-1">
                         <img
-                            src="/storage/westpoint_logo.png"
+                            src="/images/logo/Westpoint.png"
                             alt="Westpoint Pharma and Medical Supplies Distribution"
                             className="h-16 w-16 shrink-0 object-contain"
                         />
