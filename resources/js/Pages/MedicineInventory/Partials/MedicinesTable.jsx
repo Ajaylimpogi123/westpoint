@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -13,72 +13,102 @@ import { Card, CardContent } from "@/Components/ui/card";
 import { router } from "@inertiajs/react";
 import MedicineRow from "./MedicineRow";
 
-export default function MedicinesTable({
-    medicines,
-    filters,
-    branchId,
-    canEditMedicine,
-}) {
-    const [expandedRows, setExpandedRows] = useState({});
+const SEARCH_DEBOUNCE_MS = 300;
 
-    const toggleRow = (id) => {
+function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
+    const [expandedRows, setExpandedRows] = useState({});
+    const [search, setSearch] = useState(filters?.search || "");
+
+    const isFirstRender = useRef(true);
+    const debounceTimer = useRef(null);
+
+    const toggleRow = useCallback((id) => {
         setExpandedRows((prev) => ({
             ...prev,
             [id]: !prev[id],
         }));
-    };
+    }, []);
 
-    const goToPage = (page) => {
-        router.get(
-            route("medicine-inventory.index"),
-            { ...filters, page },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-                only: ["medicines"],
-            },
-        );
-    };
+    const runFilterRequest = useCallback(
+        (params) => {
+            router.get(
+                route("medicine-inventory.index"),
+                { ...filters, ...params },
+                {
+                    preserveState: true,
+                    preserveScroll: true,
+                    replace: true,
+                    only: ["medicines", "filters"],
+                },
+            );
+        },
+        [filters],
+    );
 
-    const handleSearch = (search) => {
-        router.get(
-            route("medicine-inventory.index"),
-            { ...filters, search, page: 1 },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-                only: ["medicines", "filters"],
-            },
-        );
-    };
+    const goToPage = useCallback(
+        (page) => {
+            router.get(
+                route("medicine-inventory.index"),
+                { ...filters, page },
+                {
+                    preserveState: true,
+                    preserveScroll: true,
+                    replace: true,
+                    only: ["medicines"],
+                },
+            );
+        },
+        [filters],
+    );
 
-    const handleStatusFilter = (status) => {
-        router.get(
-            route("medicine-inventory.index"),
-            { ...filters, status, page: 1 },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-                only: ["medicines", "filters"],
-            },
-        );
-    };
+    const handleStatusFilter = useCallback(
+        (status) => runFilterRequest({ status, page: 1 }),
+        [runFilterRequest],
+    );
 
-    const handleStockLevelFilter = (stock_level) => {
-        router.get(
-            route("medicine-inventory.index"),
-            { ...filters, stock_level, page: 1 },
-            {
-                preserveState: true,
-                preserveScroll: true,
-                replace: true,
-                only: ["medicines", "filters"],
-            },
-        );
-    };
+    const handleStockLevelFilter = useCallback(
+        (stock_level) => runFilterRequest({ stock_level, page: 1 }),
+        [runFilterRequest],
+    );
+
+    const handleSearchChange = useCallback((e) => {
+        setSearch(e.target.value);
+    }, []);
+
+    // Debounce search-as-you-type — fires SEARCH_DEBOUNCE_MS after the
+    // user stops typing, instead of on every keystroke or Enter press.
+    useEffect(() => {
+        if (isFirstRender.current) {
+            isFirstRender.current = false;
+            return;
+        }
+
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+
+        debounceTimer.current = setTimeout(() => {
+            runFilterRequest({ search, page: 1 });
+        }, SEARCH_DEBOUNCE_MS);
+
+        return () => {
+            if (debounceTimer.current) clearTimeout(debounceTimer.current);
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [search]);
+
+    // Memoize the row list so it only rebuilds when the underlying
+    // medicines data or the expanded/edit state actually changes —
+    // not on every parent re-render (e.g. while typing in the search box).
+    const rows = useMemo(() => {
+        return medicines.data.map((medicine) => (
+            <MedicineRow
+                key={medicine.id}
+                medicine={medicine}
+                isExpanded={!!expandedRows[medicine.id]}
+                onToggle={() => toggleRow(medicine.id)}
+                canEditMedicine={canEditMedicine}
+            />
+        ));
+    }, [medicines.data, expandedRows, toggleRow, canEditMedicine]);
 
     return (
         <Card>
@@ -101,13 +131,9 @@ export default function MedicinesTable({
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                     <Input
                         placeholder="Search medicines..."
-                        defaultValue={filters?.search || ""}
+                        value={search}
+                        onChange={handleSearchChange}
                         className="max-w-sm"
-                        onKeyDown={(e) => {
-                            if (e.key === "Enter") {
-                                handleSearch(e.target.value);
-                            }
-                        }}
                     />
                     <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
                         <div className="flex flex-col gap-1">
@@ -182,15 +208,7 @@ export default function MedicinesTable({
                         </TableHeader>
                         <TableBody>
                             {medicines.data.length ? (
-                                medicines.data.map((medicine) => (
-                                    <MedicineRow
-                                        key={medicine.id}
-                                        medicine={medicine}
-                                        isExpanded={!!expandedRows[medicine.id]}
-                                        onToggle={() => toggleRow(medicine.id)}
-                                        canEditMedicine={canEditMedicine}
-                                    />
-                                ))
+                                rows
                             ) : (
                                 <TableRow>
                                     <TableCell
@@ -241,3 +259,5 @@ export default function MedicinesTable({
         </Card>
     );
 }
+
+export default memo(MedicinesTable);
