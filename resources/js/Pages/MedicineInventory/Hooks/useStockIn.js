@@ -1,12 +1,18 @@
 import { useMemo, useState } from "react";
 import { useForm } from "@inertiajs/react";
 
+const UNIT_TYPES = [
+    { value: "Piece", label: "Piece (retail price)" },
+    { value: "Box", label: "Box / Wholesale (wholesale price)" },
+];
+
 const emptyDraft = () => ({
     pd_id: "",
     batch_number: "",
     expiry_date: "",
     quantity_received: 1,
     shelf_number: "",
+    unit_type: "Piece",
 });
 
 export default function useStockIn({ branchId, products }) {
@@ -79,6 +85,7 @@ export default function useStockIn({ branchId, products }) {
                 expiry_date: draft.expiry_date,
                 quantity_received: Number(draft.quantity_received),
                 shelf_number: draft.shelf_number.trim(),
+                unit_type: draft.unit_type,
             },
         ]);
         setDraft(emptyDraft());
@@ -102,6 +109,7 @@ export default function useStockIn({ branchId, products }) {
     };
 
     return {
+        UNIT_TYPES,
         open,
         openModal,
         closeModal,

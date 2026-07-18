@@ -1,6 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
+import { Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -141,6 +142,7 @@ export default function StockInViewModal({ stockInId, children }) {
                                             <TableHead>Brand</TableHead>
                                             <TableHead>Lot</TableHead>
                                             <TableHead>Expiry</TableHead>
+                                            <TableHead>Unit Type</TableHead>
                                             <TableHead>Qty</TableHead>
                                         </TableRow>
                                     </TableHeader>
@@ -166,15 +168,20 @@ export default function StockInViewModal({ stockInId, children }) {
                                                         )}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {item.quantity_received}{" "}
-                                                        {item.unit_type}
+                                                        {item.unit_type ===
+                                                        "Box"
+                                                            ? "Box"
+                                                            : "Piece"}
+                                                    </TableCell>
+                                                    <TableCell>
+                                                        {item.quantity_received}
                                                     </TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (
                                             <TableRow>
                                                 <TableCell
-                                                    colSpan={5}
+                                                    colSpan={6}
                                                     className="text-center"
                                                 >
                                                     No items found.
@@ -185,7 +192,24 @@ export default function StockInViewModal({ stockInId, children }) {
                                 </Table>
                             </div>
 
-                            <div className="flex justify-end">
+                            <div className="flex justify-end gap-2">
+                                <Button
+                                    variant="outline"
+                                    className="flex items-center gap-1"
+                                    onClick={() =>
+                                        window.open(
+                                            route(
+                                                "stock-in.receipt",
+                                                details.stock_in.stock_in_id,
+                                            ),
+                                            "_blank",
+                                            "noopener,noreferrer",
+                                        )
+                                    }
+                                >
+                                    <Printer className="h-3.5 w-3.5" />
+                                    Print Receipt
+                                </Button>
                                 <Button
                                     variant="outline"
                                     onClick={() => setOpen(false)}

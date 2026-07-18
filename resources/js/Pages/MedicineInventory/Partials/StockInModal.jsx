@@ -30,6 +30,7 @@ export default function StockInModal({
     children,
 }) {
     const {
+        UNIT_TYPES,
         open,
         openModal,
         closeModal,
@@ -280,6 +281,36 @@ export default function StockInModal({
                                     </div>
                                 </div>
 
+                                <div className="grid gap-2">
+                                    <Label htmlFor="unit_type">Unit Type</Label>
+                                    <select
+                                        id="unit_type"
+                                        value={draft.unit_type}
+                                        onChange={(event) =>
+                                            updateDraft(
+                                                "unit_type",
+                                                event.target.value,
+                                            )
+                                        }
+                                        disabled={!draft.pd_id}
+                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    >
+                                        {UNIT_TYPES.map((unitType) => (
+                                            <option
+                                                key={unitType.value}
+                                                value={unitType.value}
+                                            >
+                                                {unitType.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <p className="text-xs text-muted-foreground">
+                                        Determines which price (retail or
+                                        wholesale) is used on the printed
+                                        delivery receipt.
+                                    </p>
+                                </div>
+
                                 <Button
                                     type="button"
                                     variant="secondary"
@@ -325,6 +356,11 @@ export default function StockInModal({
                                                                 {
                                                                     item.quantity_received
                                                                 }
+                                                                {" · "}
+                                                                {item.unit_type ===
+                                                                "Box"
+                                                                    ? "Box / Wholesale"
+                                                                    : "Piece"}
                                                                 {item.shelf_number
                                                                     ? ` · Shelf ${item.shelf_number}`
                                                                     : ""}
@@ -372,6 +408,11 @@ export default function StockInModal({
                                                         value={
                                                             item.shelf_number
                                                         }
+                                                    />
+                                                    <input
+                                                        type="hidden"
+                                                        name={`items[${index}][unit_type]`}
+                                                        value={item.unit_type}
                                                     />
 
                                                     <InputError

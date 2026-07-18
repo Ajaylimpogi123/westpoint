@@ -12,6 +12,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Inertia\Inertia;
+use Inertia\Response;
 use Throwable;
 
 class StockInController extends Controller
@@ -32,6 +35,7 @@ class StockInController extends Controller
             'items.*.expiry_date' => ['required', 'date'],
             'items.*.quantity_received' => ['required', 'integer', 'min:1'],
             'items.*.shelf_number' => ['nullable', 'string', 'max:50'],
+            'items.*.unit_type' => ['required', 'string', Rule::in(['Piece', 'Box'])],
         ]);
 
         if ((int) $validated['branch_id'] !== $branchId) {
@@ -62,7 +66,7 @@ class StockInController extends Controller
                         'batch_number' => $item['batch_number'],
                         'expiry_date' => $item['expiry_date'],
                         'quantity_received' => $item['quantity_received'],
-                        'unit_type' => 'Piece',
+                        'unit_type' => $item['unit_type'],
                     ]);
 
                     InventoryStockService::addStock(
@@ -146,6 +150,35 @@ class StockInController extends Controller
                     ] : null,
                 ];
             }),
+        ]);
+    }
+
+    public function receipt(StockIn $stockIn): Response
+    {
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $stockIn->branch_id !== $branchId) {
+            abort(403, 'You do not have access to this stock-in transaction.');
+        }
+
+        $stockIn->load([
+            'branch',
+            'items' => function ($query) {
+                $query->select([
+                    'item_id',
+                    'stock_in_id',
+                    'pd_id',
+                    'batch_number',
+                    'expiry_date',
+                    'quantity_received',
+                    'unit_type',
+                ]);
+            },
+            'items.product:id,med_name,brand_name,dose,form,retail_price,wholesale_price',
+        ]);
+
+        return Inertia::render('MedicineInventory/StockInReceipt', [
+            'stockIn' => $stockIn,
         ]);
     }
 

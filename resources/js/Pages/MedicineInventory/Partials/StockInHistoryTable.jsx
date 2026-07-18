@@ -9,7 +9,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { router } from "@inertiajs/react";
-import { Eye } from "lucide-react";
+import { Eye, Printer } from "lucide-react";
 import StockInViewModal from "./StockInViewModal";
 
 const PER_PAGE_OPTIONS = [10, 15, 25, 50];
@@ -109,19 +109,40 @@ export default function StockInHistoryTable({ stockIns, filters }) {
                                     </TableCell>
                                     <TableCell>{stockIn.received_by}</TableCell>
                                     <TableCell className="text-right">
-                                        <StockInViewModal
-                                            stockInId={stockIn.stock_in_id}
-                                        >
+                                        <div className="flex items-center justify-end gap-2">
+                                            <StockInViewModal
+                                                stockInId={stockIn.stock_in_id}
+                                            >
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex items-center gap-1"
+                                                >
+                                                    <Eye className="h-3.5 w-3.5" />
+                                                    View
+                                                </Button>
+                                            </StockInViewModal>
                                             <Button
                                                 type="button"
                                                 variant="outline"
                                                 size="sm"
                                                 className="flex items-center gap-1"
+                                                onClick={() =>
+                                                    window.open(
+                                                        route(
+                                                            "stock-in.receipt",
+                                                            stockIn.stock_in_id,
+                                                        ),
+                                                        "_blank",
+                                                        "noopener,noreferrer",
+                                                    )
+                                                }
                                             >
-                                                <Eye className="h-3.5 w-3.5" />
-                                                View
+                                                <Printer className="h-3.5 w-3.5" />
+                                                Receipt
                                             </Button>
-                                        </StockInViewModal>
+                                        </div>
                                     </TableCell>
                                 </TableRow>
                             ))

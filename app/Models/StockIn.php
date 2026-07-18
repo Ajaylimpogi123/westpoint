@@ -31,4 +31,9 @@ class StockIn extends Model
     {
         return $this->hasMany(StockInItem::class, 'stock_in_id', 'stock_in_id');
     }
+
+    public function branch()
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
 }
