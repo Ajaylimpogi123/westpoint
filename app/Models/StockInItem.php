@@ -18,7 +18,8 @@ class StockInItem extends Model
         'batch_number',
         'expiry_date',
         'quantity_received',
-        'unit_type'
+        'unit_type',
+        'unit_price',
     ];
 
     public function stockIn()
@@ -31,6 +32,7 @@ class StockInItem extends Model
         return [
             'expiry_date' => 'date',
             'quantity_received' => 'integer',
+            'unit_price' => 'decimal:2',
         ];
     }
 

@@ -2,6 +2,7 @@ import React from 'react';
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/Components/ui/button";
 import { Printer, X } from "lucide-react";
+import { formatDateTime } from "@/lib/dates";
 
 export default function SuccessModal({ isVisible, order, onClose, onPrint }) {
     if (!isVisible || !order) return null;
@@ -9,19 +10,6 @@ export default function SuccessModal({ isVisible, order, onClose, onPrint }) {
     // Format currency
     const formatCurrency = (amount) => {
         return `₱${parseFloat(amount).toFixed(2)}`;
-    };
-
-    // Format date
-    const formatDate = (date) => {
-        if (!date) return '';
-        const d = new Date(date);
-        return d.toLocaleDateString('en-US', { 
-            month: 'short', 
-            day: '2-digit', 
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
     };
 
     return (
@@ -102,7 +90,7 @@ export default function SuccessModal({ isVisible, order, onClose, onPrint }) {
                             <div className="flex justify-between items-center">
                                 <span className="text-gray-600">Date:</span>
                                 <span className="font-medium text-gray-900">
-                                    {formatDate(order.od_date)}
+                                    {formatDateTime(order.od_date, "")}
                                 </span>
                             </div>
                             

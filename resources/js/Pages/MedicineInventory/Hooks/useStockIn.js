@@ -2,8 +2,8 @@ import { useMemo, useState } from "react";
 import { useForm } from "@inertiajs/react";
 
 const UNIT_TYPES = [
-    { value: "Piece", label: "Piece (retail price)" },
-    { value: "Box", label: "Box / Wholesale (wholesale price)" },
+    { value: "Piece", label: "Piece" },
+    { value: "Box", label: "Box / Wholesale" },
 ];
 
 const emptyDraft = () => ({
@@ -13,6 +13,7 @@ const emptyDraft = () => ({
     quantity_received: 1,
     shelf_number: "",
     unit_type: "Piece",
+    unit_price: "",
 });
 
 export default function useStockIn({ branchId, products }) {
@@ -61,10 +62,34 @@ export default function useStockIn({ branchId, products }) {
     };
 
     const updateDraft = (field, value) => {
-        setDraft((current) => ({
-            ...current,
-            [field]: value,
-        }));
+        setDraft((current) => {
+            const next = {
+                ...current,
+                [field]: value,
+            };
+
+            if (field === "pd_id" || field === "unit_type") {
+                const productId = field === "pd_id" ? value : current.pd_id;
+                const unitType =
+                    field === "unit_type" ? value : current.unit_type;
+                const product = productId
+                    ? productMap[productId] ?? null
+                    : null;
+
+                if (product) {
+                    const suggestedPrice =
+                        unitType === "Box"
+                            ? product.wholesale_price
+                            : product.retail_price;
+                    next.unit_price =
+                        suggestedPrice != null && suggestedPrice !== ""
+                            ? String(suggestedPrice)
+                            : "";
+                }
+            }
+
+            return next;
+        });
     };
 
     const addItemToBasket = () => {
@@ -72,7 +97,9 @@ export default function useStockIn({ branchId, products }) {
             !draft.pd_id ||
             !draft.batch_number.trim() ||
             !draft.expiry_date ||
-            Number(draft.quantity_received) < 1
+            Number(draft.quantity_received) < 1 ||
+            draft.unit_price === "" ||
+            Number(draft.unit_price) < 0
         ) {
             return;
         }
@@ -86,6 +113,7 @@ export default function useStockIn({ branchId, products }) {
                 quantity_received: Number(draft.quantity_received),
                 shelf_number: draft.shelf_number.trim(),
                 unit_type: draft.unit_type,
+                unit_price: Number(draft.unit_price),
             },
         ]);
         setDraft(emptyDraft());

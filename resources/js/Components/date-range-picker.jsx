@@ -1,6 +1,5 @@
 // components/date-range-picker.jsx
 import * as React from "react";
-import { format } from "date-fns";
 import { Calendar as CalendarIcon } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -10,6 +9,7 @@ import {
     PopoverTrigger,
 } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
+import { formatDate } from "@/lib/dates";
 
 export function DateRangePicker({ date, setDate, className }) {
     return (
@@ -28,11 +28,11 @@ export function DateRangePicker({ date, setDate, className }) {
                         {date?.from ? (
                             date.to ? (
                                 <>
-                                    {format(date.from, "LLL dd, y")} -{" "}
-                                    {format(date.to, "LLL dd, y")}
+                                    {formatDate(date.from, "")} -{" "}
+                                    {formatDate(date.to, "")}
                                 </>
                             ) : (
-                                format(date.from, "LLL dd, y")
+                                formatDate(date.from, "")
                             )
                         ) : (
                             <span>Pick a date range</span>

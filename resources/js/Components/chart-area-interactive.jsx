@@ -24,6 +24,7 @@ import {
   ToggleGroupItem,
 } from "@/components/ui/toggle-group"
 import { format, subDays, startOfDay, endOfDay } from "date-fns"
+import { formatDate } from "@/lib/dates"
 
 // Sample chart data - replace with your real data from props
 const sampleChartData = [
@@ -139,23 +140,13 @@ export function ChartAreaInteractive({ data = sampleChartData, title = "Total Vi
               axisLine={false}
               tickMargin={8}
               minTickGap={32}
-              tickFormatter={(value) => {
-                const date = new Date(value)
-                return date.toLocaleDateString("en-US", {
-                  month: "short",
-                  day: "numeric",
-                });
-              }} />
+              tickFormatter={(value) => formatDate(value, "")}
+            />
             <ChartTooltip
               cursor={false}
               content={
                 <ChartTooltipContent
-                  labelFormatter={(value) => {
-                    return new Date(value).toLocaleDateString("en-US", {
-                      month: "short",
-                      day: "numeric",
-                    });
-                  }}
+                  labelFormatter={(value) => formatDate(value, "")}
                   indicator="dot" />
               } />
             <Area

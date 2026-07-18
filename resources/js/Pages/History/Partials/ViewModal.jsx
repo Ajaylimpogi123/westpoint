@@ -16,25 +16,13 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
+import { formatDateTime } from "@/lib/dates";
 
 const formatCurrency = (amount) =>
     `₱${Number(amount || 0).toLocaleString("en-PH", {
         minimumFractionDigits: 2,
         maximumFractionDigits: 2,
     })}`;
-
-const formatDate = (dateString) => {
-    if (!dateString) return "";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "";
-    return date.toLocaleString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-};
 
 const productLabel = (product) => {
     if (!product) return "Product";
@@ -105,7 +93,7 @@ export default function ViewModal({ saleId, children }) {
                                         Date:
                                     </span>{" "}
                                     <span className="font-medium">
-                                        {formatDate(details.sale.created_at)}
+                                        {formatDateTime(details.sale.created_at, "")}
                                     </span>
                                 </div>
                                 <div>

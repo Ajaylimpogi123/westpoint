@@ -1,27 +1,6 @@
 import { useMemo } from "react";
 import { Head, Link } from "@inertiajs/react";
-
-function formatDate(value) {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return date.toLocaleDateString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-    });
-}
-
-function formatExpiryShort(value) {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    const month = date
-        .toLocaleDateString("en-US", { month: "short" })
-        .toUpperCase();
-    const year = String(date.getFullYear()).slice(-2);
-    return `${month}-${year}`;
-}
+import { formatDate, formatDateTime } from "@/lib/dates";
 
 function formatCurrency(amount) {
     return `₱${Number(amount || 0).toLocaleString("en-PH", {
@@ -133,6 +112,10 @@ export default function StockInReceipt({ stockIn }) {
     const items = stockIn.items ?? [];
 
     const priceFor = (item) => {
+        if (item?.unit_price != null && item.unit_price !== "") {
+            return Number(item.unit_price || 0);
+        }
+
         if (!item?.product) return 0;
         const value =
             item.unit_type === "Box"
@@ -285,7 +268,7 @@ export default function StockInReceipt({ stockIn }) {
                         />
                         <FieldLine
                             label="Recorded"
-                            value={formatDate(stockIn.created_at)}
+                            value={formatDateTime(stockIn.created_at)}
                         />
                     </div>
 
@@ -346,7 +329,7 @@ export default function StockInReceipt({ stockIn }) {
                                             {item.batch_number ?? "—"}
                                         </Td>
                                         <Td align="center">
-                                            {formatExpiryShort(item.expiry_date)}
+                                            {formatDate(item.expiry_date)}
                                         </Td>
                                         <Td align="center">
                                             {unitLabel(item.unit_type)}

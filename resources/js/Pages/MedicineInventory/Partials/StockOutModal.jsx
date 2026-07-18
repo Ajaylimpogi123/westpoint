@@ -14,22 +14,10 @@ import InputError from "@/Components/InputError";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import useStockOut from "../Hooks/useStockOut";
 import MedicineSearchSelect from "./MedicineSearchSelect";
-
-function formatExpiry(value) {
-    if (!value) {
-        return "—";
-    }
-
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) {
-        return value;
-    }
-
-    return date.toLocaleDateString();
-}
+import { formatDate } from "@/lib/dates";
 
 function formatLotLabel(lot) {
-    return `Lot ${lot.lot_number} — Exp: ${formatExpiry(lot.expiry)} — Qty: ${lot.quantity}`;
+    return `Lot ${lot.lot_number} — Exp: ${formatDate(lot.expiry)} — Qty: ${lot.quantity}`;
 }
 
 export default function StockOutModal({

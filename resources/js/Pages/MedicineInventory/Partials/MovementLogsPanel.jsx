@@ -19,16 +19,7 @@ import MovementLogViewModal from "./MovementLogViewModal";
 
 const PER_PAGE_OPTIONS = [10, 15, 25, 50];
 
-const formatDateTime = (dateString) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-};
+import { formatDateTime } from "@/lib/dates";
 
 export default function MovementLogsPanel({
     branchId,

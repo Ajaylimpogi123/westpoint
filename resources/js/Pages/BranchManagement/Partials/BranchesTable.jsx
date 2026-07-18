@@ -12,6 +12,7 @@ import { router, useForm } from "@inertiajs/react";
 import { Pencil, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
 import EditModal from "./EditModal";
+import { formatDate } from "@/lib/dates";
 
 export default function BranchesTable({ branches }) {
     const { delete: destroy } = useForm();
@@ -46,11 +47,6 @@ export default function BranchesTable({ branches }) {
                 });
             }
         });
-    };
-
-    const formatDate = (dateString) => {
-        if (!dateString) return "-";
-        return new Date(dateString).toLocaleDateString();
     };
 
     return (

@@ -1,13 +1,6 @@
 import GenericBadge from "./GenericBadge";
 import { formatCurrency } from "../lib/pricing";
-
-function formatDate(value) {
-    if (!value) {
-        return "—";
-    }
-
-    return new Date(value).toLocaleDateString();
-}
+import { formatDate } from "@/lib/dates";
 
 function formatDetailLine(product) {
     return [product.dose, product.form].filter(Boolean).join(" · ") || "—";

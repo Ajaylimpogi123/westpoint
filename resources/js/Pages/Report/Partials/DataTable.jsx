@@ -8,6 +8,7 @@ import {
     flexRender,
 } from "@tanstack/react-table";
 import { format, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
+import { formatDate, formatDateTime } from "@/lib/dates";
 import { CalendarIcon, Download, FileSpreadsheet, FileText, Filter } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -152,7 +153,7 @@ export function DataTable({ columns, data }) {
                     let value = row[column.accessorKey];
                     // Format date if it's a date field
                     if (column.accessorKey === 'created_at' && value) {
-                        value = format(parseISO(value), "PPP pp");
+                        value = formatDateTime(value, "");
                     }
                     exportRow[column.header || column.accessorKey] = value;
                 }
@@ -218,7 +219,7 @@ export function DataTable({ columns, data }) {
                     let value = row[col.accessorKey];
                     // Format date if it's a date field
                     if (col.accessorKey === 'created_at' && value) {
-                        value = format(parseISO(value), "PPP pp");
+                        value = formatDateTime(value, "");
                     }
                     return value || "";
                 });
@@ -248,15 +249,15 @@ export function DataTable({ columns, data }) {
         doc.setFontSize(16);
         doc.text("Data Export Report", 14, 15);
         doc.setFontSize(10);
-        doc.text(`Generated on: ${format(new Date(), "PPP pp")}`, 14, 22);
+        doc.text(`Generated on: ${formatDateTime(new Date(), "")}`, 14, 22);
         
         // Add filter info if filters are applied
         let filterY = 28;
         if (dateRange?.from) {
             doc.setFontSize(9);
             const filterText = dateRange.to 
-                ? `Date Filter: ${format(dateRange.from, "PPP")} - ${format(dateRange.to, "PPP")}`
-                : `Date Filter: ${format(dateRange.from, "PPP")}`;
+                ? `Date Filter: ${formatDate(dateRange.from, "")} - ${formatDate(dateRange.to, "")}`
+                : `Date Filter: ${formatDate(dateRange.from, "")}`;
             doc.text(filterText, 14, filterY);
             filterY += 5;
         }
@@ -332,7 +333,7 @@ export function DataTable({ columns, data }) {
                     let value = row[col.accessorKey];
                     // Format date if it's a date field
                     if (col.accessorKey === 'created_at' && value) {
-                        value = format(parseISO(value), "PPP pp");
+                        value = formatDateTime(value, "");
                     }
                     // Handle commas and quotes for CSV
                     if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
@@ -453,11 +454,11 @@ export function DataTable({ columns, data }) {
                                     {dateRange?.from ? (
                                         dateRange.to ? (
                                             <>
-                                                {format(dateRange.from, "LLL dd, y")} -{" "}
-                                                {format(dateRange.to, "LLL dd, y")}
+                                                {formatDate(dateRange.from, "")} -{" "}
+                                                {formatDate(dateRange.to, "")}
                                             </>
                                         ) : (
-                                            format(dateRange.from, "LLL dd, y")
+                                            formatDate(dateRange.from, "")
                                         )
                                     ) : (
                                         <span>Filter by created date</span>

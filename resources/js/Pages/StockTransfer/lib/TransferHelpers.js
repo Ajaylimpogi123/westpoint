@@ -47,29 +47,7 @@ export const LOG_ACTION_CONFIG = {
     stock_moved: { label: "Stock moved", color: "bg-purple-500" },
 };
 
-// ─────────────────────────────────────────────────────────
-// Date & time formatters
-// ─────────────────────────────────────────────────────────
-
-export function formatDate(date) {
-    if (!date) return "—";
-    return new Date(date).toLocaleDateString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-    });
-}
-
-export function formatDateTime(date) {
-    if (!date) return "—";
-    return new Date(date).toLocaleString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "numeric",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-}
+export { formatDate, formatDateTime } from "@/lib/dates";
 
 // ─────────────────────────────────────────────────────────
 // Expiry helpers (used by LotRow + LotPickerList)

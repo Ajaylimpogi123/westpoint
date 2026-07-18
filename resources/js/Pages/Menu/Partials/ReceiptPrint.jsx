@@ -1,5 +1,6 @@
 import React, { useEffect } from 'react';
 import { Head } from '@inertiajs/react';
+import { formatDateTime } from '@/lib/dates';
 
 export default function ReceiptPrint({ order }) {
     useEffect(() => {
@@ -7,17 +8,6 @@ export default function ReceiptPrint({ order }) {
         // Auto print when component mounts
         window.print();
     }, []);
-
-    const formatDate = (date) => {
-        if (!date) return '';
-        return new Date(date).toLocaleString('en-US', {
-            month: 'short',
-            day: '2-digit',
-            year: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
-        });
-    };
 
     const formatCurrency = (amount) => {
         return `₱${parseFloat(amount).toFixed(2)}`;

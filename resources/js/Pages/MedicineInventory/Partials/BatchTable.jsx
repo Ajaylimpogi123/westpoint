@@ -16,13 +16,9 @@ import AddStockModal from "./AddStockModal";
 import EditBatchModal from "./EditBatchModal";
 import StockStatusBadge from "./StockStatusBadge";
 import { getBatchStockStatus } from "../lib/stockStatus";
+import { formatDate } from "@/lib/dates";
 
 function BatchRows({ batches, medicine, canEditMedicine, onDeleteBatch, emptyMessage }) {
-    const formatDate = (dateString) => {
-        if (!dateString) return "-";
-        return new Date(dateString).toLocaleDateString();
-    };
-
     if (!batches?.length) {
         return (
             <TableRow>

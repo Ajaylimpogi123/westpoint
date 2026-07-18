@@ -1,27 +1,6 @@
 import { useMemo } from "react";
 import { Head, Link } from "@inertiajs/react";
-
-function formatDate(value) {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    return date.toLocaleDateString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-    });
-}
-
-function formatExpiryShort(value) {
-    if (!value) return "—";
-    const date = new Date(value);
-    if (Number.isNaN(date.getTime())) return "—";
-    const month = date
-        .toLocaleDateString("en-US", { month: "short" })
-        .toUpperCase();
-    const year = String(date.getFullYear()).slice(-2);
-    return `${month}-${year}`;
-}
+import { formatDate, formatDateTime } from "@/lib/dates";
 
 function formatCurrency(amount) {
     return `₱${Number(amount || 0).toLocaleString("en-PH", {
@@ -256,7 +235,7 @@ export default function StockOutReceipt({ stockOut }) {
                                 {stockOut.delivered_to}
                             </HeaderCell>
                             <HeaderCell label="Date" borderedLeft>
-                                {formatDate(stockOut.created_at)}
+                                {formatDateTime(stockOut.created_at)}
                             </HeaderCell>
                         </div>
                         <div className="grid grid-cols-[1fr_140px] border-b border-gray-900">
@@ -348,7 +327,7 @@ export default function StockOutReceipt({ stockOut }) {
                                             {item.lot_number ?? "—"}
                                         </Td>
                                         <Td align="center">
-                                            {formatExpiryShort(item.expiry)}
+                                            {formatDate(item.expiry)}
                                         </Td>
                                         <Td align="center">
                                             {unitLabel(item.unit_type)}

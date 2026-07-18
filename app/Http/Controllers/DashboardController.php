@@ -177,13 +177,13 @@ class DashboardController extends Controller
     private function statsPeriodLabel(string $statsPeriod, ?string $statsDate): ?string
     {
         return match ($statsPeriod) {
-            'daily' => Carbon::parse($statsDate)->format('F j, Y'),
+            'daily' => Carbon::parse($statsDate)->format('d/m/Y'),
             'weekly' => sprintf(
                 '%s – %s',
-                Carbon::parse($statsDate)->startOfWeek()->format('M j'),
-                Carbon::parse($statsDate)->endOfWeek()->format('M j, Y')
+                Carbon::parse($statsDate)->startOfWeek()->format('d/m/Y'),
+                Carbon::parse($statsDate)->endOfWeek()->format('d/m/Y')
             ),
-            'monthly' => Carbon::createFromFormat('Y-m', $statsDate)->format('F Y'),
+            'monthly' => Carbon::createFromFormat('Y-m', $statsDate)->format('m/Y'),
             default => null,
         };
     }
@@ -246,7 +246,7 @@ class DashboardController extends Controller
         for ($i = 0; $i < $months; $i++) {
             $month = $startDate->copy()->addMonths($i);
             $key = $month->format('Y-m');
-            $labels[] = $month->format('M Y');
+            $labels[] = $month->format('m/Y');
             $values[] = (float) ($rows[$key] ?? 0);
         }
 

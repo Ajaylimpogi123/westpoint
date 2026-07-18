@@ -18,29 +18,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 
-const formatDate = (dateString) => {
-    if (!dateString) return "-";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "-";
-    return date.toLocaleDateString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-    });
-};
-
-const formatDateTime = (dateString) => {
-    if (!dateString) return "-";
-    const date = new Date(dateString);
-    if (isNaN(date.getTime())) return "-";
-    return date.toLocaleString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-        hour: "2-digit",
-        minute: "2-digit",
-    });
-};
+import { formatDate, formatDateTime } from "@/lib/dates";
 
 export default function StockInViewModal({ stockInId, children }) {
     const [open, setOpen] = useState(false);

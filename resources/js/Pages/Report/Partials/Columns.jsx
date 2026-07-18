@@ -11,6 +11,7 @@ import { MoreHorizontal } from "lucide-react";
 import EditModal from "./EditModal";
 import { Printer } from "lucide-react";
 import { toast } from "sonner";
+import { formatDate } from "@/lib/dates";
 export const columns = [
 
     {
@@ -20,17 +21,7 @@ export const columns = [
     {
         accessorKey: "created_at",
         header: "Date",
-        cell: ({ row }) => {
-            const dateString = row.getValue("created_at");
-            if (!dateString) return "";
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return "";
-            return date.toLocaleDateString("en-PH", {
-                year: "numeric",
-                month: "short",
-                day: "2-digit",
-            });
-        },
+        cell: ({ row }) => formatDate(row.getValue("created_at"), ""),
     },
     {
         accessorKey: "table_number",

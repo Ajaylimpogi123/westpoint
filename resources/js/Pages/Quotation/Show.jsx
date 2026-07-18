@@ -7,6 +7,7 @@ import {
     formatCurrency,
 } from "./lib/quotationStatus";
 import { formatCustomerName } from "./lib/customerName";
+import { formatDate } from "@/lib/dates";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
@@ -58,7 +59,7 @@ export default function Show({ quotation }) {
                     <div>
                         <div className="text-slate-400">Date</div>
                         <div className="font-medium text-slate-700">
-                            {quotation.qt_date?.slice(0, 10)}
+                            {formatDate(quotation.qt_date, "")}
                         </div>
                     </div>
                     <div>
@@ -118,9 +119,7 @@ export default function Show({ quotation }) {
                                         {item.lot_number || "—"}
                                     </td>
                                     <td className="px-3 py-2">
-                                        {item.expiry_date
-                                            ? item.expiry_date.slice(0, 10)
-                                            : "—"}
+                                        {formatDate(item.expiry_date, "")}
                                     </td>
                                     <td className="px-3 py-2 text-right">
                                         {formatCurrency(item.qt_unit_price)}

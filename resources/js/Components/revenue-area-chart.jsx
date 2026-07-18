@@ -4,6 +4,7 @@
 import * as React from "react"
 import { Area, AreaChart, CartesianGrid, XAxis } from "recharts"
 import { format, subDays, parseISO } from "date-fns"
+import { formatDate } from "@/lib/dates"
 import {
   Card,
   CardContent,
@@ -87,7 +88,7 @@ export function RevenueAreaChart({ data, title = "Revenue Trend", description = 
               tickLine={false}
               axisLine={false}
               tickMargin={8}
-              tickFormatter={(value) => format(parseISO(value), "MMM dd")}
+              tickFormatter={(value) => formatDate(value, "")}
             />
             <ChartTooltip
               cursor={false}

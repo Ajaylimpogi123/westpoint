@@ -1,8 +1,8 @@
 // components/recent-orders-table.jsx
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { format } from "date-fns";
 import { Card, CardContent, CardHeader, CardDescription, CardTitle } from "@/Components/ui/card";
+import { formatDate } from "@/lib/dates";
 export function RecentOrdersTable({ orders }) {
     return (
         <Card>
@@ -27,7 +27,7 @@ export function RecentOrdersTable({ orders }) {
                         {orders.map((order) => (
                             <TableRow key={order.od_id}>
                                 <TableCell className="font-medium">{order.invoice_no}</TableCell>
-                                <TableCell>{format(parseISO(order.created_at), "MMM dd, yyyy")}</TableCell>
+                                <TableCell>{formatDate(order.created_at, "")}</TableCell>
                                 <TableCell>{order.cust_fullname || "Walk-in"}</TableCell>
                                 <TableCell>{order.table_number}</TableCell>
                                 <TableCell className="text-green-600 font-medium">

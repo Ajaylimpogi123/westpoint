@@ -11,17 +11,9 @@ import {
 import { router } from "@inertiajs/react";
 import { Eye, Printer } from "lucide-react";
 import StockInViewModal from "./StockInViewModal";
+import { formatDate } from "@/lib/dates";
 
 const PER_PAGE_OPTIONS = [10, 15, 25, 50];
-
-const formatDate = (dateString) => {
-    if (!dateString) return "-";
-    return new Date(dateString).toLocaleDateString("en-PH", {
-        year: "numeric",
-        month: "short",
-        day: "2-digit",
-    });
-};
 
 export default function StockInHistoryTable({ stockIns, filters }) {
     const perPage = Number(filters?.stock_in_per_page) || 10;

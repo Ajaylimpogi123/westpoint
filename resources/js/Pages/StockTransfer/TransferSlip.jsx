@@ -272,7 +272,7 @@ export default function TransferSlip({ transfer }) {
                                 name={transfer.approver?.name}
                                 sublabel={
                                     transfer.approved_at
-                                        ? formatDate(transfer.approved_at)
+                                        ? formatDateTime(transfer.approved_at)
                                         : null
                                 }
                             />

@@ -1,21 +1,11 @@
 import React, { useEffect } from "react";
 import { Head } from "@inertiajs/react";
+import { formatDateTime } from "@/lib/dates";
 
 export default function ReceiptPrint({ sale }) {
     useEffect(() => {
         window.print();
     }, []);
-
-    const formatDate = (date) => {
-        if (!date) return "";
-        return new Date(date).toLocaleString("en-PH", {
-            month: "short",
-            day: "2-digit",
-            year: "numeric",
-            hour: "2-digit",
-            minute: "2-digit",
-        });
-    };
 
     const formatCurrency = (amount) =>
         `₱${Number(amount || 0).toLocaleString("en-PH", {
@@ -125,7 +115,7 @@ export default function ReceiptPrint({ sale }) {
                 </div>
                 <div>
                     <span>Date:</span>
-                    <strong>{formatDate(sale.created_at)}</strong>
+                    <strong>{formatDateTime(sale.created_at, "")}</strong>
                 </div>
                 <div>
                     <span>Customer:</span>

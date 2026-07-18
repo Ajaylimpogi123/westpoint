@@ -228,7 +228,7 @@ class QuotationController extends Controller
 
         $quotation->update([
             'printed_by'   => auth()->user()->name,
-            'time_printed' => now()->format('m-d-Y h:i A'),
+            'time_printed' => now()->format('d/m/Y h:i A'),
         ]);
 
         return Inertia::render('Quotation/Print', [

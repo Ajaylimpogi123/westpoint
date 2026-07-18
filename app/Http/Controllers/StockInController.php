@@ -36,6 +36,7 @@ class StockInController extends Controller
             'items.*.quantity_received' => ['required', 'integer', 'min:1'],
             'items.*.shelf_number' => ['nullable', 'string', 'max:50'],
             'items.*.unit_type' => ['required', 'string', Rule::in(['Piece', 'Box'])],
+            'items.*.unit_price' => ['required', 'numeric', 'min:0'],
         ]);
 
         if ((int) $validated['branch_id'] !== $branchId) {
@@ -67,6 +68,7 @@ class StockInController extends Controller
                         'expiry_date' => $item['expiry_date'],
                         'quantity_received' => $item['quantity_received'],
                         'unit_type' => $item['unit_type'],
+                        'unit_price' => $item['unit_price'],
                     ]);
 
                     InventoryStockService::addStock(
@@ -121,6 +123,7 @@ class StockInController extends Controller
                     'expiry_date',
                     'quantity_received',
                     'unit_type',
+                    'unit_price',
                 ]);
             },
             'items.product:id,med_name,brand_name,dose,form',
@@ -142,6 +145,7 @@ class StockInController extends Controller
                     'expiry_date' => $item->expiry_date,
                     'quantity_received' => $item->quantity_received,
                     'unit_type' => $item->unit_type,
+                    'unit_price' => $item->unit_price,
                     'product' => $item->product ? [
                         'med_name' => $item->product->med_name,
                         'brand_name' => $item->product->brand_name,
@@ -172,6 +176,7 @@ class StockInController extends Controller
                     'expiry_date',
                     'quantity_received',
                     'unit_type',
+                    'unit_price',
                 ]);
             },
             'items.product:id,med_name,brand_name,dose,form,retail_price,wholesale_price',

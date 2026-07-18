@@ -2,6 +2,7 @@ import { Button } from "@/components/ui/button";
 import { Eye, Printer } from "lucide-react";
 import { toast } from "sonner";
 import ViewModal from "./ViewModal";
+import { formatDate } from "@/lib/dates";
 
 export const columns = [
     {
@@ -11,17 +12,7 @@ export const columns = [
     {
         accessorKey: "created_at",
         header: "Date",
-        cell: ({ row }) => {
-            const dateString = row.getValue("created_at");
-            if (!dateString) return "";
-            const date = new Date(dateString);
-            if (isNaN(date.getTime())) return "";
-            return date.toLocaleDateString("en-PH", {
-                year: "numeric",
-                month: "short",
-                day: "2-digit",
-            });
-        },
+        cell: ({ row }) => formatDate(row.getValue("created_at"), ""),
     },
     {
         accessorKey: "customer_name",

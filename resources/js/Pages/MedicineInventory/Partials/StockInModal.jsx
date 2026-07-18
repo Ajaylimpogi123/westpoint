@@ -214,8 +214,8 @@ export default function StockInModal({
                                     </div>
                                 )}
 
-                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
-                                    <div className="grid gap-2">
+                                <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid min-w-0 gap-2">
                                         <Label htmlFor="batch_number">
                                             Lot Number
                                         </Label>
@@ -230,7 +230,7 @@ export default function StockInModal({
                                             }
                                         />
                                     </div>
-                                    <div className="grid gap-2">
+                                    <div className="grid min-w-0 gap-2">
                                         <Label htmlFor="expiry_date">
                                             Expiry Date
                                         </Label>
@@ -244,9 +244,10 @@ export default function StockInModal({
                                                     event.target.value,
                                                 )
                                             }
+                                            className="w-full min-w-0"
                                         />
                                     </div>
-                                    <div className="grid gap-2">
+                                    <div className="grid min-w-0 gap-2">
                                         <Label htmlFor="quantity_received">
                                             Quantity
                                         </Label>
@@ -263,6 +264,29 @@ export default function StockInModal({
                                             }
                                         />
                                     </div>
+                                    <div className="grid min-w-0 gap-2">
+                                        <Label htmlFor="unit_price">
+                                            Unit Price
+                                        </Label>
+                                        <Input
+                                            id="unit_price"
+                                            type="number"
+                                            min="0"
+                                            step="0.01"
+                                            value={draft.unit_price}
+                                            onChange={(event) =>
+                                                updateDraft(
+                                                    "unit_price",
+                                                    event.target.value,
+                                                )
+                                            }
+                                            placeholder="0.00"
+                                            disabled={!draft.pd_id}
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div className="grid gap-2">
                                         <Label htmlFor="shelf_number">
                                             Shelf Number
@@ -279,36 +303,30 @@ export default function StockInModal({
                                             placeholder="e.g. A-12"
                                         />
                                     </div>
-                                </div>
-
-                                <div className="grid gap-2">
-                                    <Label htmlFor="unit_type">Unit Type</Label>
-                                    <select
-                                        id="unit_type"
-                                        value={draft.unit_type}
-                                        onChange={(event) =>
-                                            updateDraft(
-                                                "unit_type",
-                                                event.target.value,
-                                            )
-                                        }
-                                        disabled={!draft.pd_id}
-                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                    >
-                                        {UNIT_TYPES.map((unitType) => (
-                                            <option
-                                                key={unitType.value}
-                                                value={unitType.value}
-                                            >
-                                                {unitType.label}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <p className="text-xs text-muted-foreground">
-                                        Determines which price (retail or
-                                        wholesale) is used on the printed
-                                        delivery receipt.
-                                    </p>
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="unit_type">Unit Type</Label>
+                                        <select
+                                            id="unit_type"
+                                            value={draft.unit_type}
+                                            onChange={(event) =>
+                                                updateDraft(
+                                                    "unit_type",
+                                                    event.target.value,
+                                                )
+                                            }
+                                            disabled={!draft.pd_id}
+                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                        >
+                                            {UNIT_TYPES.map((unitType) => (
+                                                <option
+                                                    key={unitType.value}
+                                                    value={unitType.value}
+                                                >
+                                                    {unitType.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
                                 </div>
 
                                 <Button
@@ -316,7 +334,11 @@ export default function StockInModal({
                                     variant="secondary"
                                     className="w-full"
                                     onClick={addItemToBasket}
-                                    disabled={!draft.pd_id}
+                                    disabled={
+                                        !draft.pd_id ||
+                                        draft.unit_price === "" ||
+                                        Number(draft.unit_price) < 0
+                                    }
                                 >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Item to Basket
@@ -361,6 +383,10 @@ export default function StockInModal({
                                                                 "Box"
                                                                     ? "Box / Wholesale"
                                                                     : "Piece"}
+                                                                {" · ₱"}
+                                                                {formatCurrency(
+                                                                    item.unit_price,
+                                                                )}
                                                                 {item.shelf_number
                                                                     ? ` · Shelf ${item.shelf_number}`
                                                                     : ""}
@@ -414,6 +440,11 @@ export default function StockInModal({
                                                         name={`items[${index}][unit_type]`}
                                                         value={item.unit_type}
                                                     />
+                                                    <input
+                                                        type="hidden"
+                                                        name={`items[${index}][unit_price]`}
+                                                        value={item.unit_price}
+                                                    />
 
                                                     <InputError
                                                         message={
@@ -428,6 +459,9 @@ export default function StockInModal({
                                                             ] ||
                                                             errors[
                                                                 `items.${index}.quantity_received`
+                                                            ] ||
+                                                            errors[
+                                                                `items.${index}.unit_price`
                                                             ]
                                                         }
                                                     />

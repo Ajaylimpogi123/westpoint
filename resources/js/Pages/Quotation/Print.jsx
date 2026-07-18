@@ -1,6 +1,7 @@
 import { Head } from "@inertiajs/react";
 import { formatCurrency } from "./lib/quotationStatus";
 import { formatCustomerName } from "./lib/customerName";
+import { formatDate } from "@/lib/dates";
 
 export default function Print({ quotation }) {
     const itemCount = quotation.items?.length ?? 0;
@@ -67,7 +68,7 @@ export default function Print({ quotation }) {
                         <p className="text-right">
                             Date:{" "}
                             <span className="inline-block min-w-[90px] border-b border-slate-500 px-1 text-center">
-                                {quotation.qt_date?.slice(0, 10) || "\u00A0"}
+                                {formatDate(quotation.qt_date, "\u00A0")}
                             </span>
                             <span className="ml-4 capitalize">
                                 {quotation.delivery_type}
@@ -104,7 +105,7 @@ export default function Print({ quotation }) {
                                     <span className="flex-1 border-b border-dotted border-slate-400">
                                         {quotation.customer?.lto_no}
                                         {quotation.customer?.lto_expiration &&
-                                            ` — Expiration: ${quotation.customer.lto_expiration.slice(0, 10)}`}
+                                            ` — Expiration: ${formatDate(quotation.customer.lto_expiration, "")}`}
                                     </span>
                                 </div>
                             )}
@@ -184,7 +185,7 @@ export default function Print({ quotation }) {
                                                     item.expiry_date &&
                                                     "   "}
                                                 {item.expiry_date &&
-                                                    `Expiry Date: ${item.expiry_date.slice(0, 10)}`}
+                                                    `Expiry Date: ${formatDate(item.expiry_date, "")}`}
                                             </p>
                                         )}
                                     </td>
