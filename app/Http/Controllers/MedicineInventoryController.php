@@ -125,7 +125,7 @@ class MedicineInventoryController extends Controller
                 ->orderByDesc('stock_out_id')
                 ->paginate(
                     $stockOutPerPage,
-                    ['stock_out_id', 'transaction_subtype', 'issued_by', 'patient_reference', 'created_at'],
+                    ['stock_out_id', 'transaction_subtype', 'issued_by', 'patient_reference', 'delivery_confirmed', 'created_at'],
                     'stock_out_page'
                 )
                 ->withQueryString()

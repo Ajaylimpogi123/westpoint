@@ -9,7 +9,8 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { router } from "@inertiajs/react";
-import { Eye, Printer } from "lucide-react";
+import { CheckCircle2, Eye, Printer } from "lucide-react";
+import Swal from "sweetalert2";
 import StockOutViewModal from "./StockOutViewModal";
 import { formatDate } from "@/lib/dates";
 
@@ -44,6 +45,31 @@ export default function StockOutHistoryTable({ stockOuts, filters }) {
             stock_out_per_page: value,
             stock_out_page: 1,
         });
+    };
+
+    const addToSales = async (stockOutId) => {
+        const result = await Swal.fire({
+            icon: "question",
+            title: "Confirm Delivery",
+            text: "Confirm that the patient has received this delivery? This will record it as a completed sale.",
+            showCancelButton: true,
+            confirmButtonText: "Yes, confirm",
+            confirmButtonColor: "#16a34a",
+            cancelButtonText: "Cancel",
+        });
+
+        if (!result.isConfirmed) {
+            return;
+        }
+
+        router.post(
+            route("stock-out.confirm-delivery", stockOutId),
+            {},
+            {
+                preserveScroll: true,
+                only: ["stockOuts"],
+            },
+        );
     };
 
     return (
@@ -136,6 +162,29 @@ export default function StockOutHistoryTable({ stockOuts, filters }) {
                                                 <Printer className="h-3.5 w-3.5" />
                                                 Receipt
                                             </Button>
+                                            {stockOut.transaction_subtype ===
+                                                "Dispensed to patient" &&
+                                                (stockOut.delivery_confirmed ? (
+                                                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                                        Added to Sales
+                                                    </span>
+                                                ) : (
+                                                    <Button
+                                                        type="button"
+                                                        variant="default"
+                                                        size="sm"
+                                                        className="flex items-center gap-1"
+                                                        onClick={() =>
+                                                            addToSales(
+                                                                stockOut.stock_out_id,
+                                                            )
+                                                        }
+                                                    >
+                                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                                        Add to Sales
+                                                    </Button>
+                                                ))}
                                         </div>
                                     </TableCell>
                                 </TableRow>

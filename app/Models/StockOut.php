@@ -20,7 +20,15 @@ class StockOut extends Model
         'remarks',
         'delivered_to',
         'delivered_to_address',
+        'delivery_confirmed',
     ];
+
+    protected function casts(): array
+    {
+        return [
+            'delivery_confirmed' => 'boolean',
+        ];
+    }
 
     public function branch()
     {

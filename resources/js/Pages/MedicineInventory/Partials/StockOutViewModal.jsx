@@ -1,7 +1,9 @@
 import { useState } from "react";
 import axios from "axios";
+import { router } from "@inertiajs/react";
 import { toast } from "sonner";
-import { Printer } from "lucide-react";
+import { CheckCircle2, Printer } from "lucide-react";
+import Swal from "sweetalert2";
 import { Button } from "@/components/ui/button";
 import {
     Dialog,
@@ -24,6 +26,7 @@ export default function StockOutViewModal({ stockOutId, children }) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [details, setDetails] = useState(null);
+    const [confirming, setConfirming] = useState(false);
 
     const openModal = async () => {
         if (!stockOutId) {
@@ -45,6 +48,47 @@ export default function StockOutViewModal({ stockOutId, children }) {
         } finally {
             setLoading(false);
         }
+    };
+
+    const addToSales = async () => {
+        const result = await Swal.fire({
+            icon: "question",
+            title: "Confirm Delivery",
+            text: "Confirm that the patient has received this delivery? This will record it as a completed sale.",
+            showCancelButton: true,
+            confirmButtonText: "Yes, confirm",
+            confirmButtonColor: "#16a34a",
+            cancelButtonText: "Cancel",
+        });
+
+        if (!result.isConfirmed) {
+            return;
+        }
+
+        setConfirming(true);
+
+        router.post(
+            route("stock-out.confirm-delivery", stockOutId),
+            {},
+            {
+                preserveScroll: true,
+                only: ["stockOuts"],
+                onSuccess: () => {
+                    setDetails((current) =>
+                        current
+                            ? {
+                                  ...current,
+                                  stock_out: {
+                                      ...current.stock_out,
+                                      delivery_confirmed: true,
+                                  },
+                              }
+                            : current,
+                    );
+                },
+                onFinish: () => setConfirming(false),
+            },
+        );
     };
 
     return (
@@ -177,7 +221,25 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                 </Table>
                             </div>
 
-                            <div className="flex justify-end gap-2">
+                            <div className="flex flex-wrap items-center justify-end gap-2">
+                                {details.stock_out.transaction_subtype ===
+                                    "Dispensed to patient" &&
+                                    (details.stock_out.delivery_confirmed ? (
+                                        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                            Added to Sales
+                                        </span>
+                                    ) : (
+                                        <Button
+                                            variant="default"
+                                            className="flex items-center gap-1"
+                                            onClick={addToSales}
+                                            disabled={confirming}
+                                        >
+                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                            Add to Sales
+                                        </Button>
+                                    ))}
                                 <Button
                                     variant="outline"
                                     className="flex items-center gap-1"

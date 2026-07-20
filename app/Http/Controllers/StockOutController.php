@@ -62,8 +62,6 @@ class StockOutController extends Controller
                     'delivered_to_address' => $validated['delivered_to_address'] ?? null,
                 ]);
 
-                $saleLineItems = [];
-
                 foreach ($validated['items'] as $item) {
                     $medicine = MedicineProduct::query()
                         ->active()
@@ -104,25 +102,6 @@ class StockOutController extends Controller
                         quantity: -$item['quantity_deducted'],
                         remarks: $validated['remarks'] ?? $validated['transaction_subtype'],
                     );
-
-                    if ($validated['transaction_subtype'] === 'Dispensed to patient') {
-                        $priceUsed = $item['unit_type'] === 'box'
-                            ? (float) $medicine->wholesale_price
-                            : (float) $medicine->retail_price;
-
-                        $saleLineItems[] = [
-                            'product_id' => $medicine->id,
-                            'products_qty_id' => $batch->id,
-                            'unit_type' => $item['unit_type'] === 'box' ? 'Box' : 'Piece',
-                            'quantity_sold' => $item['quantity_deducted'],
-                            'price_used' => $priceUsed,
-                            'total_price' => round($priceUsed * $item['quantity_deducted'], 2),
-                        ];
-                    }
-                }
-
-                if ($saleLineItems !== []) {
-                    $this->recordDispenseAsSale($stockOut, $validated, $branchId, $saleLineItems);
                 }
             });
         } catch (\RuntimeException $exception) {
@@ -173,6 +152,7 @@ class StockOutController extends Controller
                 'remarks' => $stockOut->remarks,
                 'delivered_to' => $stockOut->delivered_to,
                 'delivered_to_address' => $stockOut->delivered_to_address,
+                'delivery_confirmed' => (bool) $stockOut->delivery_confirmed,
                 'created_at' => $stockOut->created_at,
             ],
             'items' => $stockOut->items->map(function (StockOutItem $item) {
@@ -223,9 +203,94 @@ class StockOutController extends Controller
     }
 
     /**
+     * Confirms the patient/recipient has received a "Dispensed to patient"
+     * delivery and, only at that point, records it as a completed sale.
+     * Kept as a separate step (instead of doing it at stock-out creation
+     * time) so the delivery receipt can be printed and handed over first.
+     */
+    public function confirmDelivery(StockOut $stockOut): RedirectResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $stockOut->branch_id !== $branchId) {
+            abort(403, 'You do not have access to this stock-out transaction.');
+        }
+
+        if ($stockOut->transaction_subtype !== 'Dispensed to patient') {
+            return redirect()->back()
+                ->with('error', 'Only "Dispensed to patient" stock-outs can be added to sales.');
+        }
+
+        if ($stockOut->delivery_confirmed) {
+            return redirect()->back()
+                ->with('error', 'This stock-out has already been added to sales.');
+        }
+
+        try {
+            DB::transaction(function () use ($stockOut, $branchId) {
+                $items = StockOutItem::query()
+                    ->where('stock_out_id', $stockOut->stock_out_id)
+                    ->with('product:id,retail_price,wholesale_price')
+                    ->get();
+
+                if ($items->isEmpty()) {
+                    throw new \RuntimeException('This stock-out has no items to add to sales.');
+                }
+
+                $saleLineItems = [];
+
+                foreach ($items as $item) {
+                    $medicine = $item->product;
+
+                    if (! $medicine) {
+                        continue;
+                    }
+
+                    $priceUsed = $item->unit_type === 'box'
+                        ? (float) $medicine->wholesale_price
+                        : (float) $medicine->retail_price;
+
+                    $batch = ProductQty::query()
+                        ->where('product_id', $item->pd_id)
+                        ->where('lot_number', $item->lot_number)
+                        ->first();
+
+                    $saleLineItems[] = [
+                        'product_id' => $item->pd_id,
+                        'products_qty_id' => $batch?->id,
+                        'unit_type' => $item->unit_type === 'box' ? 'Box' : 'Piece',
+                        'quantity_sold' => $item->quantity_deducted,
+                        'price_used' => $priceUsed,
+                        'total_price' => round($priceUsed * $item->quantity_deducted, 2),
+                    ];
+                }
+
+                if ($saleLineItems === []) {
+                    throw new \RuntimeException('This stock-out has no items to add to sales.');
+                }
+
+                $this->recordDispenseAsSale($stockOut, $branchId, $saleLineItems);
+
+                $stockOut->update(['delivery_confirmed' => true]);
+            });
+        } catch (\RuntimeException $exception) {
+            return redirect()->back()
+                ->with('error', $exception->getMessage());
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()->back()
+                ->with('error', 'Could not add this stock-out to sales. Please try again.');
+        }
+
+        return redirect()->back()
+            ->with('success', 'Delivery confirmed and added to sales.');
+    }
+
+    /**
      * @param  array<int, array{
      *     product_id: int,
-     *     products_qty_id: int,
+     *     products_qty_id: ?int,
      *     unit_type: string,
      *     quantity_sold: int,
      *     price_used: float,
@@ -234,13 +299,12 @@ class StockOutController extends Controller
      */
     private function recordDispenseAsSale(
         StockOut $stockOut,
-        array $validated,
         int $branchId,
         array $saleLineItems
     ): void {
         $grossAmount = round(array_sum(array_column($saleLineItems, 'total_price')), 2);
 
-        $customerName = $validated['patient_reference'] ?? $validated['delivered_to'] ?? null;
+        $customerName = $stockOut->patient_reference ?? $stockOut->delivered_to ?? null;
         $customerName = $customerName !== null ? trim($customerName) : null;
 
         $sale = Sale::create([
