@@ -4,6 +4,8 @@ namespace App\Http\Controllers;
 
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
+use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\StockOut;
 use App\Models\StockOutItem;
 use App\Models\InventoryMovementLog;
@@ -63,6 +65,8 @@ class StockOutController extends Controller
                     'delivered_to_address' => $validated['delivered_to_address'] ?? null,
                 ]);
 
+                $saleLineItems = [];
+
                 foreach ($validated['items'] as $item) {
                     $medicine = MedicineProduct::query()
                         ->active()
@@ -103,6 +107,25 @@ class StockOutController extends Controller
                         quantity: -$item['quantity_deducted'],
                         remarks: $validated['remarks'] ?? $validated['transaction_subtype'],
                     );
+
+                    if ($validated['transaction_subtype'] === 'Dispensed to patient') {
+                        $priceUsed = $item['unit_type'] === 'box'
+                            ? (float) $medicine->wholesale_price
+                            : (float) $medicine->retail_price;
+
+                        $saleLineItems[] = [
+                            'product_id' => $medicine->id,
+                            'products_qty_id' => $batch->id,
+                            'unit_type' => $item['unit_type'] === 'box' ? 'Box' : 'Piece',
+                            'quantity_sold' => $item['quantity_deducted'],
+                            'price_used' => $priceUsed,
+                            'total_price' => round($priceUsed * $item['quantity_deducted'], 2),
+                        ];
+                    }
+                }
+
+                if ($saleLineItems !== []) {
+                    $this->recordDispenseAsSale($stockOut, $validated, $branchId, $saleLineItems);
                 }
             });
         } catch (\RuntimeException $exception) {
@@ -200,6 +223,58 @@ class StockOutController extends Controller
         return Inertia::render('MedicineInventory/StockOutReceipt', [
             'stockOut' => $stockOut,
         ]);
+    }
+
+    /**
+     * @param  array<int, array{
+     *     product_id: int,
+     *     products_qty_id: int,
+     *     unit_type: string,
+     *     quantity_sold: int,
+     *     price_used: float,
+     *     total_price: float
+     * }>  $saleLineItems
+     */
+    private function recordDispenseAsSale(
+        StockOut $stockOut,
+        array $validated,
+        int $branchId,
+        array $saleLineItems
+    ): void {
+        $grossAmount = round(array_sum(array_column($saleLineItems, 'total_price')), 2);
+
+        $customerName = $validated['patient_reference'] ?? $validated['delivered_to'] ?? null;
+        $customerName = $customerName !== null ? trim($customerName) : null;
+
+        $sale = Sale::create([
+            'invoice_number' => $this->generateDispenseInvoiceNumber($stockOut->stock_out_id),
+            'branch_id' => $branchId,
+            'user_id' => auth()->id(),
+            'customer_name' => $customerName !== '' ? $customerName : null,
+            'customer_id' => null,
+            'gross_amount' => $grossAmount,
+            'discount_amount' => 0,
+            'net_amount' => $grossAmount,
+            'payment_method' => 'Dispensed to patient',
+            'reference_number' => "Stock Out #{$stockOut->stock_out_id}",
+        ]);
+
+        foreach ($saleLineItems as $lineItem) {
+            SaleItem::create([
+                'sale_id' => $sale->id,
+                'product_id' => $lineItem['product_id'],
+                'products_qty_id' => $lineItem['products_qty_id'],
+                'unit_type' => $lineItem['unit_type'],
+                'quantity_sold' => $lineItem['quantity_sold'],
+                'price_used' => $lineItem['price_used'],
+                'total_price' => $lineItem['total_price'],
+            ]);
+        }
+    }
+
+    private function generateDispenseInvoiceNumber(int $stockOutId): string
+    {
+        return 'DISP-' . date('Ymd') . '-' . str_pad((string) $stockOutId, 5, '0', STR_PAD_LEFT);
     }
 
     private function branchIdOrFail(): int
