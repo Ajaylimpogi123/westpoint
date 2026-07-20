@@ -29,9 +29,6 @@ class StockOutController extends Controller
         $validated = $request->validate([
             'transaction_subtype' => ['required', 'string', Rule::in([
                 'Dispensed to patient',
-                'Internal use / consumption',
-                'Expired — write off',
-                'Damaged / lost',
                 'Returned to supplier',
             ])],
             'branch_id' => ['required', 'integer', 'exists:branches,id'],

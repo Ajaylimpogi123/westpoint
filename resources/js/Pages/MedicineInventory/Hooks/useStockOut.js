@@ -1,13 +1,7 @@
 import { useMemo, useState } from "react";
 import { useForm } from "@inertiajs/react";
 
-const TRANSACTION_SUBTYPES = [
-    "Dispensed to patient",
-    "Internal use / consumption",
-    "Expired — write off",
-    "Damaged / lost",
-    "Returned to supplier",
-];
+const TRANSACTION_SUBTYPES = ["Dispensed to patient", "Returned to supplier"];
 
 const UNIT_TYPES = [
     { value: "piece", label: "Piece (retail price)" },
