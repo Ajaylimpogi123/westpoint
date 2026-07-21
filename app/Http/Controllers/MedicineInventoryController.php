@@ -35,6 +35,8 @@ class MedicineInventoryController extends Controller
         $search = $request->input('search');
         $status = $request->input('status', 'Active');
         $stockLevel = $request->input('stock_level', 'all');
+        $form = $request->input('form');
+        $genericOnly = $request->boolean('generic_only');
 
         $medicines = MedicineProduct::query()
             ->when($branchId, fn ($query) => $query->forBranch($branchId))
@@ -61,6 +63,12 @@ class MedicineInventoryController extends Controller
             })
             ->when($status && $status !== 'all', function ($query) use ($status) {
                 $query->where('tbl_products.status', $status);
+            })
+            ->when($form, function ($query) use ($form) {
+                $query->where('form', $form);
+            })
+            ->when($genericOnly, function ($query) {
+                $query->where('is_generic', true);
             })
             ->orderBy('med_name')
             ->paginate(10)
@@ -152,6 +160,8 @@ class MedicineInventoryController extends Controller
                 'search',
                 'status',
                 'stock_level',
+                'form',
+                'generic_only',
                 'movement_log_per_page',
                 'stock_in_per_page',
                 'stock_out_per_page',

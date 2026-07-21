@@ -20,28 +20,7 @@ import {
 } from "@/components/ui/select";
 import InputError from "@/Components/InputError";
 import useAddMedicine from "../Hooks/useAddMedicine";
-
-const MEDICINE_FORMS = [
-    "Tablet",
-    "Capsule",
-    "Injectibles",
-    "Eye drops",
-    "Otic drops",
-    "Film-coated tablet",
-    "Syrup",
-    "Drops",
-    "Suppository",
-    "Vial",
-    "Ampule",
-    "Cream",
-    "Ointment",
-    "Gel",
-    "Sachet",
-    "Powder",
-    "Effervescent tablet",
-    "Patch",
-    "Medical Supply",
-];
+import { MEDICINE_FORMS } from "../lib/medicineForms";
 
 export default function AddModal({ children }) {
     const {
