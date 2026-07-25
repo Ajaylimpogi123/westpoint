@@ -4,7 +4,8 @@
     "scripts": {
         "build": "vite build",
         "dev": "vite",
-        "serve": "concurrently \"npm run dev\" \"php artisan serve\""
+        "serve": "concurrently \"npm run dev\" \"php artisan serve\"",
+        "serve:ngrok": "npm run build && node scripts/ngrok-dev.mjs"
     },
     "devDependencies": {
         "@headlessui/react": "^2.0.0",
