@@ -472,7 +472,7 @@ class PosController extends Controller
 
 // For auto Print 
 $sale->load('items.product');
-app(\app\Services\ReceiptPrinterService::class)->printReceipt($sale);
+app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
 
 
             return redirect()->route('pos.index')
