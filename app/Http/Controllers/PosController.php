@@ -470,6 +470,11 @@ class PosController extends Controller
 
             DB::commit();
 
+// For auto Print 
+$sale->load('items.product');
+app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
+
+
             return redirect()->route('pos.index')
                 ->with([
                     'success' => "Sale completed. Invoice {$sale->invoice_number}",
