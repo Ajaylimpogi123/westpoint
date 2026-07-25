@@ -14,23 +14,26 @@ return [
             'network_port' => env('PRINTER_MAIN_PORT', 9100),
         ],
 
-        // If each branch needs its own physical printer, add one profile
-        // per branch and map branch_id -> printer name in
-        // 'branch_printers' below. Example:
-        // 'branch_2' => [
-        //     'enabled' => env('PRINTER_BRANCH2_ENABLED', true),
-        //     'method' => env('PRINTER_BRANCH2_METHOD', 'network'),
-        //     'com_port' => env('PRINTER_BRANCH2_COM_PORT', 'COM4'),
-        //     'com_baud' => env('PRINTER_BRANCH2_BAUD', 9600),
-        //     'network_ip' => env('PRINTER_BRANCH2_IP', '192.168.1.101'),
-        //     'network_port' => env('PRINTER_BRANCH2_PORT', 9100),
+        // 'printer2' => [
+        //     'enabled' => env('PRINTER_2_ENABLED', true),
+        //     'method' => env('PRINTER_2_METHOD', 'com'),
+        //     'com_port' => env('PRINTER_2_COM_PORT', 'COM4'),
+        //     'com_baud' => env('PRINTER_2_BAUD', 9600),
+        //     'network_ip' => env('PRINTER_2_IP', '192.168.1.101'),
+        //     'network_port' => env('PRINTER_2_PORT', 9100),
         // ],
-    ],
 
-    // Maps branch_id => printer name, so each branch's terminal auto-prints
-    // to its own physical printer. Leave empty to always use 'default'.
-    // Example: [1 => 'main', 2 => 'branch_2'],
-    'branch_printers' => [],
+        // 'printer3' => [
+        //     'enabled' => env('PRINTER_3_ENABLED', false),
+        //     'method' => env('PRINTER_3_METHOD', 'network'),
+        //     'com_port' => env('PRINTER_3_COM_PORT', 'COM5'),
+        //     'com_baud' => env('PRINTER_3_BAUD', 9600),
+        //     'network_ip' => env('PRINTER_3_IP', '192.168.1.102'),
+        //     'network_port' => env('PRINTER_3_PORT', 9100),
+        // ],
+
+        // Add more the same way — just copy a block and give it a new key.
+    ],
 
     'connect_timeout' => env('PRINTER_TIMEOUT', 2),
     'store_name' => env('PRINTER_STORE_NAME', 'WESTPOINT PHARMACY'),
