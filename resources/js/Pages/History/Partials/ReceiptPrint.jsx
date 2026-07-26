@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Head } from "@inertiajs/react";
 import { formatDateTime } from "@/lib/dates";
+import { formatPaymentMethod } from "../lib/historyHelpers";
 
 export default function ReceiptPrint({ sale }) {
     useEffect(() => {
@@ -169,7 +170,7 @@ export default function ReceiptPrint({ sale }) {
                 </div>
                 <div>
                     <span>Payment Method:</span>
-                    <span className="capitalize">{sale.payment_method}</span>
+                    <span>{formatPaymentMethod(sale.payment_method)}</span>
                 </div>
                 {sale.reference_number &&
                     String(sale.reference_number).trim() !== "" && (

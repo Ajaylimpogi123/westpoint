@@ -39,6 +39,7 @@ import {
     DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
+import { formatPaymentMethod } from "../lib/historyHelpers";
 
 export function DataTable({ columns, data }) {
     const [sorting, setSorting] = useState([]);
@@ -157,6 +158,8 @@ export function DataTable({ columns, data }) {
                     // Format date if it's a date field
                     if (column.accessorKey === 'created_at' && value) {
                         value = formatDateTime(value, "");
+                    } else if (column.accessorKey === 'payment_method') {
+                        value = formatPaymentMethod(value);
                     }
                     exportRow[column.header || column.accessorKey] = value;
                 }
@@ -172,7 +175,7 @@ export function DataTable({ columns, data }) {
                     totalsRow[column.header || column.accessorKey] = `Total: ${totals.totalAmount}`;
                 } else if (column.accessorKey === 'payment_method') {
                     const paymentSummary = Object.entries(totals.paymentCounts)
-                        .map(([type, count]) => `${type}: ${count}`)
+                        .map(([type, count]) => `${formatPaymentMethod(type)}: ${count}`)
                         .join(', ');
                     totalsRow[column.header || column.accessorKey] = paymentSummary;
                 } else if (column.accessorKey === 'invoice_number') {
@@ -223,6 +226,8 @@ export function DataTable({ columns, data }) {
                     // Format date if it's a date field
                     if (col.accessorKey === 'created_at' && value) {
                         value = formatDateTime(value, "");
+                    } else if (col.accessorKey === 'payment_method') {
+                        value = formatPaymentMethod(value);
                     }
                     return value || "";
                 });
@@ -236,7 +241,7 @@ export function DataTable({ columns, data }) {
                     return `Total: ${totals.totalAmount}`;
                 } else if (col.accessorKey === 'payment_method') {
                     const paymentSummary = Object.entries(totals.paymentCounts)
-                        .map(([type, count]) => `${type}: ${count}`)
+                        .map(([type, count]) => `${formatPaymentMethod(type)}: ${count}`)
                         .join(', ');
                     return paymentSummary;
                 } else if (col.accessorKey === 'invoice_number') {
@@ -267,7 +272,7 @@ export function DataTable({ columns, data }) {
         
         if (paymentMethodFilter !== "all") {
             doc.setFontSize(9);
-            doc.text(`Payment Filter: ${paymentMethodFilter}`, 14, filterY);
+            doc.text(`Payment Filter: ${formatPaymentMethod(paymentMethodFilter)}`, 14, filterY);
             filterY += 5;
         }
 
@@ -337,6 +342,8 @@ export function DataTable({ columns, data }) {
                     // Format date if it's a date field
                     if (col.accessorKey === 'created_at' && value) {
                         value = formatDateTime(value, "");
+                    } else if (col.accessorKey === 'payment_method') {
+                        value = formatPaymentMethod(value);
                     }
                     // Handle commas and quotes for CSV
                     if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
@@ -354,7 +361,7 @@ export function DataTable({ columns, data }) {
                     return `Total: ${totals.totalAmount}`;
                 } else if (col.accessorKey === 'payment_method') {
                     const paymentSummary = Object.entries(totals.paymentCounts)
-                        .map(([type, count]) => `${type}: ${count}`)
+                        .map(([type, count]) => `${formatPaymentMethod(type)}: ${count}`)
                         .join(', ');
                     return paymentSummary;
                 } else if (col.accessorKey === 'invoice_number') {
@@ -411,7 +418,11 @@ export function DataTable({ columns, data }) {
                                     )}
                                 >
                                     <Filter className="h-4 w-4" />
-                                    {paymentMethodFilter === "all" ? "All Payments" : paymentMethodFilter}
+                                    {paymentMethodFilter === "all"
+                                        ? "All Payments"
+                                        : formatPaymentMethod(
+                                              paymentMethodFilter,
+                                          )}
                                 </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="start" className="w-[180px]">
@@ -433,7 +444,7 @@ export function DataTable({ columns, data }) {
                                             paymentMethodFilter === method && "bg-blue-50 text-blue-600"
                                         )}
                                     >
-                                        {method}
+                                        {formatPaymentMethod(method)}
                                     </DropdownMenuItem>
                                 ))}
                             </DropdownMenuContent>
@@ -532,7 +543,7 @@ export function DataTable({ columns, data }) {
                     <div className="text-sm font-medium space-y-1">
                         {Object.entries(totals.paymentCounts).map(([type, count]) => (
                             <div key={type} className="capitalize flex justify-between">
-                                <span>{type}:</span>
+                                <span>{formatPaymentMethod(type)}:</span>
                                 <span className="font-bold">{count}</span>
                             </div>
                         ))}

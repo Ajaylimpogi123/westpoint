@@ -17,6 +17,7 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { formatDateTime } from "@/lib/dates";
+import { formatPaymentMethod } from "../lib/historyHelpers";
 
 const formatCurrency = (amount) =>
     `₱${Number(amount || 0).toLocaleString("en-PH", {
@@ -108,8 +109,10 @@ export default function ViewModal({ saleId, children }) {
                                     <span className="text-muted-foreground">
                                         Payment:
                                     </span>{" "}
-                                    <span className="font-medium uppercase">
-                                        {details.sale.payment_method}
+                                    <span className="font-medium">
+                                        {formatPaymentMethod(
+                                            details.sale.payment_method,
+                                        )}
                                     </span>
                                 </div>
                                 {details.sale.reference_number &&

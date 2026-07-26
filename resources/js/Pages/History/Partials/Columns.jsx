@@ -3,6 +3,7 @@ import { Eye, Printer } from "lucide-react";
 import { toast } from "sonner";
 import ViewModal from "./ViewModal";
 import { formatDate } from "@/lib/dates";
+import { formatPaymentMethod } from "../lib/historyHelpers";
 
 export const columns = [
     {
@@ -38,10 +39,7 @@ export const columns = [
     {
         accessorKey: "payment_method",
         header: "Payment",
-        cell: ({ row }) => {
-            const method = row.getValue("payment_method");
-            return method ? String(method).toUpperCase() : "";
-        },
+        cell: ({ row }) => formatPaymentMethod(row.getValue("payment_method")),
     },
     {
         id: "actions",
