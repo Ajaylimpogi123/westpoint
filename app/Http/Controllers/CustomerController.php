@@ -32,7 +32,7 @@ class CustomerController extends Controller
                 $query->where(function ($query) use ($search) {
                     $query->where('first_name', 'like', "%{$search}%")
                         ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhere('phone_number', 'like', "%{$search}%");
+                        ->orWhere('senior_id_number', 'like', "%{$search}%");
                 });
             })
             ->orderByDesc('created_at')
@@ -59,7 +59,7 @@ class CustomerController extends Controller
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
-            'phone_number' => ['nullable', 'digits:11'],
+            'senior_id_number' => ['nullable', 'string', 'max:50', 'required_if:customer_type,Senior Citizen'],
             'email' => ['nullable', 'email', 'max:100'],
             'address' => ['nullable', 'string'],
             'customer_type' => ['required', 'string', 'in:Regular,Senior Citizen,PWD'],
@@ -74,7 +74,9 @@ class CustomerController extends Controller
             'branch_id' => $branchId,
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
-            'phone_number' => $validated['phone_number'] ?? null,
+            'senior_id_number' => $validated['customer_type'] === 'Senior Citizen'
+                ? ($validated['senior_id_number'] ?? null)
+                : null,
             'email' => $validated['email'] ?? null,
             'address' => $validated['address'] ?? null,
             'customer_type' => $validated['customer_type'],

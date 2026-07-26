@@ -211,7 +211,10 @@ export default function CheckoutDialog({
                                 </div>
                                 <div className="mt-1 text-muted-foreground">
                                     {[
-                                        selectedCustomer.phone_number,
+                                        selectedCustomer.customer_type ===
+                                            "Senior Citizen"
+                                            ? selectedCustomer.senior_id_number
+                                            : null,
                                         selectedCustomer.customer_type,
                                     ]
                                         .filter(Boolean)

@@ -63,6 +63,7 @@ class StockBatchMergeTest extends TestCase
                     'expiry_date' => now()->addYear()->toDateString(),
                     'quantity_received' => 25,
                     'shelf_number' => 'B-02',
+                    'unit_type' => 'Piece',
                 ]],
             ])
             ->assertRedirect();
@@ -100,6 +101,7 @@ class StockBatchMergeTest extends TestCase
                     'expiry_date' => now()->addMonths(6)->toDateString(),
                     'quantity_received' => 60,
                     'shelf_number' => 'C-03',
+                    'unit_type' => 'Piece',
                 ]],
             ])
             ->assertRedirect();

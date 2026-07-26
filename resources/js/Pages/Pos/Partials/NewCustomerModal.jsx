@@ -37,18 +37,19 @@ export default function NewCustomerModal({
     const [form, setForm] = useState({
         first_name: "",
         last_name: "",
-        phone_number: "",
+        senior_id_number: "",
         customer_type: "Regular",
         branch_id: roleId === 2 ? "" : String(branchId ?? ""),
     });
 
     const isAdmin = roleId === 2;
+    const isSenior = form.customer_type === "Senior Citizen";
 
     const resetForm = () => {
         setForm({
             first_name: "",
             last_name: "",
-            phone_number: "",
+            senior_id_number: "",
             customer_type: "Regular",
             branch_id: isAdmin ? "" : String(branchId ?? ""),
         });
@@ -56,7 +57,13 @@ export default function NewCustomerModal({
     };
 
     const updateField = (field, value) => {
-        setForm((current) => ({ ...current, [field]: value }));
+        setForm((current) => ({
+            ...current,
+            [field]: value,
+            ...(field === "customer_type" && value !== "Senior Citizen"
+                ? { senior_id_number: "" }
+                : {}),
+        }));
         setErrors((current) => ({ ...current, [field]: undefined }));
     };
 
@@ -69,7 +76,7 @@ export default function NewCustomerModal({
             const payload = {
                 first_name: form.first_name.trim(),
                 last_name: form.last_name.trim(),
-                phone_number: form.phone_number,
+                senior_id_number: isSenior ? form.senior_id_number : "",
                 customer_type: form.customer_type,
             };
 
@@ -165,28 +172,6 @@ export default function NewCustomerModal({
                     </div>
 
                     <div className="space-y-2">
-                        <Label htmlFor="pos_phone_number">Phone Number</Label>
-                        <Input
-                            id="pos_phone_number"
-                            value={form.phone_number}
-                            onChange={(event) =>
-                                updateField(
-                                    "phone_number",
-                                    event.target.value.replace(/\D/g, ""),
-                                )
-                            }
-                            maxLength={11}
-                            placeholder="09XXXXXXXXX"
-                            required
-                        />
-                        {errors.phone_number && (
-                            <p className="text-sm text-destructive">
-                                {errors.phone_number[0]}
-                            </p>
-                        )}
-                    </div>
-
-                    <div className="space-y-2">
                         <Label htmlFor="pos_customer_type">Customer Type</Label>
                         <Select
                             value={form.customer_type}
@@ -211,6 +196,32 @@ export default function NewCustomerModal({
                             </p>
                         )}
                     </div>
+
+                    {isSenior && (
+                        <div className="space-y-2">
+                            <Label htmlFor="pos_senior_id_number">
+                                Senior ID Number
+                            </Label>
+                            <Input
+                                id="pos_senior_id_number"
+                                value={form.senior_id_number}
+                                onChange={(event) =>
+                                    updateField(
+                                        "senior_id_number",
+                                        event.target.value,
+                                    )
+                                }
+                                maxLength={50}
+                                placeholder="Enter Senior Citizen ID Number"
+                                required
+                            />
+                            {errors.senior_id_number && (
+                                <p className="text-sm text-destructive">
+                                    {errors.senior_id_number[0]}
+                                </p>
+                            )}
+                        </div>
+                    )}
 
                     <div className="space-y-2">
                         <Label htmlFor="pos_branch">Branch</Label>

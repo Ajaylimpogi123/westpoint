@@ -104,8 +104,8 @@ export default function ReceiptPrint({ sale }) {
             `}</style>
 
             <div className="header">
-                <h1>WESTPOINT PHARMACY</h1>
-                <p>Retail &amp; Wholesale Pharmacy</p>
+                <h1>WESTPOINT PHARMA</h1>
+                <p>&amp; MEDICAL SUPPLIES DISTRIBUTION</p>
             </div>
 
             <div className="order-info">

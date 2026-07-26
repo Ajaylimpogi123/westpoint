@@ -4,7 +4,7 @@ export default function useAddCustomer(defaultBranchId = "") {
     const { data, setData, post, errors, processing, reset } = useForm({
         first_name: "",
         last_name: "",
-        phone_number: "",
+        senior_id_number: "",
         email: "",
         address: "",
         customer_type: "Regular",
@@ -19,7 +19,7 @@ export default function useAddCustomer(defaultBranchId = "") {
                 reset(
                     "first_name",
                     "last_name",
-                    "phone_number",
+                    "senior_id_number",
                     "email",
                     "address",
                     "customer_type",

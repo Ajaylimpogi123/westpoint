@@ -36,7 +36,6 @@ class StockInController extends Controller
             'items.*.quantity_received' => ['required', 'integer', 'min:1'],
             'items.*.shelf_number' => ['nullable', 'string', 'max:50'],
             'items.*.unit_type' => ['required', 'string', Rule::in(['Piece', 'Box'])],
-            'items.*.unit_price' => ['required', 'numeric', 'min:0'],
         ]);
 
         if ((int) $validated['branch_id'] !== $branchId) {
@@ -61,6 +60,10 @@ class StockInController extends Controller
                         ->forBranch($branchId)
                         ->findOrFail($item['pd_id']);
 
+                    $quantityInPieces = $item['unit_type'] === 'Box'
+                        ? $item['quantity_received'] * $medicine->pack_size
+                        : $item['quantity_received'];
+
                     StockInItem::create([
                         'stock_in_id' => $stockIn->stock_in_id,
                         'pd_id' => $medicine->id,
@@ -68,13 +71,12 @@ class StockInController extends Controller
                         'expiry_date' => $item['expiry_date'],
                         'quantity_received' => $item['quantity_received'],
                         'unit_type' => $item['unit_type'],
-                        'unit_price' => $item['unit_price'],
                     ]);
 
                     InventoryStockService::addStock(
                         productId: $medicine->id,
                         branchId: $branchId,
-                        quantityInPieces: $item['quantity_received'],
+                        quantityInPieces: $quantityInPieces,
                         lotNumber: $item['batch_number'],
                         expiry: $item['expiry_date'],
                         shelfNumber: $item['shelf_number'] ?? null,
@@ -88,7 +90,7 @@ class StockInController extends Controller
                         pdId: $medicine->id,
                         medicineName: $medicine->med_name,
                         lotNumber: $item['batch_number'],
-                        quantity: $item['quantity_received'],
+                        quantity: $quantityInPieces,
                         remarks: $validated['remarks'] ?? "Supplier: {$validated['supplier_name']}",
                     );
                 }
@@ -123,7 +125,6 @@ class StockInController extends Controller
                     'expiry_date',
                     'quantity_received',
                     'unit_type',
-                    'unit_price',
                 ]);
             },
             'items.product:id,med_name,brand_name,dose,form',
@@ -145,7 +146,6 @@ class StockInController extends Controller
                     'expiry_date' => $item->expiry_date,
                     'quantity_received' => $item->quantity_received,
                     'unit_type' => $item->unit_type,
-                    'unit_price' => $item->unit_price,
                     'product' => $item->product ? [
                         'med_name' => $item->product->med_name,
                         'brand_name' => $item->product->brand_name,

@@ -95,7 +95,7 @@ class PosController extends Controller
             ->where(function ($query) use ($search) {
                 $query->where('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere('phone_number', 'like', "%{$search}%");
+                    ->orWhere('senior_id_number', 'like', "%{$search}%");
             })
             ->orderBy('last_name')
             ->orderBy('first_name')
@@ -114,7 +114,7 @@ class PosController extends Controller
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
-            'phone_number' => ['required', 'digits:11'],
+            'senior_id_number' => ['nullable', 'string', 'max:50', 'required_if:customer_type,Senior Citizen'],
             'customer_type' => ['required', 'string', 'in:Regular,Senior Citizen,PWD'],
             'branch_id' => [$canAssignBranch ? 'required' : 'nullable', 'integer', 'exists:branches,id'],
         ]);
@@ -127,7 +127,9 @@ class PosController extends Controller
             'branch_id' => $branchId,
             'first_name' => $validated['first_name'],
             'last_name' => $validated['last_name'],
-            'phone_number' => $validated['phone_number'],
+            'senior_id_number' => $validated['customer_type'] === 'Senior Citizen'
+                ? ($validated['senior_id_number'] ?? null)
+                : null,
             'customer_type' => $validated['customer_type'],
             'status' => 'active',
             'created_by' => auth()->id(),
@@ -936,7 +938,7 @@ app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
      *     customer_id: int,
      *     first_name: string,
      *     last_name: string,
-     *     phone_number: ?string,
+     *     senior_id_number: ?string,
      *     customer_type: string,
      *     branch_name: ?string
      * }
@@ -947,7 +949,7 @@ app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
             'customer_id' => $customer->customer_id,
             'first_name' => $customer->first_name,
             'last_name' => $customer->last_name,
-            'phone_number' => $customer->phone_number,
+            'senior_id_number' => $customer->senior_id_number,
             'customer_type' => $customer->customer_type,
             'branch_name' => $customer->branch?->branch_name,
         ];

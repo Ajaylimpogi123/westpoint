@@ -144,14 +144,14 @@ export default function InvoiceReceipt({ sale }) {
             </div>
 
             <div className="header">
-                <h1>WESTPOINT PHARMACY &amp; MEDICAL SUPPLIES TRADING</h1>
+                <h1>WESTPOINT PHARMA &amp; MEDICAL SUPPLIES DISTRIBUTION</h1>
                 <p>TIN: 439-169-208-00000</p>
                 <p>6th Lacson St., Bacolod City, Negros Occidental, 6100</p>
                 <p>Bulk/Wholesale Quotations: (034) 479 2739 / (0992) 989 5971</p>
                 <p>Retail pricing: (034) 454 1118 / (0917) 162 8332</p>
             </div>
 
-            <div className="invoice-title">SALES INVOICE</div>
+            <div className="invoice-title">RECEIPT</div>
 
             <div className="order-info">
                 <div>
@@ -229,12 +229,12 @@ export default function InvoiceReceipt({ sale }) {
                     )}
             </div>
 
-            <div className="footer">
+            {/* <div className="footer">
                 <p style={{ fontSize: "12px", fontWeight: "bold" }}>
                     Thank You!
                 </p>
                 <p>This serves as your official sales invoice.</p>
-            </div>
+            </div> */}
         </>
     );
 }

@@ -13,7 +13,6 @@ const emptyDraft = () => ({
     quantity_received: 1,
     shelf_number: "",
     unit_type: "Piece",
-    unit_price: "",
 });
 
 export default function useStockIn({ branchId, products }) {
@@ -62,44 +61,24 @@ export default function useStockIn({ branchId, products }) {
     };
 
     const updateDraft = (field, value) => {
-        setDraft((current) => {
-            const next = {
-                ...current,
-                [field]: value,
-            };
-
-            if (field === "pd_id" || field === "unit_type") {
-                const productId = field === "pd_id" ? value : current.pd_id;
-                const unitType =
-                    field === "unit_type" ? value : current.unit_type;
-                const product = productId
-                    ? productMap[productId] ?? null
-                    : null;
-
-                if (product) {
-                    const suggestedPrice =
-                        unitType === "Box"
-                            ? product.wholesale_price
-                            : product.retail_price;
-                    next.unit_price =
-                        suggestedPrice != null && suggestedPrice !== ""
-                            ? String(suggestedPrice)
-                            : "";
-                }
-            }
-
-            return next;
-        });
+        setDraft((current) => ({
+            ...current,
+            [field]: value,
+        }));
     };
+
+    const piecesPreview = useMemo(() => {
+        const quantity = Number(draft.quantity_received) || 0;
+        const packSize = selectedProduct?.pack_size || 1;
+        return draft.unit_type === "Box" ? quantity * packSize : quantity;
+    }, [draft.quantity_received, draft.unit_type, selectedProduct?.pack_size]);
 
     const addItemToBasket = () => {
         if (
             !draft.pd_id ||
             !draft.batch_number.trim() ||
             !draft.expiry_date ||
-            Number(draft.quantity_received) < 1 ||
-            draft.unit_price === "" ||
-            Number(draft.unit_price) < 0
+            Number(draft.quantity_received) < 1
         ) {
             return;
         }
@@ -113,7 +92,7 @@ export default function useStockIn({ branchId, products }) {
                 quantity_received: Number(draft.quantity_received),
                 shelf_number: draft.shelf_number.trim(),
                 unit_type: draft.unit_type,
-                unit_price: Number(draft.unit_price),
+                pack_size: selectedProduct?.pack_size || 1,
             },
         ]);
         setDraft(emptyDraft());
@@ -150,6 +129,7 @@ export default function useStockIn({ branchId, products }) {
         products: products ?? [],
         addItemToBasket,
         removeItemFromBasket,
+        piecesPreview,
         errors,
         processing,
         handleSubmit,

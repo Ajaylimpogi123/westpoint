@@ -123,6 +123,7 @@ class BatchDeactivationTest extends TestCase
                     'batch_number' => 'LOT-001',
                     'expiry_date' => now()->addYear()->toDateString(),
                     'quantity_received' => 50,
+                    'unit_type' => 'Piece',
                 ]],
             ])
             ->assertRedirect();

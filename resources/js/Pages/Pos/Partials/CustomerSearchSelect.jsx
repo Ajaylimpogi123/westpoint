@@ -152,7 +152,7 @@ export default function CustomerSearchSelect({
                         }
                     }}
                     onKeyDown={handleKeyDown}
-                    placeholder="Search by name or phone..."
+                    placeholder="Search by name or senior ID..."
                     autoComplete="off"
                     disabled={disabled}
                     className="pr-8"
@@ -184,7 +184,7 @@ export default function CustomerSearchSelect({
                         <li className="px-3 py-2 text-destructive">{error}</li>
                     ) : query.trim().length < 1 ? (
                         <li className="px-3 py-2 text-muted-foreground">
-                            Type a name or phone number
+                            Type a name or senior ID number
                         </li>
                     ) : results.length === 0 ? (
                         <li className="px-3 py-2 text-muted-foreground">
@@ -211,7 +211,10 @@ export default function CustomerSearchSelect({
                                 </div>
                                 <div className="text-xs text-muted-foreground">
                                     {[
-                                        customer.phone_number,
+                                        customer.customer_type ===
+                                            "Senior Citizen"
+                                            ? customer.senior_id_number
+                                            : null,
                                         showBranch ? customer.branch_name : null,
                                     ]
                                         .filter(Boolean)

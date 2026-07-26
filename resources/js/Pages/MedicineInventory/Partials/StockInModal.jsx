@@ -42,6 +42,7 @@ export default function StockInModal({
         productMap,
         addItemToBasket,
         removeItemFromBasket,
+        piecesPreview,
         errors,
         processing,
         handleSubmit,
@@ -263,26 +264,19 @@ export default function StockInModal({
                                                 )
                                             }
                                         />
-                                    </div>
-                                    <div className="grid min-w-0 gap-2">
-                                        <Label htmlFor="unit_price">
-                                            Unit Price
-                                        </Label>
-                                        <Input
-                                            id="unit_price"
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={draft.unit_price}
-                                            onChange={(event) =>
-                                                updateDraft(
-                                                    "unit_price",
-                                                    event.target.value,
-                                                )
-                                            }
-                                            placeholder="0.00"
-                                            disabled={!draft.pd_id}
-                                        />
+                                        {draft.unit_type === "Box" &&
+                                            draft.pd_id && (
+                                                <p className="text-xs text-muted-foreground">
+                                                    = {piecesPreview} piece
+                                                    {piecesPreview === 1
+                                                        ? ""
+                                                        : "s"}{" "}
+                                                    (
+                                                    {selectedProduct?.pack_size ||
+                                                        1}{" "}
+                                                    pcs/box)
+                                                </p>
+                                            )}
                                     </div>
                                 </div>
 
@@ -334,11 +328,7 @@ export default function StockInModal({
                                     variant="secondary"
                                     className="w-full"
                                     onClick={addItemToBasket}
-                                    disabled={
-                                        !draft.pd_id ||
-                                        draft.unit_price === "" ||
-                                        Number(draft.unit_price) < 0
-                                    }
+                                    disabled={!draft.pd_id}
                                 >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Item to Basket
@@ -383,10 +373,13 @@ export default function StockInModal({
                                                                 "Box"
                                                                     ? "Box / Wholesale"
                                                                     : "Piece"}
-                                                                {" · ₱"}
-                                                                {formatCurrency(
-                                                                    item.unit_price,
-                                                                )}
+                                                                {item.unit_type ===
+                                                                    "Box" &&
+                                                                    ` (${
+                                                                        item.quantity_received *
+                                                                        (item.pack_size ||
+                                                                            1)
+                                                                    } pcs)`}
                                                                 {item.shelf_number
                                                                     ? ` · Shelf ${item.shelf_number}`
                                                                     : ""}
@@ -440,11 +433,6 @@ export default function StockInModal({
                                                         name={`items[${index}][unit_type]`}
                                                         value={item.unit_type}
                                                     />
-                                                    <input
-                                                        type="hidden"
-                                                        name={`items[${index}][unit_price]`}
-                                                        value={item.unit_price}
-                                                    />
 
                                                     <InputError
                                                         message={
@@ -459,9 +447,6 @@ export default function StockInModal({
                                                             ] ||
                                                             errors[
                                                                 `items.${index}.quantity_received`
-                                                            ] ||
-                                                            errors[
-                                                                `items.${index}.unit_price`
                                                             ]
                                                         }
                                                     />

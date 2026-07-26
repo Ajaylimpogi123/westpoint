@@ -63,28 +63,6 @@ export default function RegistrationForm({ branches, branchId, branchName }) {
                     </div>
 
                     <div className="mt-4">
-                        <InputLabel htmlFor="phone_number" value="Phone Number" />
-                        <TextInput
-                            id="phone_number"
-                            name="phone_number"
-                            value={data.phone_number}
-                            className="mt-1 block w-full"
-                            maxLength={11}
-                            placeholder="09XXXXXXXXX"
-                            onChange={(e) =>
-                                setData(
-                                    "phone_number",
-                                    e.target.value.replace(/\D/g, ""),
-                                )
-                            }
-                        />
-                        <InputError
-                            message={errors.phone_number}
-                            className="mt-2"
-                        />
-                    </div>
-
-                    <div className="mt-4">
                         <InputLabel htmlFor="email" value="Email" />
                         <TextInput
                             id="email"
@@ -117,9 +95,12 @@ export default function RegistrationForm({ branches, branchId, branchName }) {
                             name="customer_type"
                             value={data.customer_type}
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                            onChange={(e) =>
-                                setData("customer_type", e.target.value)
-                            }
+                            onChange={(e) => {
+                                setData("customer_type", e.target.value);
+                                if (e.target.value !== "Senior Citizen") {
+                                    setData("senior_id_number", "");
+                                }
+                            }}
                             required
                         >
                             {CUSTOMER_TYPES.map((type) => (
@@ -133,6 +114,31 @@ export default function RegistrationForm({ branches, branchId, branchName }) {
                             className="mt-2"
                         />
                     </div>
+
+                    {data.customer_type === "Senior Citizen" && (
+                        <div className="mt-4">
+                            <InputLabel
+                                htmlFor="senior_id_number"
+                                value="Senior ID Number"
+                            />
+                            <TextInput
+                                id="senior_id_number"
+                                name="senior_id_number"
+                                value={data.senior_id_number}
+                                className="mt-1 block w-full"
+                                maxLength={50}
+                                placeholder="Enter Senior Citizen ID Number"
+                                onChange={(e) =>
+                                    setData("senior_id_number", e.target.value)
+                                }
+                                required
+                            />
+                            <InputError
+                                message={errors.senior_id_number}
+                                className="mt-2"
+                            />
+                        </div>
+                    )}
 
                     {(isStaff || isAdmin) && (
                         <div className="mt-4">

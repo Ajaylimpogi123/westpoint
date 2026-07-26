@@ -76,7 +76,7 @@ export default function CustomersTable({
             <CardContent className="space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                     <Input
-                        placeholder="Search by name or phone number..."
+                        placeholder="Search by name or senior ID number..."
                         defaultValue={filters?.search || ""}
                         className="max-w-sm"
                         onKeyDown={(e) => {
@@ -132,7 +132,7 @@ export default function CustomersTable({
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Phone Number</TableHead>
+                                <TableHead>Senior ID Number</TableHead>
                                 {canFilterBranches && (
                                     <TableHead>Branch</TableHead>
                                 )}
@@ -152,7 +152,11 @@ export default function CustomersTable({
                                             {customer.last_name}
                                         </TableCell>
                                         <TableCell>
-                                            {customer.phone_number || "-"}
+                                            {customer.customer_type ===
+                                                "Senior Citizen"
+                                                ? customer.senior_id_number ||
+                                                  "-"
+                                                : "-"}
                                         </TableCell>
                                         {canFilterBranches && (
                                             <TableCell>

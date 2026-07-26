@@ -124,7 +124,7 @@ export default function CustomerSearchSelect({
                         if (value) setQuery("");
                     }}
                     onKeyDown={handleKeyDown}
-                    placeholder="Search by name or phone..."
+                    placeholder="Search by name or senior ID..."
                     disabled={disabled}
                     autoComplete="off"
                     className={`w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${
@@ -156,7 +156,7 @@ export default function CustomerSearchSelect({
                         </li>
                     ) : query.trim().length < 1 ? (
                         <li className="px-3 py-2 text-slate-400">
-                            Type a name or phone number
+                            Type a name or senior ID number
                         </li>
                     ) : results.length === 0 ? (
                         <li className="px-3 py-2 text-slate-400">
@@ -177,9 +177,15 @@ export default function CustomerSearchSelect({
                                 <div className="font-medium">
                                     {formatCustomerName(c)}
                                 </div>
-                                {(c.phone_number || c.address) && (
+                                {(c.senior_id_number || c.address) && (
                                     <div className="text-xs text-slate-400">
-                                        {[c.phone_number, c.address]
+                                        {[
+                                            c.customer_type ===
+                                                "Senior Citizen"
+                                                ? c.senior_id_number
+                                                : null,
+                                            c.address,
+                                        ]
                                             .filter(Boolean)
                                             .join(" · ")}
                                     </div>
