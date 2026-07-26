@@ -451,41 +451,75 @@ export function DataTable({ columns, data }) {
                         </DropdownMenu>
                     </div>
 
-                    {/* Date Range Picker */}
+                    {/* Date From Picker */}
                     <div className="grid gap-2">
                         <Popover>
                             <PopoverTrigger asChild>
                                 <Button
-                                    id="date"
+                                    id="date-from"
                                     variant={"outline"}
                                     className={cn(
-                                        "w-[300px] justify-start text-left font-normal",
+                                        "w-[170px] justify-start text-left font-normal",
                                         !dateRange?.from && "text-muted-foreground",
                                         dateRange?.from && "bg-blue-50 border-blue-300"
                                     )}
                                 >
                                     <CalendarIcon className="mr-2 h-4 w-4" />
                                     {dateRange?.from ? (
-                                        dateRange.to ? (
-                                            <>
-                                                {formatDate(dateRange.from, "")} -{" "}
-                                                {formatDate(dateRange.to, "")}
-                                            </>
-                                        ) : (
-                                            formatDate(dateRange.from, "")
-                                        )
+                                        formatDate(dateRange.from, "")
                                     ) : (
-                                        <span>Filter by created date</span>
+                                        <span>From date</span>
                                     )}
                                 </Button>
                             </PopoverTrigger>
                             <PopoverContent className="w-auto p-0" align="start">
                                 <Calendar
                                     initialFocus
-                                    mode="range"
-                                    selected={dateRange}
-                                    onSelect={setDateRange}
-                                    numberOfMonths={2}
+                                    mode="single"
+                                    selected={dateRange?.from}
+                                    onSelect={(date) =>
+                                        setDateRange((prev) => ({
+                                            ...prev,
+                                            from: date,
+                                        }))
+                                    }
+                                />
+                            </PopoverContent>
+                        </Popover>
+                    </div>
+
+                    {/* Date To Picker */}
+                    <div className="grid gap-2">
+                        <Popover>
+                            <PopoverTrigger asChild>
+                                <Button
+                                    id="date-to"
+                                    variant={"outline"}
+                                    className={cn(
+                                        "w-[170px] justify-start text-left font-normal",
+                                        !dateRange?.to && "text-muted-foreground",
+                                        dateRange?.to && "bg-blue-50 border-blue-300"
+                                    )}
+                                >
+                                    <CalendarIcon className="mr-2 h-4 w-4" />
+                                    {dateRange?.to ? (
+                                        formatDate(dateRange.to, "")
+                                    ) : (
+                                        <span>To date</span>
+                                    )}
+                                </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-auto p-0" align="start">
+                                <Calendar
+                                    initialFocus
+                                    mode="single"
+                                    selected={dateRange?.to}
+                                    onSelect={(date) =>
+                                        setDateRange((prev) => ({
+                                            ...prev,
+                                            to: date,
+                                        }))
+                                    }
                                 />
                             </PopoverContent>
                         </Popover>

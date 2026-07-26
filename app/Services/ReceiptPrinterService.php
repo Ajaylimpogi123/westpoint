@@ -149,7 +149,7 @@ class ReceiptPrinterService
         $printer->text("TOTAL: P" . number_format($sale->net_amount, 2) . "\n");
         $printer->setEmphasis(false);
 
-        $printer->text("Payment: " . ucfirst($sale->payment_method) . "\n");
+        $printer->text("Payment: " . ucfirst(str_replace('_', ' ', $sale->payment_method)) . "\n");
 
         if ($sale->reference_number) {
             $printer->text("Ref #: {$sale->reference_number}\n");

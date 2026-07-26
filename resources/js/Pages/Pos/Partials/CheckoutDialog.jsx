@@ -90,7 +90,9 @@ export default function CheckoutDialog({
         paymentMethod === "cash" ? Math.max(received - netTotal, 0) : 0;
 
     const requiresReferenceNumber =
-        paymentMethod === "gcash" || paymentMethod === "card";
+        paymentMethod === "gcash" ||
+        paymentMethod === "debit_card" ||
+        paymentMethod === "credit_card";
 
     const canConfirm =
         cartId &&
@@ -240,7 +242,11 @@ export default function CheckoutDialog({
                             value={paymentMethod}
                             onValueChange={(value) => {
                                 setPaymentMethod(value);
-                                if (value === "gcash" || value === "card") {
+                                if (
+                                    value === "gcash" ||
+                                    value === "debit_card" ||
+                                    value === "credit_card"
+                                ) {
                                     setAmountReceived(String(netTotal));
                                     setReferenceNumber("");
                                 } else {
@@ -255,7 +261,12 @@ export default function CheckoutDialog({
                             <SelectContent>
                                 <SelectItem value="cash">Cash</SelectItem>
                                 <SelectItem value="gcash">GCash</SelectItem>
-                                <SelectItem value="card">Card</SelectItem>
+                                <SelectItem value="debit_card">
+                                    Debit Card
+                                </SelectItem>
+                                <SelectItem value="credit_card">
+                                    Credit Card
+                                </SelectItem>
                             </SelectContent>
                         </Select>
                     </div>

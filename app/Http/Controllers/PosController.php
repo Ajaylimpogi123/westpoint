@@ -346,7 +346,7 @@ class PosController extends Controller
             'items.*.product_id' => ['required', 'integer', 'exists:tbl_products,id'],
             'items.*.unit_type' => ['required', 'string', 'in:Piece,Box'],
             'items.*.quantity_sold' => ['required', 'integer', 'min:1'],
-            'payment_method' => ['required', 'string', 'in:cash,gcash,card'],
+            'payment_method' => ['required', 'string', 'in:cash,gcash,debit_card,credit_card'],
             'reference_number' => ['nullable', 'string', 'max:255'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'amount_received' => ['required', 'numeric', 'min:0'],

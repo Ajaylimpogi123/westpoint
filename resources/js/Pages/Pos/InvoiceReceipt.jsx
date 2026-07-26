@@ -218,7 +218,9 @@ export default function InvoiceReceipt({ sale }) {
                 </div>
                 <div>
                     <span>Payment Method:</span>
-                    <span className="capitalize">{sale.payment_method}</span>
+                    <span className="capitalize">
+                        {String(sale.payment_method).replace(/_/g, " ")}
+                    </span>
                 </div>
                 {sale.reference_number &&
                     String(sale.reference_number).trim() !== "" && (
