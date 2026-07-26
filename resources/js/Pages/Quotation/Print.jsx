@@ -28,14 +28,14 @@ export default function Print({ quotation }) {
                         <div className="flex h-28 w-28 shrink-0 items-center justify-center">
                             <img
                                 src="/images/logo/Westpoint.png"
-                                alt="Westpoint Pharmacy & Medical Supplies Distribution"
+                                alt="Westpoint Pharma &amp; Medical Supplies Distribution"
                                 className="h-30 w-30 object-contain"
                             />
                         </div>
                         <div className="flex-1 text-center">
                             <h1 className="text-xl font-extrabold uppercase tracking-wide">
-                                Westpoint Pharmacy &amp; Medical Supplies
-                                Trading
+                                Westpoint Pharma &amp; Medical Supplies
+                                Distribution
                             </h1>
                             <p className="mt-0.5 text-[10px] text-slate-600">
                                 5th Street, Bacolod City, Philippines, 6100

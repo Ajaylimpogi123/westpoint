@@ -29,7 +29,8 @@ export default function CheckoutDialog({
     children,
     cartId,
     cartItems,
-    discount,
+    discountPercent,
+    discountAmount,
     grossTotal,
     netTotal,
     selectedCustomer,
@@ -125,7 +126,7 @@ export default function CheckoutDialog({
                 reference_number: requiresReferenceNumber
                     ? referenceNumber.trim()
                     : null,
-                discount_amount: discount,
+                discount_amount: discountAmount,
                 amount_received: requiresReferenceNumber ? netTotal : received,
             },
             {
@@ -191,8 +192,13 @@ export default function CheckoutDialog({
                             <span>{formatCurrency(grossTotal)}</span>
                         </div>
                         <div className="flex justify-between">
-                            <span>Discount</span>
-                            <span>-{formatCurrency(discount)}</span>
+                            <span>
+                                Discount
+                                {discountPercent > 0
+                                    ? ` (${discountPercent}%)`
+                                    : ""}
+                            </span>
+                            <span>-{formatCurrency(discountAmount)}</span>
                         </div>
                         <div className="mt-2 flex justify-between border-t pt-2 font-semibold">
                             <span>Net Total</span>

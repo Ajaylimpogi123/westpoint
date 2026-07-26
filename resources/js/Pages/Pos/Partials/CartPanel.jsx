@@ -11,10 +11,10 @@ import { formatCurrency } from "../lib/pricing";
 export default function CartPanel({
     cartId,
     cartItems,
-    discount,
-    setDiscount,
-    discountPreset,
+    discountPercent,
+    setDiscountPercent,
     togglePercentDiscount,
+    discountAmount,
     selectedCustomer,
     onSelectCustomer,
     onClearCustomer,
@@ -92,30 +92,39 @@ export default function CartPanel({
                             <Label htmlFor="discount" className="shrink-0">
                                 Discount
                             </Label>
-                            <Input
-                                id="discount"
-                                type="number"
-                                min="0"
-                                max={grossTotal}
-                                step="0.01"
-                                value={discount}
-                                onChange={(event) =>
-                                    setDiscount(
-                                        Math.min(
-                                            Number(event.target.value) || 0,
-                                            grossTotal,
-                                        ),
-                                    )
-                                }
-                                className="max-w-[140px] text-right"
-                            />
+                            <div className="flex items-center gap-2">
+                                <div className="relative">
+                                    <Input
+                                        id="discount"
+                                        type="number"
+                                        min="0"
+                                        max={100}
+                                        step="0.01"
+                                        value={discountPercent}
+                                        onChange={(event) =>
+                                            setDiscountPercent(
+                                                event.target.value,
+                                            )
+                                        }
+                                        className="max-w-[100px] pr-6 text-right"
+                                    />
+                                    <span className="pointer-events-none absolute inset-y-0 right-2 flex items-center text-sm text-muted-foreground">
+                                        %
+                                    </span>
+                                </div>
+                                <span className="w-20 shrink-0 text-right text-sm text-muted-foreground">
+                                    -{formatCurrency(discountAmount)}
+                                </span>
+                            </div>
                         </div>
 
                         <div className="grid grid-cols-2 gap-2">
                             <Button
                                 type="button"
                                 variant={
-                                    discountPreset === 20 ? "default" : "outline"
+                                    discountPercent === 20
+                                        ? "default"
+                                        : "outline"
                                 }
                                 size="sm"
                                 disabled={syncing || grossTotal <= 0}
@@ -126,7 +135,9 @@ export default function CartPanel({
                             <Button
                                 type="button"
                                 variant={
-                                    discountPreset === 10 ? "default" : "outline"
+                                    discountPercent === 10
+                                        ? "default"
+                                        : "outline"
                                 }
                                 size="sm"
                                 disabled={syncing || grossTotal <= 0}
@@ -148,7 +159,8 @@ export default function CartPanel({
                         <CheckoutDialog
                             cartId={cartId}
                             cartItems={cartItems}
-                            discount={discount}
+                            discountPercent={discountPercent}
+                            discountAmount={discountAmount}
                             grossTotal={grossTotal}
                             netTotal={netTotal}
                             selectedCustomer={selectedCustomer}

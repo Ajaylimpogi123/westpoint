@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { toast } from "sonner";
 import {
     addCartItem,
@@ -19,30 +19,15 @@ function resolveCartError(error) {
     );
 }
 
-function initialGrossTotal(items) {
-    return (items ?? []).reduce(
-        (sum, item) => sum + Number(item.totalPrice || 0),
-        0,
-    );
-}
-
 export function usePosCart(initialActiveCart, branchId) {
     const initialCustomer = initialActiveCart?.customer ?? null;
     const initialItems = initialActiveCart?.items ?? [];
-    const initialGross = initialGrossTotal(initialItems);
-    const initialPreset =
-        initialCustomer && isDiscountEligible(initialCustomer) ? 20 : null;
+    const initialPercent =
+        initialCustomer && isDiscountEligible(initialCustomer) ? 20 : 0;
 
     const [cartId, setCartId] = useState(initialActiveCart?.id ?? null);
     const [cartItems, setCartItems] = useState(initialItems);
-    const [discount, setDiscount] = useState(() => {
-        if (initialPreset === 20) {
-            return percentDiscountAmount(initialGross, 20);
-        }
-
-        return 0;
-    });
-    const [discountPreset, setDiscountPreset] = useState(initialPreset);
+    const [discountPercent, setDiscountPercentState] = useState(initialPercent);
     const [selectedCustomer, setSelectedCustomer] = useState(initialCustomer);
     const [syncing, setSyncing] = useState(false);
 
@@ -60,22 +45,6 @@ export function usePosCart(initialActiveCart, branchId) {
         setCartItems(data.items ?? []);
         setSelectedCustomer(data.customer ?? null);
     }, []);
-
-    useEffect(() => {
-        if (!selectedCustomer || !isDiscountEligible(selectedCustomer)) {
-            return;
-        }
-
-        if (discountPreset === 20) {
-            setDiscount(percentDiscountAmount(grossTotal, 20));
-        }
-    }, [grossTotal, selectedCustomer, discountPreset]);
-
-    useEffect(() => {
-        if (discountPreset === 10) {
-            setDiscount(percentDiscountAmount(grossTotal, 10));
-        }
-    }, [grossTotal, discountPreset]);
 
     const persistCartCustomer = useCallback(
         async (customer) => {
@@ -112,16 +81,9 @@ export function usePosCart(initialActiveCart, branchId) {
                 return;
             }
 
-            if (isDiscountEligible(customer)) {
-                setDiscount(percentDiscountAmount(grossTotal, 20));
-                setDiscountPreset(20);
-                return;
-            }
-
-            setDiscount(0);
-            setDiscountPreset(null);
+            setDiscountPercentState(isDiscountEligible(customer) ? 20 : 0);
         },
-        [grossTotal, persistCartCustomer],
+        [persistCartCustomer],
     );
 
     const clearSelectedCustomer = useCallback(async () => {
@@ -131,27 +93,18 @@ export function usePosCart(initialActiveCart, branchId) {
             return;
         }
 
-        setDiscount(0);
-        setDiscountPreset(null);
+        setDiscountPercentState(0);
     }, [persistCartCustomer]);
 
-    const togglePercentDiscount = useCallback(
-        (percent) => {
-            if (discountPreset === percent) {
-                setDiscount(0);
-                setDiscountPreset(null);
-                return;
-            }
+    const togglePercentDiscount = useCallback((percent) => {
+        setDiscountPercentState((current) =>
+            current === percent ? 0 : percent,
+        );
+    }, []);
 
-            setDiscount(percentDiscountAmount(grossTotal, percent));
-            setDiscountPreset(percent);
-        },
-        [discountPreset, grossTotal],
-    );
-
-    const setDiscountManual = useCallback((value) => {
-        setDiscount(value);
-        setDiscountPreset(null);
+    const setDiscountPercent = useCallback((value) => {
+        const clamped = Math.min(Math.max(Number(value) || 0, 0), 100);
+        setDiscountPercentState(clamped);
     }, []);
 
     const syncCart = useCallback(
@@ -295,23 +248,27 @@ export function usePosCart(initialActiveCart, branchId) {
     const clearCart = useCallback(() => {
         setCartId(null);
         setCartItems([]);
-        setDiscount(0);
-        setDiscountPreset(null);
+        setDiscountPercentState(0);
         setSelectedCustomer(null);
     }, []);
 
+    const discountAmount = useMemo(
+        () => percentDiscountAmount(grossTotal, discountPercent),
+        [grossTotal, discountPercent],
+    );
+
     const netTotal = useMemo(
-        () => Math.max(grossTotal - (Number(discount) || 0), 0),
-        [grossTotal, discount],
+        () => Math.max(grossTotal - discountAmount, 0),
+        [grossTotal, discountAmount],
     );
 
     return {
         cartId,
         cartItems,
-        discount,
-        setDiscount: setDiscountManual,
-        discountPreset,
+        discountPercent,
+        setDiscountPercent,
         togglePercentDiscount,
+        discountAmount,
         selectedCustomer,
         selectCustomer,
         clearSelectedCustomer,

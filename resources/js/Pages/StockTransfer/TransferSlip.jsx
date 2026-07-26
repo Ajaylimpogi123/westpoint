@@ -26,8 +26,16 @@ export default function TransferSlip({ transfer }) {
             <style>{`
                 @media print {
                     .no-print { display: none !important; }
-                    body      { background: white !important; -webkit-print-color-adjust: exact; }
-                    @page     { margin: 1.2cm; size: A4 portrait; }
+                    @page {
+                        margin: 0;
+                        size: A4 portrait;
+                    }
+                    html, body {
+                        background: white !important;
+                        -webkit-print-color-adjust: exact;
+                        print-color-adjust: exact;
+                        margin: 1.2cm;
+                    }
                     .slip-card { box-shadow: none !important; border: none !important; }
                 }
                 @media screen {
@@ -71,7 +79,7 @@ export default function TransferSlip({ transfer }) {
                         <div className="flex items-center justify-between gap-4 border-b-2 border-gray-800 pb-3 mb-4">
                             <img
                                 src="/images/logo/Westpoint.png"
-                                alt="Westpoint Pharmacy & Medical Supplies Distribution"
+                                alt="Westpoint Pharma & Medical Supplies Distribution"
                                 className="h-28 w-28 shrink-0 object-contain"
                             />
                             <div className="flex-1 text-center">

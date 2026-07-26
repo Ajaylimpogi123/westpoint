@@ -26,10 +26,10 @@ export default function Index({ branchId, branchName, branches = [], activeCart 
     const {
         cartId,
         cartItems,
-        discount,
-        setDiscount,
-        discountPreset,
+        discountPercent,
+        setDiscountPercent,
         togglePercentDiscount,
+        discountAmount,
         selectedCustomer,
         selectCustomer,
         clearSelectedCustomer,
@@ -98,10 +98,10 @@ export default function Index({ branchId, branchName, branches = [], activeCart 
                             <CartPanel
                                 cartId={cartId}
                                 cartItems={cartItems}
-                                discount={discount}
-                                setDiscount={setDiscount}
-                                discountPreset={discountPreset}
+                                discountPercent={discountPercent}
+                                setDiscountPercent={setDiscountPercent}
                                 togglePercentDiscount={togglePercentDiscount}
+                                discountAmount={discountAmount}
                                 selectedCustomer={selectedCustomer}
                                 onSelectCustomer={selectCustomer}
                                 onClearCustomer={clearSelectedCustomer}

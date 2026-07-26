@@ -140,7 +140,7 @@ export default function InvoiceReceipt({ sale }) {
             `}</style>
 
             <div className="logo-wrap">
-                <img src="/storage/westpoint_logo.png" alt="Westpoint Pharmacy & Medical Supplies Trading" />
+                <img src="/storage/westpoint_logo.png" alt="Westpoint Pharma & Medical Supplies Distribution" />
             </div>
 
             <div className="header">
