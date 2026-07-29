@@ -14,9 +14,10 @@ import { formatDate, formatDateTime } from "./lib/TransferHelpers";
 export default function TransferSlip({ transfer }) {
     const totalQty = transfer.items?.reduce(
         (sum, item) =>
-            sum + (item.quantity_approved ?? item.quantity_requested),
+            sum +
+            (item.quantity_approved ?? item.quantity_requested ?? 0),
         0,
-    );
+    ) ?? 0;
 
     return (
         <>
@@ -184,7 +185,8 @@ export default function TransferSlip({ transfer }) {
                                 {transfer.items?.map((item, idx) => {
                                     const qty =
                                         item.quantity_approved ??
-                                        item.quantity_requested;
+                                        item.quantity_requested ??
+                                        0;
                                     const isPartial =
                                         item.quantity_approved !== null &&
                                         item.quantity_approved !==
@@ -214,9 +216,7 @@ export default function TransferSlip({ transfer }) {
                                             <Td align="center">
                                                 {formatDate(item.expiry)}
                                             </Td>
-                                            <Td align="center">
-                                                {item.product?.unit ?? "—"}
-                                            </Td>
+                                            <Td align="center">pcs</Td>
                                             <Td align="right">
                                                 <span className="font-bold">
                                                     {qty}
@@ -259,7 +259,7 @@ export default function TransferSlip({ transfer }) {
                                         className="border border-gray-800 px-3 py-2 text-xs font-semibold
                                             text-gray-700 uppercase tracking-wide text-right"
                                     >
-                                        Total units transferred
+                                        Total pieces transferred
                                     </td>
                                     <td className="border border-gray-800 px-3 py-2 text-right font-bold text-gray-900 text-base">
                                         {totalQty}

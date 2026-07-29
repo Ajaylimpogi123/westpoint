@@ -1,7 +1,10 @@
-import { getPosStockStatus, getStockStatusBadgeClass } from "../lib/pricing";
+import {
+    getMedicineStockStatus,
+    getStockStatusBadgeClass,
+} from "@/Pages/MedicineInventory/lib/stockStatus";
 
-export default function StockStatusBadge({ totalStock, packSize }) {
-    const status = getPosStockStatus(totalStock, packSize);
+export default function StockStatusBadge({ totalStock, stockThreshold }) {
+    const status = getMedicineStockStatus(totalStock, stockThreshold);
 
     return (
         <span
