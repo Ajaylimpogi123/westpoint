@@ -12,9 +12,11 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import InputError from "@/Components/InputError";
 import useAddStock from "../Hooks/useAddStock";
+import { isBoxUnit } from "@/lib/units";
 
 export default function AddStockModal({ medicine, children }) {
     const {
+        UNIT_TYPES,
         open,
         openModal,
         closeModal,
@@ -23,7 +25,9 @@ export default function AddStockModal({ medicine, children }) {
         errors,
         processing,
         handleSubmit,
-        piecesPreview,
+        normalizeQuantity,
+        piecesLabel,
+        boxesUnavailable,
     } = useAddStock(medicine);
 
     return (
@@ -41,39 +45,81 @@ export default function AddStockModal({ medicine, children }) {
                                     {medicine?.med_name}
                                 </span>
                                 . Stock is assigned to your branch
-                                automatically. Enter quantity in boxes — the
-                                system converts to pieces using pack size (
-                                {medicine?.pack_size ?? 1} pcs/box).
+                                automatically and stored in pieces.
                             </DialogDescription>
                         </DialogHeader>
 
                         <div className="grid gap-4">
-                            <div className="grid gap-3">
-                                <Label htmlFor="boxes_received">
-                                    Boxes Received
-                                </Label>
-                                <Input
-                                    id="boxes_received"
-                                    type="number"
-                                    min="1"
-                                    value={data.boxes_received}
-                                    onChange={(e) =>
-                                        setData(
-                                            "boxes_received",
-                                            e.target.value,
-                                        )
-                                    }
-                                />
-                                <InputError message={errors.boxes_received} />
-                                <p className="text-sm text-muted-foreground">
-                                    Total pieces to save:{" "}
-                                    <span className="font-semibold text-foreground">
-                                        {piecesPreview}
-                                    </span>{" "}
-                                    ({data.boxes_received || 0} ×{" "}
-                                    {medicine?.pack_size ?? 1})
-                                </p>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="grid gap-3">
+                                    <Label htmlFor="boxes_received">
+                                        Quantity Received
+                                    </Label>
+                                    <Input
+                                        id="boxes_received"
+                                        type="number"
+                                        min="1"
+                                        step="1"
+                                        value={data.boxes_received}
+                                        onChange={(e) =>
+                                            setData(
+                                                "boxes_received",
+                                                e.target.value,
+                                            )
+                                        }
+                                        onBlur={normalizeQuantity}
+                                    />
+                                    <InputError
+                                        message={errors.boxes_received}
+                                    />
+                                </div>
+
+                                <div className="grid gap-3">
+                                    <Label htmlFor="add_stock_unit_type">
+                                        Unit
+                                    </Label>
+                                    <select
+                                        id="add_stock_unit_type"
+                                        value={data.unit_type}
+                                        onChange={(e) =>
+                                            setData(
+                                                "unit_type",
+                                                e.target.value,
+                                            )
+                                        }
+                                        className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                    >
+                                        {UNIT_TYPES.map((unitType) => (
+                                            <option
+                                                key={unitType.value}
+                                                value={unitType.value}
+                                                disabled={
+                                                    boxesUnavailable &&
+                                                    isBoxUnit(unitType.value)
+                                                }
+                                            >
+                                                {unitType.label}
+                                            </option>
+                                        ))}
+                                    </select>
+                                    <InputError message={errors.unit_type} />
+                                </div>
                             </div>
+
+                            <p className="text-sm text-muted-foreground">
+                                Adds{" "}
+                                <span className="font-semibold text-foreground">
+                                    {piecesLabel}
+                                </span>
+                            </p>
+
+                            {boxesUnavailable && (
+                                <p className="text-xs text-destructive">
+                                    No pack size set for this medicine — add
+                                    stock by the piece, or set a pack size
+                                    first.
+                                </p>
+                            )}
 
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="grid gap-3">

@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\UnitType;
+use App\Exceptions\InvalidPackSizeException;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -42,6 +44,49 @@ class MedicineProduct extends Model
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class, 'branch_id');
+    }
+
+    /**
+     * The single conversion point between a transacted unit and stored pieces.
+     *
+     * Every write path that touches products_qty.quantity must route its
+     * quantity through here rather than multiplying inline — the Box branch
+     * was previously duplicated across four controllers and omitted from a
+     * fifth, which let box-denominated stock-outs deduct pieces.
+     */
+    public function toPieces(int $quantity, UnitType|string $unitType): int
+    {
+        $unit = $unitType instanceof UnitType
+            ? $unitType
+            : UnitType::fromInput($unitType);
+
+        if (! $unit->isBox()) {
+            return $quantity;
+        }
+
+        if (! $this->hasValidPackSize()) {
+            throw InvalidPackSizeException::forProduct($this->med_name ?? 'This medicine');
+        }
+
+        return $quantity * (int) $this->pack_size;
+    }
+
+    /**
+     * How many whole boxes the given piece count represents. Used for display
+     * and for capping box-denominated inputs; never for computing stock.
+     */
+    public function toWholeBoxes(int $pieces): int
+    {
+        if (! $this->hasValidPackSize()) {
+            return 0;
+        }
+
+        return intdiv(max($pieces, 0), (int) $this->pack_size);
+    }
+
+    public function hasValidPackSize(): bool
+    {
+        return (int) $this->pack_size >= 1;
     }
 
     public function batches(): HasMany

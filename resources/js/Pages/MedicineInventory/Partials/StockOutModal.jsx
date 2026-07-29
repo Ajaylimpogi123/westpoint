@@ -15,9 +15,12 @@ import { Minus, Plus, Trash2 } from "lucide-react";
 import useStockOut from "../Hooks/useStockOut";
 import MedicineSearchSelect from "./MedicineSearchSelect";
 import { formatDate } from "@/lib/dates";
+import { isBoxUnit, unitLabel } from "@/lib/units";
 
 function formatLotLabel(lot) {
-    return `Lot ${lot.lot_number} — Exp: ${formatDate(lot.expiry)} — Qty: ${lot.quantity}`;
+    const shelf = lot.shelf_number ? ` — Shelf: ${lot.shelf_number}` : "";
+
+    return `Lot ${lot.lot_number} — Exp: ${formatDate(lot.expiry)}${shelf} — ${lot.quantity} pcs`;
 }
 
 export default function StockOutModal({
@@ -42,6 +45,9 @@ export default function StockOutModal({
         availableLots,
         selectedLot,
         maxQuantity,
+        piecesLabel,
+        boxesUnavailable,
+        canAddToBasket,
         productMap,
         products: productList,
         addItemToBasket,
@@ -264,10 +270,10 @@ export default function StockOutModal({
                                     <Label htmlFor="lot_select">Lot</Label>
                                     <select
                                         id="lot_select"
-                                        value={draft.lot_number}
+                                        value={draft.products_qty_id}
                                         onChange={(event) =>
                                             updateDraft(
-                                                "lot_number",
+                                                "products_qty_id",
                                                 event.target.value,
                                             )
                                         }
@@ -276,10 +282,7 @@ export default function StockOutModal({
                                     >
                                         <option value="">Select a lot</option>
                                         {availableLots.map((lot) => (
-                                            <option
-                                                key={lot.id}
-                                                value={lot.lot_number}
-                                            >
+                                            <option key={lot.id} value={lot.id}>
                                                 {formatLotLabel(lot)}
                                             </option>
                                         ))}
@@ -305,7 +308,7 @@ export default function StockOutModal({
                                             className="h-9 w-9"
                                             onClick={() => updateQuantity(-1)}
                                             disabled={
-                                                !draft.lot_number ||
+                                                !draft.products_qty_id ||
                                                 Number(
                                                     draft.quantity_deducted,
                                                 ) <= 1
@@ -317,6 +320,7 @@ export default function StockOutModal({
                                             id="quantity_deducted"
                                             type="number"
                                             min="1"
+                                            step="1"
                                             max={maxQuantity}
                                             value={draft.quantity_deducted}
                                             onChange={(event) =>
@@ -326,7 +330,7 @@ export default function StockOutModal({
                                                 )
                                             }
                                             onBlur={normalizeQuantity}
-                                            disabled={!draft.lot_number}
+                                            disabled={!draft.products_qty_id}
                                             className="text-center"
                                         />
                                         <Button
@@ -336,7 +340,7 @@ export default function StockOutModal({
                                             className="h-9 w-9"
                                             onClick={() => updateQuantity(1)}
                                             disabled={
-                                                !draft.lot_number ||
+                                                !draft.products_qty_id ||
                                                 Number(
                                                     draft.quantity_deducted,
                                                 ) >= maxQuantity
@@ -346,13 +350,19 @@ export default function StockOutModal({
                                         </Button>
                                     </div>
                                     {selectedLot && (
-                                        <p className="text-xs text-muted-foreground">
-                                            Available: {selectedLot.quantity}{" "}
-                                            piece
-                                            {Number(selectedLot.quantity) === 1
-                                                ? ""
-                                                : "s"}
-                                        </p>
+                                        <div className="space-y-0.5 text-xs text-muted-foreground">
+                                            <p>
+                                                Available:{" "}
+                                                {selectedLot.quantity} pieces ·
+                                                max {maxQuantity}{" "}
+                                                {unitLabel(
+                                                    draft.unit_type,
+                                                ).toLowerCase()}
+                                            </p>
+                                            <p className="font-medium text-foreground">
+                                                Deducts {piecesLabel}
+                                            </p>
+                                        </div>
                                     )}
                                 </div>
 
@@ -369,23 +379,36 @@ export default function StockOutModal({
                                                 event.target.value,
                                             )
                                         }
-                                        disabled={!draft.lot_number}
+                                        disabled={!draft.products_qty_id}
                                         className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                                     >
                                         {UNIT_TYPES.map((unitType) => (
                                             <option
                                                 key={unitType.value}
                                                 value={unitType.value}
+                                                disabled={
+                                                    boxesUnavailable &&
+                                                    isBoxUnit(unitType.value)
+                                                }
                                             >
                                                 {unitType.label}
                                             </option>
                                         ))}
                                     </select>
-                                    <p className="text-xs text-muted-foreground">
-                                        Determines which price (retail or
-                                        wholesale) is used on the printed
-                                        delivery receipt.
-                                    </p>
+                                    {boxesUnavailable ? (
+                                        <p className="text-xs text-destructive">
+                                            This medicine has no pack size set,
+                                            so it can only be dispensed by the
+                                            piece.
+                                        </p>
+                                    ) : (
+                                        <p className="text-xs text-muted-foreground">
+                                            Boxes are converted to pieces using
+                                            the pack size before stock is
+                                            deducted, and set the price used on
+                                            the delivery receipt.
+                                        </p>
+                                    )}
                                 </div>
 
                                 <Button
@@ -393,11 +416,7 @@ export default function StockOutModal({
                                     variant="secondary"
                                     className="w-full"
                                     onClick={addItemToBasket}
-                                    disabled={
-                                        !draft.pd_id ||
-                                        !draft.lot_number ||
-                                        Number(draft.quantity_deducted) < 1
-                                    }
+                                    disabled={!canAddToBasket}
                                 >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Item to Basket
@@ -419,7 +438,7 @@ export default function StockOutModal({
 
                                             return (
                                                 <div
-                                                    key={`${item.pd_id}-${item.lot_number}-${index}`}
+                                                    key={`${item.pd_id}-${item.products_qty_id}-${index}`}
                                                     className="rounded-md border bg-background p-3"
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
@@ -436,10 +455,16 @@ export default function StockOutModal({
                                                                     item.quantity_deducted
                                                                 }{" "}
                                                                 ·{" "}
-                                                                {item.unit_type ===
-                                                                "box"
-                                                                    ? "Box / Wholesale"
-                                                                    : "Piece"}
+                                                                {unitLabel(
+                                                                    item.unit_type,
+                                                                )}
+                                                            </p>
+                                                            <p className="text-xs text-muted-foreground">
+                                                                Deducts{" "}
+                                                                {
+                                                                    item.pieces_preview
+                                                                }{" "}
+                                                                pieces
                                                             </p>
                                                         </div>
                                                         <Button
@@ -462,10 +487,13 @@ export default function StockOutModal({
                                                                 `items.${index}.pd_id`
                                                             ] ||
                                                             errors[
-                                                                `items.${index}.lot_number`
+                                                                `items.${index}.products_qty_id`
                                                             ] ||
                                                             errors[
                                                                 `items.${index}.quantity_deducted`
+                                                            ] ||
+                                                            errors[
+                                                                `items.${index}.unit_type`
                                                             ]
                                                         }
                                                     />

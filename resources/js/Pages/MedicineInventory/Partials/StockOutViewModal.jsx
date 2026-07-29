@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 
 import { formatDateTime } from "@/lib/dates";
+import { isBoxUnit } from "@/lib/units";
 
 export default function StockOutViewModal({ stockOutId, children }) {
     const [open, setOpen] = useState(false);
@@ -197,8 +198,9 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                                         {item.lot_number || "-"}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {item.unit_type ===
-                                                        "box"
+                                                        {isBoxUnit(
+                                                            item.unit_type,
+                                                        )
                                                             ? "Box"
                                                             : "Piece"}
                                                     </TableCell>

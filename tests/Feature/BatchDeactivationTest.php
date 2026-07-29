@@ -59,12 +59,15 @@ class BatchDeactivationTest extends TestCase
 
     public function test_partial_lot_depletion_does_not_deactivate_product_when_other_lots_have_stock(): void
     {
+        // Expires after the seeded lot so FEFO drains the seeded lot first;
+        // the point of this test is what happens to the *other* lot once one
+        // is emptied.
         $secondBatch = ProductQty::create([
             'product_id' => $this->product->id,
             'quantity' => 50,
             'status' => 'Active',
             'lot_number' => 'LOT-002',
-            'expiry' => now()->addMonths(6)->toDateString(),
+            'expiry' => now()->addMonths(18)->toDateString(),
         ]);
 
         $this->batch->update(['quantity' => 2]);

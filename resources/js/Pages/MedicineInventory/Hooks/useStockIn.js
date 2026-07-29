@@ -1,10 +1,15 @@
 import { useMemo, useState } from "react";
 import { useForm } from "@inertiajs/react";
-
-const UNIT_TYPES = [
-    { value: "Piece", label: "Piece" },
-    { value: "Box", label: "Box / Wholesale" },
-];
+import {
+    UNIT_PIECE,
+    UNIT_TYPES,
+    clampQuantity,
+    describePieces,
+    hasValidPackSize,
+    isBoxUnit,
+    toPieces,
+} from "@/lib/units";
+import { newIdempotencyKey } from "@/lib/idempotency";
 
 const emptyDraft = () => ({
     pd_id: "",
@@ -12,7 +17,17 @@ const emptyDraft = () => ({
     expiry_date: "",
     quantity_received: 1,
     shelf_number: "",
-    unit_type: "Piece",
+    unit_type: UNIT_PIECE,
+});
+
+const emptyForm = (branchId) => ({
+    idempotency_key: newIdempotencyKey(),
+    supplier_name: "",
+    delivery_date: new Date().toISOString().slice(0, 10),
+    branch_id: branchId ? String(branchId) : "",
+    received_by: "",
+    remarks: "",
+    items: [],
 });
 
 export default function useStockIn({ branchId, products }) {
@@ -20,14 +35,7 @@ export default function useStockIn({ branchId, products }) {
     const [draft, setDraft] = useState(emptyDraft);
 
     const { data, setData, post, errors, processing, reset, clearErrors } =
-        useForm({
-            supplier_name: "",
-            delivery_date: new Date().toISOString().slice(0, 10),
-            branch_id: branchId ? String(branchId) : "",
-            received_by: "",
-            remarks: "",
-            items: [],
-        });
+        useForm(emptyForm(branchId));
 
     const productMap = useMemo(() => {
         return Object.fromEntries(
@@ -39,17 +47,13 @@ export default function useStockIn({ branchId, products }) {
         ? productMap[draft.pd_id] ?? null
         : null;
 
+    const boxesUnavailable =
+        selectedProduct !== null && !hasValidPackSize(selectedProduct);
+
     const openModal = () => {
         clearErrors();
         setDraft(emptyDraft());
-        setData({
-            supplier_name: "",
-            delivery_date: new Date().toISOString().slice(0, 10),
-            branch_id: branchId ? String(branchId) : "",
-            received_by: "",
-            remarks: "",
-            items: [],
-        });
+        setData(emptyForm(branchId));
         setOpen(true);
     };
 
@@ -61,25 +65,80 @@ export default function useStockIn({ branchId, products }) {
     };
 
     const updateDraft = (field, value) => {
+        setDraft((current) => {
+            const next = { ...current, [field]: value };
+
+            // Lot number, expiry, and quantity belong to the medicine that was
+            // selected when they were typed. Carrying them onto a different
+            // medicine is how a batch ends up labelled with another product's
+            // lot number.
+            if (field === "pd_id" && value !== current.pd_id) {
+                next.batch_number = "";
+                next.expiry_date = "";
+                next.quantity_received = 1;
+                next.shelf_number = "";
+                next.unit_type = UNIT_PIECE;
+
+                return next;
+            }
+
+            if (field === "quantity_received") {
+                if (value === "") {
+                    next.quantity_received = "";
+
+                    return next;
+                }
+
+                next.quantity_received = clampQuantity(value, {
+                    min: 0,
+                    fallback: current.quantity_received || 0,
+                });
+            }
+
+            return next;
+        });
+    };
+
+    const normalizeQuantity = () => {
         setDraft((current) => ({
             ...current,
-            [field]: value,
+            quantity_received: clampQuantity(current.quantity_received),
         }));
     };
 
-    const piecesPreview = useMemo(() => {
-        const quantity = Number(draft.quantity_received) || 0;
-        const packSize = selectedProduct?.pack_size || 1;
-        return draft.unit_type === "Box" ? quantity * packSize : quantity;
-    }, [draft.quantity_received, draft.unit_type, selectedProduct?.pack_size]);
+    const piecesPreview = useMemo(
+        () =>
+            selectedProduct
+                ? toPieces(
+                      selectedProduct,
+                      draft.quantity_received,
+                      draft.unit_type,
+                  )
+                : 0,
+        [selectedProduct, draft.quantity_received, draft.unit_type],
+    );
+
+    const piecesLabel = useMemo(
+        () =>
+            selectedProduct
+                ? describePieces(
+                      selectedProduct,
+                      draft.quantity_received,
+                      draft.unit_type,
+                  )
+                : "",
+        [selectedProduct, draft.quantity_received, draft.unit_type],
+    );
+
+    const canAddToBasket =
+        Boolean(draft.pd_id) &&
+        draft.batch_number.trim() !== "" &&
+        Boolean(draft.expiry_date) &&
+        Number(draft.quantity_received) >= 1 &&
+        !(isBoxUnit(draft.unit_type) && boxesUnavailable);
 
     const addItemToBasket = () => {
-        if (
-            !draft.pd_id ||
-            !draft.batch_number.trim() ||
-            !draft.expiry_date ||
-            Number(draft.quantity_received) < 1
-        ) {
+        if (!canAddToBasket) {
             return;
         }
 
@@ -92,7 +151,10 @@ export default function useStockIn({ branchId, products }) {
                 quantity_received: Number(draft.quantity_received),
                 shelf_number: draft.shelf_number.trim(),
                 unit_type: draft.unit_type,
-                pack_size: selectedProduct?.pack_size || 1,
+                // Display only. The server recomputes from the product's
+                // current pack_size so a concurrent edit cannot make the
+                // booked quantity differ from the validated one.
+                pieces_preview: piecesPreview,
             },
         ]);
         setDraft(emptyDraft());
@@ -108,10 +170,14 @@ export default function useStockIn({ branchId, products }) {
     const handleSubmit = (event) => {
         event.preventDefault();
 
+        if (processing || data.items.length === 0) {
+            return;
+        }
+
         post(route("stock-in.store"), {
             onSuccess: () => closeModal(),
             preserveScroll: true,
-            only: ["stockIns", "medicines", "movementLogs"],
+            only: ["stockIns", "medicines", "products", "movementLogs"],
         });
     };
 
@@ -124,12 +190,16 @@ export default function useStockIn({ branchId, products }) {
         setData,
         draft,
         updateDraft,
+        normalizeQuantity,
         selectedProduct,
+        boxesUnavailable,
+        canAddToBasket,
         productMap,
         products: products ?? [],
         addItemToBasket,
         removeItemFromBasket,
         piecesPreview,
+        piecesLabel,
         errors,
         processing,
         handleSubmit,

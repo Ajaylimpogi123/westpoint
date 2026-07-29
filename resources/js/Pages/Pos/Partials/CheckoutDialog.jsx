@@ -24,6 +24,7 @@ import {
 } from "@/components/ui/select";
 import { formatCurrency } from "../lib/pricing";
 import { formatCustomerName } from "../lib/customerDiscount";
+import { newIdempotencyKey } from "@/lib/idempotency";
 
 export default function CheckoutDialog({
     children,
@@ -44,6 +45,9 @@ export default function CheckoutDialog({
     const [reviewItems, setReviewItems] = useState([]);
     const [reviewLoading, setReviewLoading] = useState(false);
     const [reviewError, setReviewError] = useState("");
+    // Regenerated each time the dialog opens, so a retry of the same checkout
+    // reuses one key while a genuinely new sale gets a fresh one.
+    const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
 
     useEffect(() => {
         if (!open || !cartId || cartItems.length === 0) {
@@ -114,6 +118,7 @@ export default function CheckoutDialog({
         router.post(
             route("pos.store"),
             {
+                idempotency_key: idempotencyKey,
                 cart_id: cartId,
                 customer_id: selectedCustomer?.customer_id ?? null,
                 customer_name: selectedCustomer
@@ -139,6 +144,7 @@ export default function CheckoutDialog({
                     setAmountReceived("");
                     setReferenceNumber("");
                     setPaymentMethod("cash");
+                    setIdempotencyKey(newIdempotencyKey());
                     onCheckoutSuccess?.();
 
                     const saleId = page?.props?.flash?.sale_id;

@@ -1,6 +1,7 @@
 import { useMemo } from "react";
 import { Head, Link } from "@inertiajs/react";
 import { formatDate, formatDateTime } from "@/lib/dates";
+import { isBoxUnit } from "@/lib/units";
 
 function formatCurrency(amount) {
     return `₱${Number(amount || 0).toLocaleString("en-PH", {
@@ -14,7 +15,7 @@ function receiptNumber(stockOutId) {
 }
 
 function unitLabel(unitType) {
-    return unitType === "box" ? "BOX" : "PC";
+    return isBoxUnit(unitType) ? "BOX" : "PC";
 }
 
 const ONES = [
@@ -110,11 +111,16 @@ export default function StockOutReceipt({ stockOut }) {
     const items = stockOut.items ?? [];
 
     const priceFor = (item) => {
+        // Prefer the price captured when the line was dispensed; the product's
+        // current price may have been edited since.
+        if (item?.unit_price !== null && item?.unit_price !== undefined) {
+            return Number(item.unit_price) || 0;
+        }
+
         if (!item?.product) return 0;
-        const value =
-            item.unit_type === "box"
-                ? item.product.wholesale_price
-                : item.product.retail_price;
+        const value = isBoxUnit(item.unit_type)
+            ? item.product.wholesale_price
+            : item.product.retail_price;
         return Number(value || 0);
     };
 

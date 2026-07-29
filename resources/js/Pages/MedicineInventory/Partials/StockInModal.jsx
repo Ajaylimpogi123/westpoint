@@ -14,6 +14,7 @@ import InputError from "@/Components/InputError";
 import { Plus, Trash2 } from "lucide-react";
 import useStockIn from "../Hooks/useStockIn";
 import MedicineSearchSelect from "./MedicineSearchSelect";
+import { isBoxUnit, unitLabel } from "@/lib/units";
 
 function formatCurrency(value) {
     const amount = Number(value) || 0;
@@ -38,11 +39,14 @@ export default function StockInModal({
         setData,
         draft,
         updateDraft,
+        normalizeQuantity,
         selectedProduct,
+        boxesUnavailable,
+        canAddToBasket,
         productMap,
         addItemToBasket,
         removeItemFromBasket,
-        piecesPreview,
+        piecesLabel,
         errors,
         processing,
         handleSubmit,
@@ -256,6 +260,7 @@ export default function StockInModal({
                                             id="quantity_received"
                                             type="number"
                                             min="1"
+                                            step="1"
                                             value={draft.quantity_received}
                                             onChange={(event) =>
                                                 updateDraft(
@@ -263,20 +268,13 @@ export default function StockInModal({
                                                     event.target.value,
                                                 )
                                             }
+                                            onBlur={normalizeQuantity}
                                         />
-                                        {draft.unit_type === "Box" &&
-                                            draft.pd_id && (
-                                                <p className="text-xs text-muted-foreground">
-                                                    = {piecesPreview} piece
-                                                    {piecesPreview === 1
-                                                        ? ""
-                                                        : "s"}{" "}
-                                                    (
-                                                    {selectedProduct?.pack_size ||
-                                                        1}{" "}
-                                                    pcs/box)
-                                                </p>
-                                            )}
+                                        {draft.pd_id && (
+                                            <p className="text-xs font-medium text-foreground">
+                                                Adds {piecesLabel}
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -315,11 +313,25 @@ export default function StockInModal({
                                                 <option
                                                     key={unitType.value}
                                                     value={unitType.value}
+                                                    disabled={
+                                                        boxesUnavailable &&
+                                                        isBoxUnit(
+                                                            unitType.value,
+                                                        )
+                                                    }
                                                 >
                                                     {unitType.label}
                                                 </option>
                                             ))}
                                         </select>
+                                        {boxesUnavailable && (
+                                            <p className="text-xs text-destructive">
+                                                No pack size set for this
+                                                medicine — receive it by the
+                                                piece, or set a pack size
+                                                first.
+                                            </p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -328,7 +340,7 @@ export default function StockInModal({
                                     variant="secondary"
                                     className="w-full"
                                     onClick={addItemToBasket}
-                                    disabled={!draft.pd_id}
+                                    disabled={!canAddToBasket}
                                 >
                                     <Plus className="mr-2 h-4 w-4" />
                                     Add Item to Basket
@@ -369,17 +381,13 @@ export default function StockInModal({
                                                                     item.quantity_received
                                                                 }
                                                                 {" · "}
-                                                                {item.unit_type ===
-                                                                "Box"
-                                                                    ? "Box / Wholesale"
-                                                                    : "Piece"}
-                                                                {item.unit_type ===
-                                                                    "Box" &&
-                                                                    ` (${
-                                                                        item.quantity_received *
-                                                                        (item.pack_size ||
-                                                                            1)
-                                                                    } pcs)`}
+                                                                {unitLabel(
+                                                                    item.unit_type,
+                                                                )}
+                                                                {isBoxUnit(
+                                                                    item.unit_type,
+                                                                ) &&
+                                                                    ` (${item.pieces_preview} pcs)`}
                                                                 {item.shelf_number
                                                                     ? ` · Shelf ${item.shelf_number}`
                                                                     : ""}
@@ -447,6 +455,9 @@ export default function StockInModal({
                                                             ] ||
                                                             errors[
                                                                 `items.${index}.quantity_received`
+                                                            ] ||
+                                                            errors[
+                                                                `items.${index}.unit_type`
                                                             ]
                                                         }
                                                     />
