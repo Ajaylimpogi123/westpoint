@@ -1,7 +1,7 @@
 import { Link } from "@inertiajs/react";
 import TransferStatusBadge from "./TransferStatusBadge";
 import PipelineBar from "./PipelineBar";
-import { formatDate, PRIORITY_CONFIG } from "../lib/transferHelpers";
+import { formatDate, PRIORITY_CONFIG } from "../lib/TransferHelpers";
 
 /**
  * TransferRow

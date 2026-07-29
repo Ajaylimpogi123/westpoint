@@ -1,4 +1,4 @@
-import { LOG_ACTION_CONFIG, formatDateTime } from "../lib/transferHelpers";
+import { LOG_ACTION_CONFIG, formatDateTime } from "../lib/TransferHelpers";
 
 /**
  * TransferLogsPanel
