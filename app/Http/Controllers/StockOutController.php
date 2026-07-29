@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UnitType;
+use App\Exceptions\InsufficientStockException;
+use App\Exceptions\InvalidPackSizeException;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\Sale;
@@ -9,6 +12,7 @@ use App\Models\SaleItem;
 use App\Models\StockOut;
 use App\Models\StockOutItem;
 use App\Models\InventoryMovementLog;
+use App\Services\IdempotencyGuard;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
 use Illuminate\Http\JsonResponse;
@@ -22,6 +26,8 @@ use Throwable;
 
 class StockOutController extends Controller
 {
+    private const MAX_QUANTITY = InventoryStockService::MAX_TRANSACTION_QUANTITY;
+
     public function store(Request $request): RedirectResponse
     {
         $branchId = $this->branchIdOrFail();
@@ -39,15 +45,22 @@ class StockOutController extends Controller
             'delivered_to_address' => ['nullable', 'string', 'max:500'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
-            'items.*.lot_number' => ['required', 'string', 'max:100'],
-            'items.*.quantity_deducted' => ['required', 'integer', 'min:1'],
-            'items.*.unit_type' => ['required', 'string', Rule::in(['piece', 'box'])],
+            'items.*.products_qty_id' => ['required', 'integer', 'exists:products_qty,id'],
+            'items.*.quantity_deducted' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+            'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
         ]);
 
         if ((int) $validated['branch_id'] !== $branchId) {
             return redirect()->back()
                 ->withInput()
                 ->with('error', 'The source branch does not match your session branch.');
+        }
+
+        $idempotencyKey = $request->input('idempotency_key');
+
+        if (! IdempotencyGuard::claim(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey)) {
+            return redirect()->route('medicine-inventory.index')
+                ->with('success', 'This stock-out was already saved.');
         }
 
         try {
@@ -68,27 +81,36 @@ class StockOutController extends Controller
                         ->forBranch($branchId)
                         ->findOrFail($item['pd_id']);
 
-                    $batch = ProductQty::query()
-                        ->where('product_id', $medicine->id)
-                        ->where('lot_number', $item['lot_number'])
-                        ->lockForUpdate()
-                        ->first();
+                    $unitType = UnitType::fromInput($item['unit_type']);
 
-                    if (! $batch || $item['quantity_deducted'] > $batch->quantity) {
-                        throw new \RuntimeException('Qty exceeds lot stock. Reduce or select another lot.');
-                    }
+                    // Resolve the batch the operator actually selected rather
+                    // than the first row sharing its lot number.
+                    $batch = $this->resolveBatchOrFail(
+                        (int) $item['products_qty_id'],
+                        $medicine,
+                    );
 
-                    $batch->decrement('quantity', $item['quantity_deducted']);
+                    $quantity = (int) $item['quantity_deducted'];
+                    $piecesToDeduct = $medicine->toPieces($quantity, $unitType);
 
-                    InventoryStockService::afterBatchQuantityChange($batch->fresh());
+                    InventoryStockService::deductFromBatch(
+                        batchId: $batch->id,
+                        quantityInPieces: $piecesToDeduct,
+                        medicineName: $medicine->med_name,
+                    );
 
                     StockOutItem::create([
                         'stock_out_id' => $stockOut->stock_out_id,
                         'pd_id' => $medicine->id,
-                        'lot_number' => $item['lot_number'],
-                        'quantity_deducted' => $item['quantity_deducted'],
+                        'products_qty_id' => $batch->id,
+                        'lot_number' => $batch->lot_number,
+                        'quantity_deducted' => $quantity,
+                        'pieces_deducted' => $piecesToDeduct,
                         'expiry' => $batch->expiry,
-                        'unit_type' => $item['unit_type'],
+                        'unit_type' => $unitType->value,
+                        'unit_price' => $unitType->isBox()
+                            ? $medicine->wholesale_price
+                            : $medicine->retail_price,
                     ]);
 
                     InventoryMovementLogger::log(
@@ -98,17 +120,20 @@ class StockOutController extends Controller
                         referenceId: $stockOut->stock_out_id,
                         pdId: $medicine->id,
                         medicineName: $medicine->med_name,
-                        lotNumber: $item['lot_number'],
-                        quantity: -$item['quantity_deducted'],
+                        lotNumber: $batch->lot_number,
+                        quantity: -$piecesToDeduct,
                         remarks: $validated['remarks'] ?? $validated['transaction_subtype'],
                     );
                 }
             });
-        } catch (\RuntimeException $exception) {
+        } catch (InvalidPackSizeException | InsufficientStockException | \RuntimeException $exception) {
+            IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey);
+
             return redirect()->back()
                 ->withInput()
                 ->with('error', $exception->getMessage());
         } catch (Throwable $exception) {
+            IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey);
             report($exception);
 
             return redirect()->back()
@@ -134,10 +159,13 @@ class StockOutController extends Controller
                     'item_id',
                     'stock_out_id',
                     'pd_id',
+                    'products_qty_id',
                     'lot_number',
                     'quantity_deducted',
+                    'pieces_deducted',
                     'expiry',
                     'unit_type',
+                    'unit_price',
                 ]);
             },
             'items.product:id,med_name,brand_name,dose,form',
@@ -160,8 +188,10 @@ class StockOutController extends Controller
                     'item_id' => $item->item_id,
                     'lot_number' => $item->lot_number,
                     'quantity_deducted' => $item->quantity_deducted,
+                    'pieces_deducted' => $item->pieces_deducted,
                     'expiry' => $item->expiry,
                     'unit_type' => $item->unit_type,
+                    'unit_price' => $item->unit_price,
                     'product' => $item->product ? [
                         'med_name' => $item->product->med_name,
                         'brand_name' => $item->product->brand_name,
@@ -188,13 +218,16 @@ class StockOutController extends Controller
                     'item_id',
                     'stock_out_id',
                     'pd_id',
+                    'products_qty_id',
                     'lot_number',
                     'quantity_deducted',
+                    'pieces_deducted',
                     'expiry',
                     'unit_type',
+                    'unit_price',
                 ]);
             },
-            'items.product:id,med_name,brand_name,dose,form,retail_price,wholesale_price',
+            'items.product:id,med_name,brand_name,dose,form,pack_size,retail_price,wholesale_price',
         ]);
 
         return Inertia::render('MedicineInventory/StockOutReceipt', [
@@ -230,7 +263,7 @@ class StockOutController extends Controller
             DB::transaction(function () use ($stockOut, $branchId) {
                 $items = StockOutItem::query()
                     ->where('stock_out_id', $stockOut->stock_out_id)
-                    ->with('product:id,retail_price,wholesale_price')
+                    ->with('product:id,med_name,retail_price,wholesale_price')
                     ->get();
 
                 if ($items->isEmpty()) {
@@ -246,19 +279,21 @@ class StockOutController extends Controller
                         continue;
                     }
 
-                    $priceUsed = $item->unit_type === 'box'
-                        ? (float) $medicine->wholesale_price
-                        : (float) $medicine->retail_price;
+                    $unitType = UnitType::tryFromInput($item->unit_type) ?? UnitType::Piece;
 
-                    $batch = ProductQty::query()
-                        ->where('product_id', $item->pd_id)
-                        ->where('lot_number', $item->lot_number)
-                        ->first();
+                    // Prefer the price captured at dispense time. Falling back
+                    // to the product's current price is only for rows written
+                    // before unit_price existed.
+                    $priceUsed = $item->unit_price !== null
+                        ? (float) $item->unit_price
+                        : (float) ($unitType->isBox()
+                            ? $medicine->wholesale_price
+                            : $medicine->retail_price);
 
                     $saleLineItems[] = [
                         'product_id' => $item->pd_id,
-                        'products_qty_id' => $batch?->id,
-                        'unit_type' => $item->unit_type === 'box' ? 'Box' : 'Piece',
+                        'products_qty_id' => $item->products_qty_id,
+                        'unit_type' => $unitType->value,
                         'quantity_sold' => $item->quantity_deducted,
                         'price_used' => $priceUsed,
                         'total_price' => round($priceUsed * $item->quantity_deducted, 2),
@@ -336,6 +371,34 @@ class StockOutController extends Controller
     private function generateDispenseInvoiceNumber(int $stockOutId): string
     {
         return 'DISP-' . date('Ymd') . '-' . str_pad((string) $stockOutId, 5, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Confirm the submitted batch belongs to the submitted product and is fit
+     * to dispense. Validating ownership here rather than trusting the id
+     * keeps a crafted payload from reaching stock in another branch.
+     */
+    private function resolveBatchOrFail(int $batchId, MedicineProduct $medicine): ProductQty
+    {
+        $batch = ProductQty::query()
+            ->whereKey($batchId)
+            ->where('product_id', $medicine->id)
+            ->first();
+
+        if (! $batch || $batch->isDeleted()) {
+            throw new \RuntimeException(
+                "The selected lot is no longer available for {$medicine->med_name}. Refresh and try again."
+            );
+        }
+
+        if ($batch->isExpired()) {
+            throw new \RuntimeException(
+                "Lot {$batch->lot_number} of {$medicine->med_name} expired on "
+                . $batch->expiry->format('d M Y') . ' and cannot be dispensed.'
+            );
+        }
+
+        return $batch;
     }
 
     private function branchIdOrFail(): int

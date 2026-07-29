@@ -18,8 +18,11 @@ class InventoryMovementLog extends Model
     public const TYPE_ADD_STOCK = 'add_stock';
     public const TYPE_BATCH_UPDATED = 'batch_updated';
     public const TYPE_BATCH_DELETED = 'batch_deleted';
+    public const TYPE_BATCH_EXPIRED = 'batch_expired';
     public const TYPE_MEDICINE_AUTO_DELETED = 'medicine_auto_deleted';
     public const TYPE_MEDICINE_REACTIVATED = 'medicine_reactivated';
+    public const TYPE_TRANSFER_OUT = 'transfer_out';
+    public const TYPE_TRANSFER_IN = 'transfer_in';
 
     protected $table = 'tbl_inventory_movement_logs';
     protected $primaryKey = 'log_id';

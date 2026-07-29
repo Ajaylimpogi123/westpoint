@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UnitType;
+use App\Exceptions\InvalidPackSizeException;
 use App\Models\Branch;
 use App\Models\InventoryMovementLog;
 use App\Models\MedicineProduct;
@@ -12,11 +14,14 @@ use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
 class MedicineInventoryController extends Controller
 {
+    private const MAX_QUANTITY = InventoryStockService::MAX_TRANSACTION_QUANTITY;
+
     private const MEDICINE_DETAIL_FIELDS = [
         'med_name',
         'dose',
@@ -85,9 +90,20 @@ class MedicineInventoryController extends Controller
                 ->forBranch($branchId)
                 ->with(['batches' => function ($batchQuery) {
                     $batchQuery
-                        ->available()
+                        ->whereNotIn('status', [
+                            ProductQty::STATUS_DELETED,
+                            ProductQty::STATUS_EXPIRED,
+                        ])
                         ->orderBy('expiry')
-                        ->select(['id', 'product_id', 'lot_number', 'expiry', 'shelf_number', 'quantity']);
+                        ->select([
+                            'id',
+                            'product_id',
+                            'lot_number',
+                            'expiry',
+                            'shelf_number',
+                            'quantity',
+                            'status',
+                        ]);
                 }])
                 ->orderBy('med_name')
                 ->get([
@@ -295,16 +311,28 @@ class MedicineInventoryController extends Controller
 
         $validated = $request->validate([
             'product_id' => ['required', 'integer', 'exists:tbl_products,id'],
-            'boxes_received' => ['required', 'integer', 'min:1'],
+            'boxes_received' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+            'unit_type' => ['sometimes', 'string', Rule::in(UnitType::values())],
             'lot_number' => ['nullable', 'string', 'max:100'],
-            'expiry' => ['nullable', 'date'],
+            'expiry' => ['nullable', 'date', 'after:today'],
             'shelf_number' => ['nullable', 'string', 'max:50'],
+        ], [
+            'expiry.after' => 'The expiry date must be in the future. Expired stock cannot be added.',
         ]);
 
         $medicine = MedicineProduct::active()
             ->forBranch($branchId)
             ->findOrFail($validated['product_id']);
-        $quantityInPieces = $validated['boxes_received'] * $medicine->pack_size;
+
+        $unitType = UnitType::tryFromInput($validated['unit_type'] ?? null) ?? UnitType::Box;
+
+        try {
+            $quantityInPieces = $medicine->toPieces((int) $validated['boxes_received'], $unitType);
+        } catch (InvalidPackSizeException $exception) {
+            return redirect()->back()
+                ->withInput()
+                ->with('error', $exception->getMessage());
+        }
 
         InventoryStockService::addStock(
             productId: $medicine->id,
@@ -324,13 +352,21 @@ class MedicineInventoryController extends Controller
             medicineName: $medicine->med_name,
             lotNumber: $validated['lot_number'] ?? null,
             quantity: $quantityInPieces,
-            remarks: "{$validated['boxes_received']} box(es) added manually.",
+            remarks: "{$validated['boxes_received']} {$unitType->value}(s) added manually.",
         );
 
         return redirect()->route('medicine-inventory.index')
-            ->with('success', "Stock added: {$validated['boxes_received']} box(es) ({$quantityInPieces} pieces).");
+            ->with('success', "Stock added: {$validated['boxes_received']} {$unitType->value}(s) ({$quantityInPieces} pieces).");
     }
 
+    /**
+     * Edit a batch's lot details and correct its stock level.
+     *
+     * The quantity is expressed in pieces — the storage unit. It used to be
+     * entered in boxes and converted on both sides, so opening the modal and
+     * saving without touching the quantity would round a partial box away and
+     * silently change stock.
+     */
     public function updateBatch(Request $request, int $id): RedirectResponse
     {
         $branchId = $this->branchIdOrFail();
@@ -339,18 +375,22 @@ class MedicineInventoryController extends Controller
         $validated = $request->validate([
             'lot_number' => ['nullable', 'string', 'max:100'],
             'expiry' => ['nullable', 'date'],
-            'boxes_received' => ['required', 'integer', 'min:0'],
+            'quantity_in_pieces' => ['required', 'integer', 'min:0', 'max:' . self::MAX_QUANTITY],
             'shelf_number' => ['nullable', 'string', 'max:50'],
+            'adjustment_reason' => ['required', 'string', 'max:255'],
+        ], [
+            'adjustment_reason.required' => 'Give a reason for this stock adjustment so it can be audited.',
         ]);
 
         $medicine = MedicineProduct::findOrFail($batch->product_id);
-        $quantityInPieces = $validated['boxes_received'] * $medicine->pack_size;
+        $quantityInPieces = (int) $validated['quantity_in_pieces'];
 
         $batchFields = ['lot_number', 'expiry', 'quantity', 'shelf_number'];
+        $previousQuantity = (int) $batch->quantity;
         $before = [
             'lot_number' => $batch->lot_number,
             'expiry' => $batch->expiry?->format('Y-m-d'),
-            'quantity' => $batch->quantity,
+            'quantity' => $previousQuantity,
             'shelf_number' => $batch->shelf_number,
         ];
 
@@ -368,11 +408,12 @@ class MedicineInventoryController extends Controller
         $after = [
             'lot_number' => $batch->lot_number,
             'expiry' => $batch->expiry?->format('Y-m-d'),
-            'quantity' => $batch->quantity,
+            'quantity' => (int) $batch->quantity,
             'shelf_number' => $batch->shelf_number,
         ];
 
         $changes = InventoryMovementLogger::diffFields($before, $after, $batchFields);
+        $delta = $quantityInPieces - $previousQuantity;
 
         InventoryMovementLogger::log(
             branchId: $branchId,
@@ -381,10 +422,16 @@ class MedicineInventoryController extends Controller
             referenceId: $batch->id,
             pdId: $medicine->id,
             medicineName: $medicine->med_name,
-            lotNumber: $validated['lot_number'] ?? null,
-            quantity: $quantityInPieces,
-            remarks: 'Batch quantity or lot details updated.',
-            metadata: ['changes' => $changes],
+            lotNumber: $batch->lot_number,
+            // A signed delta, matching every other row in the ledger. Logging
+            // the absolute level here made the ledger unsummable.
+            quantity: $delta,
+            remarks: $validated['adjustment_reason'],
+            metadata: [
+                'changes' => $changes,
+                'quantity_before' => $previousQuantity,
+                'quantity_after' => $quantityInPieces,
+            ],
         );
 
         return redirect()->route('medicine-inventory.index')

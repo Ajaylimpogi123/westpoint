@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UnitType;
+use App\Exceptions\InsufficientStockException;
 use App\Models\Branch;
 use App\Models\BranchCustomer;
 use App\Models\MedicineProduct;
@@ -10,11 +12,16 @@ use App\Models\PosCartItem;
 use App\Models\ProductQty;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\SaleItemAllocation;
+use App\Services\DocumentNumberService;
+use App\Services\IdempotencyGuard;
 use App\Services\InventoryStockService;
+use App\Services\ReceiptPrinterService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -344,8 +351,13 @@ class PosController extends Controller
             'cart_id' => ['required', 'integer', 'exists:tbl_carts,id'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.product_id' => ['required', 'integer', 'exists:tbl_products,id'],
-            'items.*.unit_type' => ['required', 'string', 'in:Piece,Box'],
-            'items.*.quantity_sold' => ['required', 'integer', 'min:1'],
+            'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
+            'items.*.quantity_sold' => [
+                'required',
+                'integer',
+                'min:1',
+                'max:' . InventoryStockService::MAX_TRANSACTION_QUANTITY,
+            ],
             'payment_method' => ['required', 'string', 'in:cash,gcash,debit_card,credit_card'],
             'reference_number' => ['nullable', 'string', 'max:255'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
@@ -391,6 +403,13 @@ class PosController extends Controller
             $customerName = trim("{$customer->first_name} {$customer->last_name}");
         }
 
+        $idempotencyKey = $request->input('idempotency_key');
+
+        if (! IdempotencyGuard::claim(IdempotencyGuard::SCOPE_POS_CHECKOUT, $idempotencyKey)) {
+            return redirect()->route('pos.index')
+                ->with('success', 'This sale was already completed.');
+        }
+
         try {
             DB::beginTransaction();
 
@@ -401,19 +420,17 @@ class PosController extends Controller
                 $product = MedicineProduct::active()
                     ->forBranch($branchId)
                     ->findOrFail($item['product_id']);
-                $unitType = $item['unit_type'];
+                $unitType = UnitType::fromInput($item['unit_type']);
                 $quantitySold = (int) $item['quantity_sold'];
 
-                $priceUsed = $unitType === 'Box'
+                $priceUsed = $unitType->isBox()
                     ? (float) $product->wholesale_price
                     : (float) $product->retail_price;
 
                 $lineTotal = round($priceUsed * $quantitySold, 2);
                 $grossAmount += $lineTotal;
 
-                $piecesNeeded = $unitType === 'Box'
-                    ? $quantitySold * (int) $product->pack_size
-                    : $quantitySold;
+                $piecesNeeded = $product->toPieces($quantitySold, $unitType);
 
                 $this->assertSufficientBranchStock(
                     $product->id,
@@ -431,8 +448,9 @@ class PosController extends Controller
 
                 $lineItems[] = [
                     'product_id' => $product->id,
-                    'unit_type' => $unitType,
+                    'unit_type' => $unitType->value,
                     'quantity_sold' => $quantitySold,
+                    'pieces_sold' => $piecesNeeded,
                     'price_used' => $priceUsed,
                     'total_price' => $lineTotal,
                     'deductions' => $deductions,
@@ -446,7 +464,7 @@ class PosController extends Controller
             }
 
             $sale = Sale::create([
-                'invoice_number' => $this->generateInvoiceNumber(),
+                'invoice_number' => $this->generateInvoiceNumber($branchId),
                 'branch_id' => $branchId,
                 'user_id' => auth()->id(),
                 'customer_name' => $customerName,
@@ -471,27 +489,48 @@ class PosController extends Controller
                 ->delete();
 
             DB::commit();
-
-// For auto Print 
-$sale->load('items.product');
-app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
-
-
-            return redirect()->route('pos.index')
-                ->with([
-                    'success' => "Sale completed. Invoice {$sale->invoice_number}",
-                    'sale_id' => $sale->id,
-                ]);
         } catch (\RuntimeException $e) {
             DB::rollBack();
+            IdempotencyGuard::release(IdempotencyGuard::SCOPE_POS_CHECKOUT, $idempotencyKey);
 
             return redirect()->back()
                 ->with('error', $e->getMessage());
         } catch (\Throwable $e) {
             DB::rollBack();
+            report($e);
+            IdempotencyGuard::release(IdempotencyGuard::SCOPE_POS_CHECKOUT, $idempotencyKey);
 
             return redirect()->back()
                 ->with('error', 'Failed to process sale. Please try again.');
+        }
+
+        // Printing happens after the transaction and outside its error
+        // boundary. It used to sit inside the try, so a printer fault routed
+        // to the catch and told the cashier the sale had failed — while it
+        // was already committed — prompting them to ring it up twice.
+        $printed = $this->printReceiptSafely($sale);
+
+        return redirect()->route('pos.index')
+            ->with([
+                'success' => $printed
+                    ? "Sale completed. Invoice {$sale->invoice_number}"
+                    : "Sale completed. Invoice {$sale->invoice_number} — the receipt did not print; use Reprint.",
+                'sale_id' => $sale->id,
+                'receipt_printed' => $printed,
+            ]);
+    }
+
+    private function printReceiptSafely(Sale $sale): bool
+    {
+        try {
+            $sale->load('items.product');
+            app(ReceiptPrinterService::class)->printReceipt($sale);
+
+            return true;
+        } catch (\Throwable $e) {
+            report($e);
+
+            return false;
         }
     }
 
@@ -662,12 +701,12 @@ app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
             ->active()
             ->forBranch($branchId)
             ->withSum(['batches as total_stock' => function ($batchQuery) {
-                $batchQuery->available();
+                $batchQuery->dispensable();
             }], 'quantity');
 
         if ($inStock) {
             $query->whereHas('batches', function ($batchQuery) {
-                $batchQuery->available();
+                $batchQuery->dispensable();
             });
         }
 
@@ -682,19 +721,19 @@ app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
         return $query;
     }
 
+    /**
+     * Pieces this product can actually be sold in. Expired batches are
+     * excluded: FEFO sorts by earliest expiry, so including them meant the
+     * most-expired stock was preferentially dispensed.
+     */
     private function getProductStock(int $productId): int
     {
-        return (int) ProductQty::query()
-            ->where('product_id', $productId)
-            ->available()
-            ->sum('quantity');
+        return InventoryStockService::dispensableStock($productId);
     }
 
     private function piecesForCartLine(MedicineProduct $product, string $unitType, int $quantitySold): int
     {
-        return $unitType === 'Box'
-            ? $quantitySold * (int) $product->pack_size
-            : $quantitySold;
+        return $product->toPieces($quantitySold, $unitType);
     }
 
     /**
@@ -754,17 +793,11 @@ app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
             ->exists();
 
         if (! $belongsToBranch) {
-            throw new \RuntimeException("Insufficient Stock for {$productName}.");
+            throw InsufficientStockException::forProduct($productName);
         }
 
-        $totalAvailable = (int) ProductQty::query()
-            ->where('product_id', $productId)
-            ->available()
-            ->lockForUpdate()
-            ->sum('quantity');
-
-        if ($totalAvailable < $piecesNeeded) {
-            throw new \RuntimeException("Insufficient Stock for {$productName}.");
+        if (InventoryStockService::dispensableStock($productId, lock: true) < $piecesNeeded) {
+            throw InsufficientStockException::forProduct($productName);
         }
     }
 
@@ -777,43 +810,7 @@ app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
      */
     private function previewStockFefo(int $productId, int $piecesNeeded, array &$allocatedByBatch): array
     {
-        $batches = ProductQty::query()
-            ->where('product_id', $productId)
-            ->available()
-            ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('expiry')
-            ->get();
-
-        $allocations = [];
-        $remaining = $piecesNeeded;
-
-        foreach ($batches as $batch) {
-            if ($remaining <= 0) {
-                break;
-            }
-
-            $alreadyAllocated = $allocatedByBatch[$batch->id] ?? 0;
-            $available = max((int) $batch->quantity - $alreadyAllocated, 0);
-
-            if ($available <= 0) {
-                continue;
-            }
-
-            $take = min($available, $remaining);
-            $allocatedByBatch[$batch->id] = $alreadyAllocated + $take;
-
-            $allocations[] = [
-                'batch_id' => $batch->id,
-                'lot_number' => $batch->lot_number,
-                'expiry' => $batch->expiry?->format('Y-m-d'),
-                'shelf_number' => $batch->shelf_number,
-                'pieces' => $take,
-            ];
-
-            $remaining -= $take;
-        }
-
-        return $allocations;
+        return InventoryStockService::previewFefo($productId, $piecesNeeded, $allocatedByBatch);
     }
 
     private function deductStockFefo(int $productId, int $branchId, int $piecesNeeded, string $productName): array
@@ -824,47 +821,17 @@ app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
             ->exists();
 
         if (! $belongsToBranch) {
-            throw new \RuntimeException("Insufficient Stock for {$productName}.");
+            throw InsufficientStockException::forProduct($productName);
         }
 
-        $batches = ProductQty::query()
-            ->where('product_id', $productId)
-            ->available()
-            ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('expiry')
-            ->lockForUpdate()
-            ->get();
-
-        $totalAvailable = (int) $batches->sum('quantity');
-
-        if ($totalAvailable < $piecesNeeded) {
-            throw new \RuntimeException("Insufficient Stock for {$productName}.");
-        }
-
-        $deductions = [];
-        $remaining = $piecesNeeded;
-
-        foreach ($batches as $batch) {
-            if ($remaining <= 0) {
-                break;
-            }
-
-            $deduct = min((int) $batch->quantity, $remaining);
-            $batch->update(['quantity' => (int) $batch->quantity - $deduct]);
-            InventoryStockService::afterBatchQuantityChange($batch->fresh());
-
-            $deductions[] = [
-                'batch_id' => $batch->id,
-                'pieces' => $deduct,
-            ];
-
-            $remaining -= $deduct;
-        }
-
-        return $deductions;
+        return InventoryStockService::deductFefo($productId, $piecesNeeded, $productName);
     }
 
     /**
+     * Persist one commercial sale line, then record batch allocations when FEFO
+     * pulled from more than one lot. Split-batch lines used to be rewritten as
+     * multiple Piece rows, which broke receipts and unit-based reporting.
+     *
      * @param  array{
      *     product_id: int,
      *     unit_type: string,
@@ -878,47 +845,38 @@ app(\App\Services\ReceiptPrinterService::class)->printReceipt($sale);
     {
         $deductions = $lineItem['deductions'];
 
-        if (count($deductions) === 1) {
-            SaleItem::create([
-                'sale_id' => $saleId,
-                'product_id' => $lineItem['product_id'],
-                'products_qty_id' => $deductions[0]['batch_id'],
-                'unit_type' => $lineItem['unit_type'],
-                'quantity_sold' => $lineItem['quantity_sold'],
-                'price_used' => $lineItem['price_used'],
-                'total_price' => $lineItem['total_price'],
-            ]);
+        $saleItem = SaleItem::create([
+            'sale_id' => $saleId,
+            'product_id' => $lineItem['product_id'],
+            'products_qty_id' => $deductions[0]['batch_id'] ?? null,
+            'unit_type' => $lineItem['unit_type'],
+            'quantity_sold' => $lineItem['quantity_sold'],
+            'price_used' => $lineItem['price_used'],
+            'total_price' => $lineItem['total_price'],
+        ]);
 
+        if (count($deductions) <= 1) {
             return;
         }
 
-        $totalPieces = array_sum(array_column($deductions, 'pieces'));
-        $allocatedTotal = 0.0;
-        $lastIndex = count($deductions) - 1;
-
-        foreach ($deductions as $index => $deduction) {
-            $isLast = $index === $lastIndex;
-            $portion = $isLast
-                ? round($lineItem['total_price'] - $allocatedTotal, 2)
-                : round(($deduction['pieces'] / $totalPieces) * $lineItem['total_price'], 2);
-
-            $allocatedTotal += $portion;
-
-            SaleItem::create([
-                'sale_id' => $saleId,
-                'product_id' => $lineItem['product_id'],
+        foreach ($deductions as $deduction) {
+            SaleItemAllocation::create([
+                'sale_item_id' => $saleItem->id,
                 'products_qty_id' => $deduction['batch_id'],
-                'unit_type' => 'Piece',
-                'quantity_sold' => $deduction['pieces'],
-                'price_used' => round($portion / max($deduction['pieces'], 1), 2),
-                'total_price' => $portion,
+                'pieces' => $deduction['pieces'],
             ]);
         }
     }
 
-    private function generateInvoiceNumber(): string
+    /**
+     * Allocated from a per-branch, per-day counter inside the sale's
+     * transaction. Random numbers in a 99,999 space collided against the
+     * unique index often enough to abort real sales, and gave an unordered
+     * series that an audit cannot follow.
+     */
+    private function generateInvoiceNumber(int $branchId): string
     {
-        return 'POS-' . date('Ymd') . '-' . str_pad((string) mt_rand(1, 99999), 5, '0', STR_PAD_LEFT);
+        return DocumentNumberService::posInvoiceNumber($branchId);
     }
 
     private function branchId(): ?int

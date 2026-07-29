@@ -2,10 +2,13 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\UnitType;
+use App\Exceptions\InvalidPackSizeException;
 use App\Models\MedicineProduct;
 use App\Models\StockIn;
 use App\Models\StockInItem;
 use App\Models\InventoryMovementLog;
+use App\Services\IdempotencyGuard;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
 use Illuminate\Http\JsonResponse;
@@ -19,6 +22,8 @@ use Throwable;
 
 class StockInController extends Controller
 {
+    private const MAX_QUANTITY = InventoryStockService::MAX_TRANSACTION_QUANTITY;
+
     public function store(Request $request): RedirectResponse
     {
         $branchId = $this->branchIdOrFail();
@@ -32,16 +37,30 @@ class StockInController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
             'items.*.batch_number' => ['required', 'string', 'max:100'],
-            'items.*.expiry_date' => ['required', 'date'],
-            'items.*.quantity_received' => ['required', 'integer', 'min:1'],
+            // Receiving already-expired goods put stock into the dispensable
+            // pool that FEFO would then hand out first.
+            'items.*.expiry_date' => ['required', 'date', 'after:today'],
+            'items.*.quantity_received' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
             'items.*.shelf_number' => ['nullable', 'string', 'max:50'],
-            'items.*.unit_type' => ['required', 'string', Rule::in(['Piece', 'Box'])],
+            'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
+            'items.*.confirm_duplicate_lot' => ['sometimes', 'boolean'],
+        ], [
+            'items.*.expiry_date.after' => 'The expiry date must be in the future. Expired stock cannot be received.',
         ]);
 
         if ((int) $validated['branch_id'] !== $branchId) {
             return redirect()->back()
                 ->withInput()
                 ->with('error', 'The destination branch does not match your session branch.');
+        }
+
+        $idempotencyKey = $request->input('idempotency_key');
+
+        // Stock In has no stock check that would incidentally catch a repeat,
+        // so an unguarded duplicate silently doubles the delivery.
+        if (! IdempotencyGuard::claim(IdempotencyGuard::SCOPE_STOCK_IN, $idempotencyKey)) {
+            return redirect()->route('medicine-inventory.index')
+                ->with('success', 'This stock-in was already saved.');
         }
 
         try {
@@ -60,17 +79,30 @@ class StockInController extends Controller
                         ->forBranch($branchId)
                         ->findOrFail($item['pd_id']);
 
-                    $quantityInPieces = $item['unit_type'] === 'Box'
-                        ? $item['quantity_received'] * $medicine->pack_size
-                        : $item['quantity_received'];
+                    $unitType = UnitType::fromInput($item['unit_type']);
+                    $quantity = (int) $item['quantity_received'];
+                    $quantityInPieces = $medicine->toPieces($quantity, $unitType);
+
+                    InventoryStockService::assertStockInIntentAllowed(
+                        productId: $medicine->id,
+                        branchId: $branchId,
+                        lotNumber: $item['batch_number'],
+                        expiry: $item['expiry_date'],
+                        shelfNumber: $item['shelf_number'] ?? null,
+                        confirmDuplicateLot: (bool) ($item['confirm_duplicate_lot'] ?? false),
+                    );
 
                     StockInItem::create([
                         'stock_in_id' => $stockIn->stock_in_id,
                         'pd_id' => $medicine->id,
                         'batch_number' => $item['batch_number'],
                         'expiry_date' => $item['expiry_date'],
-                        'quantity_received' => $item['quantity_received'],
-                        'unit_type' => $item['unit_type'],
+                        'quantity_received' => $quantity,
+                        'pieces_received' => $quantityInPieces,
+                        'unit_type' => $unitType->value,
+                        'unit_price' => $unitType->isBox()
+                            ? $medicine->wholesale_price
+                            : $medicine->retail_price,
                     ]);
 
                     InventoryStockService::addStock(
@@ -95,8 +127,17 @@ class StockInController extends Controller
                     );
                 }
             });
+        } catch (InvalidPackSizeException | \RuntimeException $exception) {
+            // Nothing was written, so hand the key back and let the operator
+            // correct the entry and resubmit the same form.
+            IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_IN, $idempotencyKey);
+
+            return redirect()->back()
+                ->withInput()
+                ->with('error', $exception->getMessage());
         } catch (Throwable $exception) {
             report($exception);
+            IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_IN, $idempotencyKey);
 
             return redirect()->back()
                 ->withInput()
@@ -124,6 +165,7 @@ class StockInController extends Controller
                     'batch_number',
                     'expiry_date',
                     'quantity_received',
+                    'pieces_received',
                     'unit_type',
                 ]);
             },
@@ -145,6 +187,7 @@ class StockInController extends Controller
                     'batch_number' => $item->batch_number,
                     'expiry_date' => $item->expiry_date,
                     'quantity_received' => $item->quantity_received,
+                    'pieces_received' => $item->pieces_received,
                     'unit_type' => $item->unit_type,
                     'product' => $item->product ? [
                         'med_name' => $item->product->med_name,
@@ -175,11 +218,12 @@ class StockInController extends Controller
                     'batch_number',
                     'expiry_date',
                     'quantity_received',
+                    'pieces_received',
                     'unit_type',
                     'unit_price',
                 ]);
             },
-            'items.product:id,med_name,brand_name,dose,form,retail_price,wholesale_price',
+            'items.product:id,med_name,brand_name,dose,form,pack_size,retail_price,wholesale_price',
         ]);
 
         return Inertia::render('MedicineInventory/StockInReceipt', [

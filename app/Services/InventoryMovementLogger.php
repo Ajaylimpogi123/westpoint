@@ -42,7 +42,10 @@ class InventoryMovementLogger
             'medicine_name' => $medicineName,
             'lot_number' => $lotNumber,
             'quantity' => $quantity,
-            'performed_by' => $performedBy ?? (int) auth()->id(),
+            // Null means "performed by the system" — scheduled work has no
+            // authenticated user, and dropping the entry instead would leave
+            // a gap in the ledger.
+            'performed_by' => $performedBy ?? auth()->id(),
             'remarks' => $remarks,
             'metadata' => $metadata,
         ]);

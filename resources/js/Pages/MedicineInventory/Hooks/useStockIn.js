@@ -1,10 +1,21 @@
 import { useMemo, useState } from "react";
 import { useForm } from "@inertiajs/react";
-
-const UNIT_TYPES = [
-    { value: "Piece", label: "Piece" },
-    { value: "Box", label: "Box / Wholesale" },
-];
+import {
+    UNIT_PIECE,
+    UNIT_TYPES,
+    clampQuantity,
+    describePieces,
+    hasValidPackSize,
+    isBoxUnit,
+    toPieces,
+} from "@/lib/units";
+import { newIdempotencyKey } from "@/lib/idempotency";
+import {
+    BATCH_INTENT,
+    batchToDraftFields,
+    existingLotsForProduct,
+    resolveBatchIntent,
+} from "../lib/batchIntent";
 
 const emptyDraft = () => ({
     pd_id: "",
@@ -12,7 +23,18 @@ const emptyDraft = () => ({
     expiry_date: "",
     quantity_received: 1,
     shelf_number: "",
-    unit_type: "Piece",
+    unit_type: UNIT_PIECE,
+    confirm_duplicate_lot: false,
+});
+
+const emptyForm = (branchId) => ({
+    idempotency_key: newIdempotencyKey(),
+    supplier_name: "",
+    delivery_date: new Date().toISOString().slice(0, 10),
+    branch_id: branchId ? String(branchId) : "",
+    received_by: "",
+    remarks: "",
+    items: [],
 });
 
 export default function useStockIn({ branchId, products }) {
@@ -20,14 +42,7 @@ export default function useStockIn({ branchId, products }) {
     const [draft, setDraft] = useState(emptyDraft);
 
     const { data, setData, post, errors, processing, reset, clearErrors } =
-        useForm({
-            supplier_name: "",
-            delivery_date: new Date().toISOString().slice(0, 10),
-            branch_id: branchId ? String(branchId) : "",
-            received_by: "",
-            remarks: "",
-            items: [],
-        });
+        useForm(emptyForm(branchId));
 
     const productMap = useMemo(() => {
         return Object.fromEntries(
@@ -39,17 +54,23 @@ export default function useStockIn({ branchId, products }) {
         ? productMap[draft.pd_id] ?? null
         : null;
 
+    const boxesUnavailable =
+        selectedProduct !== null && !hasValidPackSize(selectedProduct);
+
+    const batchIntent = useMemo(
+        () => resolveBatchIntent(selectedProduct, draft),
+        [selectedProduct, draft.batch_number, draft.expiry_date, draft.shelf_number],
+    );
+
+    const existingLots = useMemo(
+        () => existingLotsForProduct(selectedProduct),
+        [selectedProduct],
+    );
+
     const openModal = () => {
         clearErrors();
         setDraft(emptyDraft());
-        setData({
-            supplier_name: "",
-            delivery_date: new Date().toISOString().slice(0, 10),
-            branch_id: branchId ? String(branchId) : "",
-            received_by: "",
-            remarks: "",
-            items: [],
-        });
+        setData(emptyForm(branchId));
         setOpen(true);
     };
 
@@ -61,25 +82,98 @@ export default function useStockIn({ branchId, products }) {
     };
 
     const updateDraft = (field, value) => {
+        setDraft((current) => {
+            const next = { ...current, [field]: value };
+
+            if (field === "pd_id" && value !== current.pd_id) {
+                next.batch_number = "";
+                next.expiry_date = "";
+                next.quantity_received = 1;
+                next.shelf_number = "";
+                next.unit_type = UNIT_PIECE;
+                next.confirm_duplicate_lot = false;
+
+                return next;
+            }
+
+            if (
+                field === "batch_number" ||
+                field === "expiry_date" ||
+                field === "shelf_number"
+            ) {
+                next.confirm_duplicate_lot = false;
+            }
+
+            if (field === "quantity_received") {
+                if (value === "") {
+                    next.quantity_received = "";
+
+                    return next;
+                }
+
+                next.quantity_received = clampQuantity(value, {
+                    min: 0,
+                    fallback: current.quantity_received || 0,
+                });
+            }
+
+            return next;
+        });
+    };
+
+    const applyExistingLot = (batch) => {
         setDraft((current) => ({
             ...current,
-            [field]: value,
+            ...batchToDraftFields(batch),
+            confirm_duplicate_lot: false,
         }));
     };
 
-    const piecesPreview = useMemo(() => {
-        const quantity = Number(draft.quantity_received) || 0;
-        const packSize = selectedProduct?.pack_size || 1;
-        return draft.unit_type === "Box" ? quantity * packSize : quantity;
-    }, [draft.quantity_received, draft.unit_type, selectedProduct?.pack_size]);
+    const normalizeQuantity = () => {
+        setDraft((current) => ({
+            ...current,
+            quantity_received: clampQuantity(current.quantity_received),
+        }));
+    };
+
+    const piecesPreview = useMemo(
+        () =>
+            selectedProduct
+                ? toPieces(
+                      selectedProduct,
+                      draft.quantity_received,
+                      draft.unit_type,
+                  )
+                : 0,
+        [selectedProduct, draft.quantity_received, draft.unit_type],
+    );
+
+    const piecesLabel = useMemo(
+        () =>
+            selectedProduct
+                ? describePieces(
+                      selectedProduct,
+                      draft.quantity_received,
+                      draft.unit_type,
+                  )
+                : "",
+        [selectedProduct, draft.quantity_received, draft.unit_type],
+    );
+
+    const needsDuplicateConfirmation =
+        batchIntent.mode === BATCH_INTENT.CONFLICT &&
+        !draft.confirm_duplicate_lot;
+
+    const canAddToBasket =
+        Boolean(draft.pd_id) &&
+        draft.batch_number.trim() !== "" &&
+        Boolean(draft.expiry_date) &&
+        Number(draft.quantity_received) >= 1 &&
+        !(isBoxUnit(draft.unit_type) && boxesUnavailable) &&
+        !needsDuplicateConfirmation;
 
     const addItemToBasket = () => {
-        if (
-            !draft.pd_id ||
-            !draft.batch_number.trim() ||
-            !draft.expiry_date ||
-            Number(draft.quantity_received) < 1
-        ) {
+        if (!canAddToBasket) {
             return;
         }
 
@@ -92,7 +186,9 @@ export default function useStockIn({ branchId, products }) {
                 quantity_received: Number(draft.quantity_received),
                 shelf_number: draft.shelf_number.trim(),
                 unit_type: draft.unit_type,
-                pack_size: selectedProduct?.pack_size || 1,
+                confirm_duplicate_lot:
+                    batchIntent.mode === BATCH_INTENT.CONFLICT,
+                pieces_preview: piecesPreview,
             },
         ]);
         setDraft(emptyDraft());
@@ -108,14 +204,19 @@ export default function useStockIn({ branchId, products }) {
     const handleSubmit = (event) => {
         event.preventDefault();
 
+        if (processing || data.items.length === 0) {
+            return;
+        }
+
         post(route("stock-in.store"), {
             onSuccess: () => closeModal(),
             preserveScroll: true,
-            only: ["stockIns", "medicines", "movementLogs"],
+            only: ["stockIns", "medicines", "products", "movementLogs"],
         });
     };
 
     return {
+        BATCH_INTENT,
         UNIT_TYPES,
         open,
         openModal,
@@ -124,12 +225,21 @@ export default function useStockIn({ branchId, products }) {
         setData,
         draft,
         updateDraft,
+        setDraft,
+        normalizeQuantity,
         selectedProduct,
+        boxesUnavailable,
+        batchIntent,
+        existingLots,
+        applyExistingLot,
+        needsDuplicateConfirmation,
+        canAddToBasket,
         productMap,
         products: products ?? [],
         addItemToBasket,
         removeItemFromBasket,
         piecesPreview,
+        piecesLabel,
         errors,
         processing,
         handleSubmit,

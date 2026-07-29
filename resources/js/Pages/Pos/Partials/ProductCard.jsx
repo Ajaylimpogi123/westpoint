@@ -26,7 +26,7 @@ export default function ProductCard({ product, cartItems, onAddToCart }) {
                         {isGeneric && <GenericBadge />}
                         <StockStatusBadge
                             totalStock={totalStock}
-                            packSize={product.pack_size}
+                            stockThreshold={product.stock_threshold}
                         />
                     </div>
                 </div>

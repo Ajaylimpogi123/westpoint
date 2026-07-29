@@ -23,7 +23,9 @@ export default function EditBatchModal({ batch, medicine, children }) {
         errors,
         processing,
         handleSubmit,
-        piecesPreview,
+        breakdown,
+        delta,
+        packSize,
     } = useEditBatch(batch, medicine);
 
     return (
@@ -37,35 +39,50 @@ export default function EditBatchModal({ batch, medicine, children }) {
                             <DialogTitle>Edit Batch</DialogTitle>
                             <DialogDescription>
                                 Update lot details for batch{" "}
-                                {batch?.lot_number || `#${batch?.id}`}. Quantity
-                                is stored in pieces (
-                                {medicine?.pack_size ?? 1} pcs/box).
+                                {batch?.lot_number || `#${batch?.id}`}. Stock is
+                                entered in pieces
+                                {packSize >= 1
+                                    ? ` (${packSize} pcs/box)`
+                                    : " (no pack size set)"}
+                                .
                             </DialogDescription>
                         </DialogHeader>
 
                         <div className="grid gap-4">
                             <div className="grid gap-3">
-                                <Label htmlFor="edit_boxes_received">
-                                    Boxes (stock level)
+                                <Label htmlFor="edit_quantity_in_pieces">
+                                    Stock level (pieces)
                                 </Label>
                                 <Input
-                                    id="edit_boxes_received"
+                                    id="edit_quantity_in_pieces"
                                     type="number"
                                     min="0"
-                                    value={data.boxes_received}
+                                    step="1"
+                                    value={data.quantity_in_pieces}
                                     onChange={(e) =>
                                         setData(
-                                            "boxes_received",
+                                            "quantity_in_pieces",
                                             e.target.value,
                                         )
                                     }
                                 />
-                                <InputError message={errors.boxes_received} />
+                                <InputError
+                                    message={errors.quantity_in_pieces}
+                                />
                                 <p className="text-sm text-muted-foreground">
-                                    Total pieces:{" "}
-                                    <span className="font-semibold text-foreground">
-                                        {piecesPreview}
-                                    </span>
+                                    {breakdown}
+                                    {delta !== 0 && (
+                                        <span
+                                            className={`ml-2 font-semibold ${
+                                                delta > 0
+                                                    ? "text-green-700"
+                                                    : "text-destructive"
+                                            }`}
+                                        >
+                                            {delta > 0 ? "+" : ""}
+                                            {delta} vs. current
+                                        </span>
+                                    )}
                                 </p>
                             </div>
 
@@ -118,6 +135,26 @@ export default function EditBatchModal({ batch, medicine, children }) {
                                     placeholder="e.g. A-12"
                                 />
                                 <InputError message={errors.shelf_number} />
+                            </div>
+
+                            <div className="grid gap-3">
+                                <Label htmlFor="edit_adjustment_reason">
+                                    Reason for adjustment
+                                </Label>
+                                <Input
+                                    id="edit_adjustment_reason"
+                                    value={data.adjustment_reason}
+                                    onChange={(e) =>
+                                        setData(
+                                            "adjustment_reason",
+                                            e.target.value,
+                                        )
+                                    }
+                                    placeholder="e.g. Physical count correction"
+                                />
+                                <InputError
+                                    message={errors.adjustment_reason}
+                                />
                             </div>
                         </div>
 

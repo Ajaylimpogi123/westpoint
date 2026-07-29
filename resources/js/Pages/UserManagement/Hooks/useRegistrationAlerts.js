@@ -3,9 +3,13 @@ import { useEffect } from "react";
 import Swal from "sweetalert2";
 
 export function showRegistrationSuccess(message = "User registered successfully.") {
+    return showUserManagementSuccess(message);
+}
+
+export function showUserManagementSuccess(message) {
     return Swal.fire({
         icon: "success",
-        title: "Registration Successful",
+        title: "Success",
         text: message,
         confirmButtonColor: "#16a34a",
     });
@@ -40,7 +44,7 @@ export function useRegistrationAlerts() {
 
     useEffect(() => {
         if (flash?.success) {
-            showRegistrationSuccess(flash.success);
+            showUserManagementSuccess(flash.success);
         }
 
         if (flash?.error) {
