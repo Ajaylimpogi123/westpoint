@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class SaleItem extends Model
 {
@@ -44,5 +45,14 @@ class SaleItem extends Model
     public function batch(): BelongsTo
     {
         return $this->belongsTo(ProductQty::class, 'products_qty_id');
+    }
+
+    /**
+     * Which batches supplied the pieces when one sale line spans multiple lots.
+     * Empty for single-batch lines — products_qty_id on the sale item is enough.
+     */
+    public function allocations(): HasMany
+    {
+        return $this->hasMany(SaleItemAllocation::class, 'sale_item_id');
     }
 }

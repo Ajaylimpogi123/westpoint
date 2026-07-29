@@ -12,6 +12,7 @@ use App\Models\PosCartItem;
 use App\Models\ProductQty;
 use App\Models\Sale;
 use App\Models\SaleItem;
+use App\Models\SaleItemAllocation;
 use App\Services\DocumentNumberService;
 use App\Services\IdempotencyGuard;
 use App\Services\InventoryStockService;
@@ -827,6 +828,10 @@ class PosController extends Controller
     }
 
     /**
+     * Persist one commercial sale line, then record batch allocations when FEFO
+     * pulled from more than one lot. Split-batch lines used to be rewritten as
+     * multiple Piece rows, which broke receipts and unit-based reporting.
+     *
      * @param  array{
      *     product_id: int,
      *     unit_type: string,
@@ -840,40 +845,25 @@ class PosController extends Controller
     {
         $deductions = $lineItem['deductions'];
 
-        if (count($deductions) === 1) {
-            SaleItem::create([
-                'sale_id' => $saleId,
-                'product_id' => $lineItem['product_id'],
-                'products_qty_id' => $deductions[0]['batch_id'],
-                'unit_type' => $lineItem['unit_type'],
-                'quantity_sold' => $lineItem['quantity_sold'],
-                'price_used' => $lineItem['price_used'],
-                'total_price' => $lineItem['total_price'],
-            ]);
+        $saleItem = SaleItem::create([
+            'sale_id' => $saleId,
+            'product_id' => $lineItem['product_id'],
+            'products_qty_id' => $deductions[0]['batch_id'] ?? null,
+            'unit_type' => $lineItem['unit_type'],
+            'quantity_sold' => $lineItem['quantity_sold'],
+            'price_used' => $lineItem['price_used'],
+            'total_price' => $lineItem['total_price'],
+        ]);
 
+        if (count($deductions) <= 1) {
             return;
         }
 
-        $totalPieces = array_sum(array_column($deductions, 'pieces'));
-        $allocatedTotal = 0.0;
-        $lastIndex = count($deductions) - 1;
-
-        foreach ($deductions as $index => $deduction) {
-            $isLast = $index === $lastIndex;
-            $portion = $isLast
-                ? round($lineItem['total_price'] - $allocatedTotal, 2)
-                : round(($deduction['pieces'] / $totalPieces) * $lineItem['total_price'], 2);
-
-            $allocatedTotal += $portion;
-
-            SaleItem::create([
-                'sale_id' => $saleId,
-                'product_id' => $lineItem['product_id'],
+        foreach ($deductions as $deduction) {
+            SaleItemAllocation::create([
+                'sale_item_id' => $saleItem->id,
                 'products_qty_id' => $deduction['batch_id'],
-                'unit_type' => 'Piece',
-                'quantity_sold' => $deduction['pieces'],
-                'price_used' => round($portion / max($deduction['pieces'], 1), 2),
-                'total_price' => $portion,
+                'pieces' => $deduction['pieces'],
             ]);
         }
     }
