@@ -9,14 +9,21 @@ import {
     TableRow,
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import StatusBadge from "@/Pages/CustomerManagement/Partials/StatusBadge";
 import { router, useForm, usePage } from "@inertiajs/react";
+import { Pencil, UserCheck, UserX } from "lucide-react";
 import { useEffect, useMemo } from "react";
+import Swal from "sweetalert2";
+import EditModal from "./EditModal";
 
 const SUPERADMIN_ROLE_ID = 3;
 
 export default function UsersTable({ users, branches, roles, filters }) {
     const { auth } = usePage().props;
     const roleId = auth?.user?.role_id;
+    const currentUserId = auth?.user?.id;
+
+    const { patch } = useForm();
 
     const availableRoles = useMemo(
         () =>
@@ -36,12 +43,14 @@ export default function UsersTable({ users, branches, roles, filters }) {
     const { data: filterData, setData: setFilterData } = useForm({
         role_id: filters?.role_id || "",
         branch_id: filters?.branch_id || "",
+        status: filters?.status || "",
     });
 
     useEffect(() => {
         setFilterData({
             role_id: filters?.role_id || "",
             branch_id: filters?.branch_id || "",
+            status: filters?.status || "",
         });
     }, [filters]);
 
@@ -51,6 +60,7 @@ export default function UsersTable({ users, branches, roles, filters }) {
             {
                 role_id: overrides.role_id ?? filterData.role_id,
                 branch_id: overrides.branch_id ?? filterData.branch_id,
+                status: overrides.status ?? filterData.status,
             },
             {
                 preserveState: true,
@@ -62,7 +72,7 @@ export default function UsersTable({ users, branches, roles, filters }) {
     };
 
     const clearFilters = () => {
-        setFilterData({ role_id: "", branch_id: "" });
+        setFilterData({ role_id: "", branch_id: "", status: "" });
         router.get(
             route("user-management.index"),
             {},
@@ -81,6 +91,7 @@ export default function UsersTable({ users, branches, roles, filters }) {
             {
                 role_id: filterData.role_id,
                 branch_id: filterData.branch_id,
+                status: filterData.status,
                 page,
             },
             {
@@ -92,7 +103,31 @@ export default function UsersTable({ users, branches, roles, filters }) {
         );
     };
 
-    const hasActiveFilters = filterData.role_id || filterData.branch_id;
+    const handleToggleStatus = (user) => {
+        const isActive = user.status !== "inactive";
+
+        Swal.fire({
+            title: isActive ? "Deactivate Account?" : "Activate Account?",
+            text: isActive
+                ? `Deactivate "${user.name}"? They will no longer be able to log in.`
+                : `Reactivate "${user.name}"? They will be able to log in again.`,
+            icon: "warning",
+            showCancelButton: true,
+            confirmButtonColor: isActive ? "#dc2626" : "#16a34a",
+            cancelButtonColor: "#6b7280",
+            confirmButtonText: isActive ? "Deactivate" : "Activate",
+        }).then((result) => {
+            if (result.isConfirmed) {
+                patch(route("user-management.toggle-status", user.id), {
+                    preserveScroll: true,
+                    only: ["users", "flash"],
+                });
+            }
+        });
+    };
+
+    const hasActiveFilters =
+        filterData.role_id || filterData.branch_id || filterData.status;
 
     return (
         <Card>
@@ -143,6 +178,24 @@ export default function UsersTable({ users, branches, roles, filters }) {
                         </select>
                     </div>
 
+                    <div className="flex-1">
+                        <InputLabel htmlFor="filter_status" value="Filter by Status" />
+                        <select
+                            id="filter_status"
+                            value={filterData.status}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                            onChange={(e) => {
+                                const status = e.target.value;
+                                setFilterData("status", status);
+                                applyFilters({ status });
+                            }}
+                        >
+                            <option value="">All Statuses</option>
+                            <option value="active">Active</option>
+                            <option value="inactive">Deactivated</option>
+                        </select>
+                    </div>
+
                     {hasActiveFilters && (
                         <Button type="button" variant="outline" onClick={clearFilters}>
                             Clear Filters
@@ -158,25 +211,88 @@ export default function UsersTable({ users, branches, roles, filters }) {
                                 <TableHead>Email</TableHead>
                                 <TableHead>Role</TableHead>
                                 <TableHead>Branch</TableHead>
+                                <TableHead>Status</TableHead>
+                                <TableHead className="text-right">Actions</TableHead>
                             </TableRow>
                         </TableHeader>
                         <TableBody>
                             {visibleUsers.length ? (
-                                visibleUsers.map((user) => (
-                                    <TableRow key={user.id}>
-                                        <TableCell>{user.name}</TableCell>
-                                        <TableCell>{user.email}</TableCell>
-                                        <TableCell>
-                                            {user.role?.role_name || "-"}
-                                        </TableCell>
-                                        <TableCell>
-                                            {user.branch?.branch_name || "-"}
-                                        </TableCell>
-                                    </TableRow>
-                                ))
+                                visibleUsers.map((user) => {
+                                    const isActive = user.status !== "inactive";
+                                    const isCurrentUser =
+                                        user.id === currentUserId;
+
+                                    return (
+                                        <TableRow key={user.id}>
+                                            <TableCell>{user.name}</TableCell>
+                                            <TableCell>{user.email}</TableCell>
+                                            <TableCell>
+                                                {user.role?.role_name || "-"}
+                                            </TableCell>
+                                            <TableCell>
+                                                {user.branch?.branch_name || "-"}
+                                            </TableCell>
+                                            <TableCell>
+                                                <StatusBadge
+                                                    status={
+                                                        user.status || "active"
+                                                    }
+                                                />
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-2">
+                                                    <EditModal
+                                                        user={user}
+                                                        branches={branches}
+                                                        roles={roles}
+                                                    >
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className="flex items-center gap-1"
+                                                        >
+                                                            <Pencil className="h-3.5 w-3.5" />
+                                                            Edit
+                                                        </Button>
+                                                    </EditModal>
+                                                    {!isCurrentUser && (
+                                                        <Button
+                                                            type="button"
+                                                            variant="outline"
+                                                            size="sm"
+                                                            className={`flex items-center gap-1 ${
+                                                                isActive
+                                                                    ? "text-red-600 hover:text-red-700"
+                                                                    : "text-green-700 hover:text-green-800"
+                                                            }`}
+                                                            onClick={() =>
+                                                                handleToggleStatus(
+                                                                    user,
+                                                                )
+                                                            }
+                                                        >
+                                                            {isActive ? (
+                                                                <>
+                                                                    <UserX className="h-3.5 w-3.5" />
+                                                                    Deactivate
+                                                                </>
+                                                            ) : (
+                                                                <>
+                                                                    <UserCheck className="h-3.5 w-3.5" />
+                                                                    Activate
+                                                                </>
+                                                            )}
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    );
+                                })
                             ) : (
                                 <TableRow>
-                                    <TableCell colSpan={4} className="h-24 text-center">
+                                    <TableCell colSpan={6} className="h-24 text-center">
                                         No users found.
                                     </TableCell>
                                 </TableRow>

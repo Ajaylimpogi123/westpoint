@@ -318,6 +318,87 @@ class WestpointFeatureTest extends TestCase
         $this->assertDatabaseHas('users', ['email' => 'newstaff@westpoint.test']);
     }
 
+    public function test_admin_can_update_user(): void
+    {
+        $this->actingAsWithSession($this->admin)
+            ->patch("/user-management/{$this->staff->id}", [
+                'name' => 'Updated Staff',
+                'email' => 'updatedstaff@westpoint.test',
+                'branch_id' => $this->branchB->id,
+                'role_id' => 1,
+            ])
+            ->assertRedirect(route('user-management.index'));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $this->staff->id,
+            'name' => 'Updated Staff',
+            'email' => 'updatedstaff@westpoint.test',
+            'branch_id' => $this->branchB->id,
+        ]);
+    }
+
+    public function test_admin_can_deactivate_user(): void
+    {
+        $this->actingAsWithSession($this->admin)
+            ->patch("/user-management/{$this->staff->id}/toggle-status")
+            ->assertRedirect(route('user-management.index'));
+
+        $this->assertDatabaseHas('users', [
+            'id' => $this->staff->id,
+            'status' => 'inactive',
+        ]);
+    }
+
+    public function test_deactivated_user_cannot_log_in(): void
+    {
+        $this->staff->update(['status' => 'inactive']);
+
+        $this->post('/login', [
+            'email' => 'staff@westpoint.test',
+            'password' => 'password',
+        ])->assertSessionHasErrors('email');
+    }
+
+    public function test_admin_cannot_deactivate_self(): void
+    {
+        $this->actingAsWithSession($this->admin)
+            ->patch("/user-management/{$this->admin->id}/toggle-status")
+            ->assertForbidden();
+    }
+
+    public function test_admin_cannot_manage_superadmin(): void
+    {
+        $this->actingAsWithSession($this->admin)
+            ->patch("/user-management/{$this->superadmin->id}", [
+                'name' => 'Hacked Superadmin',
+                'email' => $this->superadmin->email,
+                'branch_id' => $this->branchA->id,
+                'role_id' => 3,
+            ])
+            ->assertForbidden();
+    }
+
+    public function test_admin_can_filter_users_by_status(): void
+    {
+        $this->staff->update(['status' => 'inactive']);
+
+        $this->actingAsWithSession($this->admin)
+            ->get('/user-management?status=inactive')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('UserManagement/Index')
+                ->has('users.data', 1)
+                ->where('users.data.0.id', $this->staff->id)
+            );
+
+        $this->actingAsWithSession($this->admin)
+            ->get('/user-management?status=active')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->has('users.data', 2)
+            );
+    }
+
     public function test_stock_transfer_request_and_admin_approval(): void
     {
         $this->actingAsWithSession($this->staff)
