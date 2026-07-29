@@ -118,14 +118,6 @@ export default function Login({ status, canResetPassword }) {
                             <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
                                     <Label htmlFor="password">Password</Label>
-                                    {canResetPassword && (
-                                        // <Link
-                                        //     href={route("password.request")}
-                                        //     className="text-xs text-muted-foreground hover:text-foreground transition-colors underline-offset-4 hover:underline"
-                                        // >
-                                        //     Forgot password?
-                                        // </Link>
-                                    )}
                                 </div>
                                 <Input
                                     id="password"
@@ -205,8 +197,6 @@ export default function Login({ status, canResetPassword }) {
                         </form>
                     </CardContent>
                 </Card>
-
-
             </div>
         </div>
     );
