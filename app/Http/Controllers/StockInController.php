@@ -43,6 +43,7 @@ class StockInController extends Controller
             'items.*.quantity_received' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
             'items.*.shelf_number' => ['nullable', 'string', 'max:50'],
             'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
+            'items.*.confirm_duplicate_lot' => ['sometimes', 'boolean'],
         ], [
             'items.*.expiry_date.after' => 'The expiry date must be in the future. Expired stock cannot be received.',
         ]);
@@ -81,6 +82,15 @@ class StockInController extends Controller
                     $unitType = UnitType::fromInput($item['unit_type']);
                     $quantity = (int) $item['quantity_received'];
                     $quantityInPieces = $medicine->toPieces($quantity, $unitType);
+
+                    InventoryStockService::assertStockInIntentAllowed(
+                        productId: $medicine->id,
+                        branchId: $branchId,
+                        lotNumber: $item['batch_number'],
+                        expiry: $item['expiry_date'],
+                        shelfNumber: $item['shelf_number'] ?? null,
+                        confirmDuplicateLot: (bool) ($item['confirm_duplicate_lot'] ?? false),
+                    );
 
                     StockInItem::create([
                         'stock_in_id' => $stockIn->stock_in_id,

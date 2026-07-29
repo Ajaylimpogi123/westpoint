@@ -90,9 +90,20 @@ class MedicineInventoryController extends Controller
                 ->forBranch($branchId)
                 ->with(['batches' => function ($batchQuery) {
                     $batchQuery
-                        ->available()
+                        ->whereNotIn('status', [
+                            ProductQty::STATUS_DELETED,
+                            ProductQty::STATUS_EXPIRED,
+                        ])
                         ->orderBy('expiry')
-                        ->select(['id', 'product_id', 'lot_number', 'expiry', 'shelf_number', 'quantity']);
+                        ->select([
+                            'id',
+                            'product_id',
+                            'lot_number',
+                            'expiry',
+                            'shelf_number',
+                            'quantity',
+                            'status',
+                        ]);
                 }])
                 ->orderBy('med_name')
                 ->get([

@@ -16,6 +16,53 @@ import useStockIn from "../Hooks/useStockIn";
 import MedicineSearchSelect from "./MedicineSearchSelect";
 import { isBoxUnit, unitLabel } from "@/lib/units";
 
+function BatchIntentNotice({
+    batchIntent,
+    needsDuplicateConfirmation,
+    draft,
+    setDraft,
+}) {
+    if (!batchIntent.message) {
+        return null;
+    }
+
+    const toneClasses = {
+        merge: "border-green-200 bg-green-50 text-green-950",
+        new: "border-border bg-muted/40 text-muted-foreground",
+        conflict: "border-amber-300 bg-amber-50 text-amber-950",
+        shelf_split: "border-sky-200 bg-sky-50 text-sky-950",
+        incomplete: "border-border bg-muted/30 text-muted-foreground",
+    };
+
+    const tone =
+        toneClasses[batchIntent.mode] ?? toneClasses.incomplete;
+
+    return (
+        <div className={`space-y-2 rounded-md border px-3 py-2 text-sm ${tone}`}>
+            <p>{batchIntent.message}</p>
+            {needsDuplicateConfirmation && (
+                <label className="flex cursor-pointer items-start gap-2 pt-1">
+                    <input
+                        type="checkbox"
+                        className="mt-0.5"
+                        checked={draft.confirm_duplicate_lot}
+                        onChange={(event) =>
+                            setDraft((current) => ({
+                                ...current,
+                                confirm_duplicate_lot: event.target.checked,
+                            }))
+                        }
+                    />
+                    <span>
+                        I confirm this is a separate batch with the same lot
+                        number (not a typo on the expiry date).
+                    </span>
+                </label>
+            )}
+        </div>
+    );
+}
+
 function formatCurrency(value) {
     const amount = Number(value) || 0;
     return amount.toLocaleString(undefined, {
@@ -47,6 +94,11 @@ export default function StockInModal({
         addItemToBasket,
         removeItemFromBasket,
         piecesLabel,
+        batchIntent,
+        existingLots,
+        applyExistingLot,
+        needsDuplicateConfirmation,
+        setDraft,
         errors,
         processing,
         handleSubmit,
@@ -219,6 +271,64 @@ export default function StockInModal({
                                     </div>
                                 )}
 
+                                {selectedProduct && existingLots.length > 0 && (
+                                    <div className="grid gap-2">
+                                        <Label htmlFor="existing_batch_pick">
+                                            Receive into an existing batch
+                                        </Label>
+                                        <select
+                                            id="existing_batch_pick"
+                                            value=""
+                                            onChange={(event) => {
+                                                const lot = existingLots.find(
+                                                    (batch) =>
+                                                        String(batch.id) ===
+                                                        event.target.value,
+                                                );
+
+                                                if (lot) {
+                                                    applyExistingLot(lot);
+                                                }
+                                            }}
+                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                        >
+                                            <option value="">
+                                                Select a batch to fill lot
+                                                details…
+                                            </option>
+                                            {existingLots.map((lot) => {
+                                                const qty =
+                                                    Number(lot.quantity) || 0;
+                                                const expiry = lot.expiry
+                                                    ? String(lot.expiry).slice(
+                                                          0,
+                                                          10,
+                                                      )
+                                                    : "no expiry";
+                                                const shelf = lot.shelf_number
+                                                    ? ` · ${lot.shelf_number}`
+                                                    : "";
+
+                                                return (
+                                                    <option
+                                                        key={lot.id}
+                                                        value={lot.id}
+                                                    >
+                                                        {lot.lot_number} · exp{" "}
+                                                        {expiry}
+                                                        {shelf} · {qty} pcs
+                                                    </option>
+                                                );
+                                            })}
+                                        </select>
+                                        <p className="text-xs text-muted-foreground">
+                                            Or type a new lot below. Matching
+                                            lot + expiry + shelf adds to the
+                                            existing batch.
+                                        </p>
+                                    </div>
+                                )}
+
                                 <div className="grid grid-cols-2 gap-3">
                                     <div className="grid min-w-0 gap-2">
                                         <Label htmlFor="batch_number">
@@ -277,6 +387,15 @@ export default function StockInModal({
                                         )}
                                     </div>
                                 </div>
+
+                                <BatchIntentNotice
+                                    batchIntent={batchIntent}
+                                    needsDuplicateConfirmation={
+                                        needsDuplicateConfirmation
+                                    }
+                                    draft={draft}
+                                    setDraft={setDraft}
+                                />
 
                                 <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                                     <div className="grid gap-2">
@@ -441,6 +560,15 @@ export default function StockInModal({
                                                         name={`items[${index}][unit_type]`}
                                                         value={item.unit_type}
                                                     />
+                                                    <input
+                                                        type="hidden"
+                                                        name={`items[${index}][confirm_duplicate_lot]`}
+                                                        value={
+                                                            item.confirm_duplicate_lot
+                                                                ? "1"
+                                                                : "0"
+                                                        }
+                                                    />
 
                                                     <InputError
                                                         message={
@@ -458,6 +586,9 @@ export default function StockInModal({
                                                             ] ||
                                                             errors[
                                                                 `items.${index}.unit_type`
+                                                            ] ||
+                                                            errors[
+                                                                `items.${index}.confirm_duplicate_lot`
                                                             ]
                                                         }
                                                     />

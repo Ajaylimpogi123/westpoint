@@ -50,7 +50,11 @@ export default function useStockOut({ branchId, products }) {
         ? productMap[draft.pd_id] ?? null
         : null;
 
-    const availableLots = selectedProduct?.batches ?? [];
+    const availableLots = (selectedProduct?.batches ?? []).filter(
+        (lot) =>
+            (lot.status ?? "Active") === "Active" &&
+            Number(lot.quantity) > 0,
+    );
 
     // Lots are addressed by primary key, not lot number: the same lot number
     // can exist on several batches with different expiries or shelves, and

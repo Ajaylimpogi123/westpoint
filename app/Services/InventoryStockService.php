@@ -249,6 +249,96 @@ class InventoryStockService
             ->first();
     }
 
+    public const STOCK_IN_INTENT_INCOMPLETE = 'incomplete';
+    public const STOCK_IN_INTENT_NEW = 'new';
+    public const STOCK_IN_INTENT_MERGE = 'merge';
+    public const STOCK_IN_INTENT_CONFLICT = 'conflict';
+    public const STOCK_IN_INTENT_SHELF_SPLIT = 'shelf_split';
+
+    /**
+     * Whether a stock-in line will merge, create a new batch, or reuse a lot
+     * number with different identifying details.
+     */
+    public static function stockInIntent(
+        int $productId,
+        int $branchId,
+        ?string $lotNumber,
+        ?string $expiry,
+        ?string $shelfNumber,
+    ): string {
+        $lotNumber = self::normalizeOptionalString($lotNumber);
+
+        if ($lotNumber === null) {
+            return self::STOCK_IN_INTENT_INCOMPLETE;
+        }
+
+        if (self::findMatchingBatch($productId, $branchId, $lotNumber, $expiry, $shelfNumber) !== null) {
+            return self::STOCK_IN_INTENT_MERGE;
+        }
+
+        $sameLot = ProductQty::query()
+            ->where('product_id', $productId)
+            ->whereNotIn('status', self::LOCKED_STATUSES)
+            ->whereHas('product', fn (Builder $productQuery) => $productQuery->where('branch_id', $branchId))
+            ->where('lot_number', $lotNumber)
+            ->get();
+
+        if ($sameLot->isEmpty()) {
+            return self::STOCK_IN_INTENT_NEW;
+        }
+
+        $normalizedExpiry = ($expiry === null || $expiry === '') ? null : $expiry;
+
+        $sameLotAndExpiry = $sameLot->filter(function (ProductQty $batch) use ($normalizedExpiry) {
+            $batchExpiry = $batch->expiry?->format('Y-m-d');
+
+            return $batchExpiry === $normalizedExpiry;
+        });
+
+        if ($sameLotAndExpiry->isEmpty()) {
+            return self::STOCK_IN_INTENT_CONFLICT;
+        }
+
+        return self::STOCK_IN_INTENT_SHELF_SPLIT;
+    }
+
+    /**
+     * @throws \RuntimeException when the lot number exists with a different expiry
+     */
+    public static function assertStockInIntentAllowed(
+        int $productId,
+        int $branchId,
+        string $lotNumber,
+        string $expiry,
+        ?string $shelfNumber,
+        bool $confirmDuplicateLot,
+    ): void {
+        $intent = self::stockInIntent($productId, $branchId, $lotNumber, $expiry, $shelfNumber);
+
+        if ($intent !== self::STOCK_IN_INTENT_CONFLICT) {
+            return;
+        }
+
+        if ($confirmDuplicateLot) {
+            return;
+        }
+
+        $existing = ProductQty::query()
+            ->where('product_id', $productId)
+            ->whereNotIn('status', self::LOCKED_STATUSES)
+            ->whereHas('product', fn (Builder $productQuery) => $productQuery->where('branch_id', $branchId))
+            ->where('lot_number', trim($lotNumber))
+            ->orderBy('expiry')
+            ->first();
+
+        $onFileExpiry = $existing?->expiry?->format('d M Y') ?? 'unknown';
+
+        throw new \RuntimeException(
+            "Lot {$lotNumber} already exists with expiry {$onFileExpiry}. "
+            . 'Confirm that you intend to create a separate batch, or match the expiry on file.'
+        );
+    }
+
     private static function matchingBatchQuery(
         int $productId,
         int $branchId,

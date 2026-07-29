@@ -10,6 +10,12 @@ import {
     toPieces,
 } from "@/lib/units";
 import { newIdempotencyKey } from "@/lib/idempotency";
+import {
+    BATCH_INTENT,
+    batchToDraftFields,
+    existingLotsForProduct,
+    resolveBatchIntent,
+} from "../lib/batchIntent";
 
 const emptyDraft = () => ({
     pd_id: "",
@@ -18,6 +24,7 @@ const emptyDraft = () => ({
     quantity_received: 1,
     shelf_number: "",
     unit_type: UNIT_PIECE,
+    confirm_duplicate_lot: false,
 });
 
 const emptyForm = (branchId) => ({
@@ -50,6 +57,16 @@ export default function useStockIn({ branchId, products }) {
     const boxesUnavailable =
         selectedProduct !== null && !hasValidPackSize(selectedProduct);
 
+    const batchIntent = useMemo(
+        () => resolveBatchIntent(selectedProduct, draft),
+        [selectedProduct, draft.batch_number, draft.expiry_date, draft.shelf_number],
+    );
+
+    const existingLots = useMemo(
+        () => existingLotsForProduct(selectedProduct),
+        [selectedProduct],
+    );
+
     const openModal = () => {
         clearErrors();
         setDraft(emptyDraft());
@@ -68,18 +85,23 @@ export default function useStockIn({ branchId, products }) {
         setDraft((current) => {
             const next = { ...current, [field]: value };
 
-            // Lot number, expiry, and quantity belong to the medicine that was
-            // selected when they were typed. Carrying them onto a different
-            // medicine is how a batch ends up labelled with another product's
-            // lot number.
             if (field === "pd_id" && value !== current.pd_id) {
                 next.batch_number = "";
                 next.expiry_date = "";
                 next.quantity_received = 1;
                 next.shelf_number = "";
                 next.unit_type = UNIT_PIECE;
+                next.confirm_duplicate_lot = false;
 
                 return next;
+            }
+
+            if (
+                field === "batch_number" ||
+                field === "expiry_date" ||
+                field === "shelf_number"
+            ) {
+                next.confirm_duplicate_lot = false;
             }
 
             if (field === "quantity_received") {
@@ -97,6 +119,14 @@ export default function useStockIn({ branchId, products }) {
 
             return next;
         });
+    };
+
+    const applyExistingLot = (batch) => {
+        setDraft((current) => ({
+            ...current,
+            ...batchToDraftFields(batch),
+            confirm_duplicate_lot: false,
+        }));
     };
 
     const normalizeQuantity = () => {
@@ -130,12 +160,17 @@ export default function useStockIn({ branchId, products }) {
         [selectedProduct, draft.quantity_received, draft.unit_type],
     );
 
+    const needsDuplicateConfirmation =
+        batchIntent.mode === BATCH_INTENT.CONFLICT &&
+        !draft.confirm_duplicate_lot;
+
     const canAddToBasket =
         Boolean(draft.pd_id) &&
         draft.batch_number.trim() !== "" &&
         Boolean(draft.expiry_date) &&
         Number(draft.quantity_received) >= 1 &&
-        !(isBoxUnit(draft.unit_type) && boxesUnavailable);
+        !(isBoxUnit(draft.unit_type) && boxesUnavailable) &&
+        !needsDuplicateConfirmation;
 
     const addItemToBasket = () => {
         if (!canAddToBasket) {
@@ -151,9 +186,8 @@ export default function useStockIn({ branchId, products }) {
                 quantity_received: Number(draft.quantity_received),
                 shelf_number: draft.shelf_number.trim(),
                 unit_type: draft.unit_type,
-                // Display only. The server recomputes from the product's
-                // current pack_size so a concurrent edit cannot make the
-                // booked quantity differ from the validated one.
+                confirm_duplicate_lot:
+                    batchIntent.mode === BATCH_INTENT.CONFLICT,
                 pieces_preview: piecesPreview,
             },
         ]);
@@ -182,6 +216,7 @@ export default function useStockIn({ branchId, products }) {
     };
 
     return {
+        BATCH_INTENT,
         UNIT_TYPES,
         open,
         openModal,
@@ -190,9 +225,14 @@ export default function useStockIn({ branchId, products }) {
         setData,
         draft,
         updateDraft,
+        setDraft,
         normalizeQuantity,
         selectedProduct,
         boxesUnavailable,
+        batchIntent,
+        existingLots,
+        applyExistingLot,
+        needsDuplicateConfirmation,
         canAddToBasket,
         productMap,
         products: products ?? [],
