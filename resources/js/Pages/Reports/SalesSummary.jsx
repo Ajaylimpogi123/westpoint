@@ -1,6 +1,9 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import ReportFilterBar from "./Partials/ReportFilterBar";
 import DataTable from "./Partials/DataTable";
+import SalesSummaryCards from "./Partials/SalesSummaryCards";
+import PaymentMethodBreakdownChart from "./Partials/PaymentMethodBreakdownChart";
+import SalesByDayChart from "./Partials/SalesByDayChart";
 
 export default function SalesSummary({
     filters,
@@ -16,15 +19,16 @@ export default function SalesSummary({
         >
             <div className="relative z-10 py-8">
                 <div className="mx-auto w-full min-w-0 max-w-full space-y-6 px-4 sm:px-6 lg:px-8">
-                    <div className="mb-6 rounded-2xl text-white shadow-sm">
+                    <div>
                         <h1 className="text-3xl font-bold tracking-tight text-white">
                             Sales Summary
                         </h1>
-                        <p className="mt-2 text-sm text-white">
+                        <p className="mt-2 text-md text-white">
                             Overview of sales performance, including transaction
                             counts, revenue, and payment method breakdown.
                         </p>
                     </div>
+
                     <ReportFilterBar
                         routeName="reports.sales-summary"
                         filters={filters}
@@ -32,40 +36,26 @@ export default function SalesSummary({
                         paymentMethodOptions={paymentMethods}
                     />
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6 relative z-10">
-                        {[
-                            ["Transactions", totals.transaction_count],
-                            [
-                                "Gross",
-                                `₱${Number(totals.gross_amount).toLocaleString()}`,
-                            ],
-                            [
-                                "Discounts",
-                                `₱${Number(totals.discount_amount).toLocaleString()}`,
-                            ],
-                            [
-                                "Net",
-                                `₱${Number(totals.net_amount).toLocaleString()}`,
-                            ],
-                        ].map(([label, value]) => (
-                            <div
-                                key={label}
-                                className="bg-white rounded-lg shadow-sm p-4"
-                            >
-                                <div className="text-xs text-slate-500 uppercase">
-                                    {label}
-                                </div>
-                                <div className="text-xl font-semibold text-slate-800">
-                                    {value}
-                                </div>
-                            </div>
-                        ))}
+                    <SalesSummaryCards
+                        totals={{
+                            transaction_count: totals.transaction_count,
+                            gross_total: totals.gross_amount,
+                            discount_total: totals.discount_amount,
+                            net_total: totals.net_amount,
+                        }}
+                    />
+
+                    <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
+                        <PaymentMethodBreakdownChart
+                            breakdown={byPaymentMethod}
+                        />
+                        <SalesByDayChart byDay={byDay} />
                     </div>
 
-                    <h3 className="text-sm font-semibold text-slate-500 uppercase mb-2">
-                        By Payment Method
-                    </h3>
-                    <div className="mb-6">
+                    <div>
+                        <h3 className="text-xs font-semibold text-[#8C93A5] uppercase tracking-widest mb-3">
+                            By Payment Method
+                        </h3>
                         <DataTable
                             columns={[
                                 { key: "payment_method", label: "Method" },
@@ -81,22 +71,27 @@ export default function SalesSummary({
                         />
                     </div>
 
-                    <h3 className="text-sm font-semibold text-slate-500 uppercase mb-2">
-                        By Day
-                    </h3>
-                    <DataTable
-                        columns={[
-                            { key: "sale_date", label: "Date" },
-                            { key: "transaction_count", label: "Transactions" },
-                            {
-                                key: "net_amount",
-                                label: "Net",
-                                render: (r) =>
-                                    `₱${Number(r.net_amount).toLocaleString()}`,
-                            },
-                        ]}
-                        rows={byDay}
-                    />
+                    <div>
+                        <h3 className="text-xs font-semibold text-[#8C93A5] uppercase tracking-widest mb-3">
+                            By Day
+                        </h3>
+                        <DataTable
+                            columns={[
+                                { key: "sale_date", label: "Date" },
+                                {
+                                    key: "transaction_count",
+                                    label: "Transactions",
+                                },
+                                {
+                                    key: "net_amount",
+                                    label: "Net",
+                                    render: (r) =>
+                                        `₱${Number(r.net_amount).toLocaleString()}`,
+                                },
+                            ]}
+                            rows={byDay}
+                        />
+                    </div>
                 </div>
             </div>
         </AuthenticatedLayout>

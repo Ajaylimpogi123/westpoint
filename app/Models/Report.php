@@ -100,6 +100,57 @@ class Report
 
     return $query->paginate($filters['per_page'] ?? 25)->withQueryString();
 }
+public static function salesDetailTotals(array $filters)
+{
+    [$from, $to] = static::dateRange($filters);
+
+    $query = DB::table('tbl_sales as s')
+        ->whereBetween('s.created_at', [$from, $to]);
+
+    static::applyBranch($query, $filters, 's.branch_id');
+
+    if (!empty($filters['user_id'])) {
+        $query->where('s.user_id', $filters['user_id']);
+    }
+
+    if (!empty($filters['payment_method'])) {
+        $query->where('s.payment_method', $filters['payment_method']);
+    }
+
+    return $query->selectRaw('
+        COUNT(*) as transaction_count,
+        COALESCE(SUM(s.gross_amount), 0) as gross_total,
+        COALESCE(SUM(s.discount_amount), 0) as discount_total,
+        COALESCE(SUM(s.net_amount), 0) as net_total
+    ')->first();
+}
+
+public static function salesDetailByPaymentMethod(array $filters)
+{
+    [$from, $to] = static::dateRange($filters);
+
+    $query = DB::table('tbl_sales as s')
+        ->whereBetween('s.created_at', [$from, $to]);
+
+    static::applyBranch($query, $filters, 's.branch_id');
+
+    if (!empty($filters['user_id'])) {
+        $query->where('s.user_id', $filters['user_id']);
+    }
+
+    if (!empty($filters['payment_method'])) {
+        $query->where('s.payment_method', $filters['payment_method']);
+    }
+
+    return $query->selectRaw('
+        s.payment_method,
+        COUNT(*) as count,
+        COALESCE(SUM(s.net_amount), 0) as total
+    ')
+        ->groupBy('s.payment_method')
+        ->orderByDesc('total')
+        ->get();
+}
 
    public static function topProducts(array $filters, int $limit = 20)
 {

@@ -38,18 +38,19 @@ class ReportController extends Controller
             'paymentMethods' => DB::table('tbl_sales')->distinct()->pluck('payment_method')->filter()->values(),
         ]);
     }
+public function salesDetail(Request $request)
+{
+    $filters = $request->only(['date_from', 'date_to', 'branch_id', 'user_id', 'payment_method', 'per_page']);
 
-    public function salesDetail(Request $request)
-    {
-        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'user_id', 'payment_method', 'per_page']);
-
-        return Inertia::render('Reports/SalesDetail', [
-            'filters' => $filters,
-            'sales' => Report::salesDetail($filters),
-            'branches' => $this->branchOptions(),
-            'paymentMethods' => DB::table('tbl_sales')->distinct()->pluck('payment_method')->filter()->values(),
-        ]);
-    }
+    return Inertia::render('Reports/SalesDetail', [
+        'filters' => $filters,
+        'sales' => Report::salesDetail($filters),
+        'totals' => Report::salesDetailTotals($filters),
+        'paymentBreakdown' => Report::salesDetailByPaymentMethod($filters),
+        'branches' => $this->branchOptions(),
+        'paymentMethods' => DB::table('tbl_sales')->distinct()->pluck('payment_method')->filter()->values(),
+    ]);
+}
 
     public function topProducts(Request $request)
     {
