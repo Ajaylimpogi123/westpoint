@@ -27,18 +27,25 @@ class HandleInertiaRequests extends Middleware
      *
      * @return array<string, mixed>
      */
+
+
     public function share(Request $request): array
-    {
-        return [
-            ...parent::share($request),
-            'auth' => [
-                'user' => $request->user(),
-            ],
-            'flash' => fn () => [
-                'success' => $request->session()->get('success'),
-                'error' => $request->session()->get('error'),
-                'sale_id' => $request->session()->get('sale_id'),
-            ],
-        ];
-    }
+{
+    return [
+        ...parent::share($request),
+        'auth' => [
+            'user' => $request->user(),
+        ],
+        'flash' => fn () => [
+            'success' => $request->session()->get('success'),
+            'error' => $request->session()->get('error'),
+            'sale_id' => $request->session()->get('sale_id'),
+        ],
+        'notifications' => fn () => [
+            'pendingStockTransfers' => $request->user()?->role_id === 2
+                ? \App\Models\StockTransfer::countPendingForApprovers()
+                : 0,
+        ],
+    ];
+}
 }
