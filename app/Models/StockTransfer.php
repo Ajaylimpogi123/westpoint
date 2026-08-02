@@ -86,7 +86,10 @@ class StockTransfer extends Model
 
         return 'TR-' . $year . '-' . str_pad($sequence, 5, '0', STR_PAD_LEFT);
     }
-
+public static function countPendingForApprovers(): int
+{
+    return static::where('status', 'pending')->count();
+}
     /**
      * Check if this transfer can still be acted upon
      */
