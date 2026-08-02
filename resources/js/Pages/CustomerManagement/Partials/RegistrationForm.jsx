@@ -26,7 +26,10 @@ export default function RegistrationForm({ branches, branchId, branchName }) {
                 <form onSubmit={submit} className="max-w-xl">
                     <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                         <div>
-                            <InputLabel htmlFor="first_name" value="First Name" />
+                            <InputLabel
+                                htmlFor="first_name"
+                                value="First Name"
+                            />
                             <TextInput
                                 id="first_name"
                                 name="first_name"
@@ -89,7 +92,10 @@ export default function RegistrationForm({ branches, branchId, branchName }) {
                     </div>
 
                     <div className="mt-4">
-                        <InputLabel htmlFor="customer_type" value="Customer Type" />
+                        <InputLabel
+                            htmlFor="customer_type"
+                            value="Customer Type"
+                        />
                         <select
                             id="customer_type"
                             name="customer_type"
@@ -166,9 +172,14 @@ export default function RegistrationForm({ branches, branchId, branchName }) {
                                     }
                                     required
                                 >
-                                    <option value="">- Select a Branch -</option>
+                                    <option value="">
+                                        - Select a Branch -
+                                    </option>
                                     {branches.map((branch) => (
-                                        <option key={branch.id} value={branch.id}>
+                                        <option
+                                            key={branch.id}
+                                            value={branch.id}
+                                        >
                                             {branch.branch_name}
                                         </option>
                                     ))}

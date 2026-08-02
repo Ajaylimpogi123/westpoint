@@ -65,7 +65,7 @@ export default function Index({
             <Head title="Stock Transfers" />
 
             <div className="relative z-10 py-8">
-                <div className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto w-full min-w-0 max-w-full space-y-6 px-4 sm:px-6 lg:px-8">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-white">
                             Stock Transfer

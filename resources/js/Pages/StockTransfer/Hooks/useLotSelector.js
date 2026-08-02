@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { getDaysUntilExpiry } from "../lib/TransferHelpers";
+import { getDaysUntilExpiry } from "../lib/transferHelpers";
 
 /**
  * useLotSelector

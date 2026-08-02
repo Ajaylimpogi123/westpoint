@@ -38,7 +38,7 @@ export default function StockTransfers({ filters, transfers }) {
             header={<h2 className="text-xl font-semibold">Stock Transfers</h2>}
         >
             <div className="relative z-10 py-8">
-                <div className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto w-full min-w-0 max-w-full space-y-6 px-4 sm:px-6 lg:px-8">
                     <div className="mb-6 rounded-2xl text-white shadow-sm">
                         <h1 className="text-3xl font-bold tracking-tight text-white">
                             Stock Transfers Report
