@@ -1,6 +1,7 @@
 import { Head, Link, useForm } from "@inertiajs/react";
 
 import { Button } from "@/components/ui/button";
+<<<<<<< Updated upstream
 import {
     Card,
     CardContent,
@@ -11,6 +12,98 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+=======
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+
+function Capsule({ className, colorA, colorB, style }) {
+    return (
+        <svg
+            viewBox="0 0 200 88"
+            className={className}
+            style={style}
+            aria-hidden="true"
+        >
+            <defs>
+                <linearGradient
+                    id={`cap-${colorA}-${colorB}`}
+                    x1="0"
+                    y1="0"
+                    x2="1"
+                    y2="0"
+                >
+                    <stop offset="0%" stopColor={colorA} />
+                    <stop offset="50%" stopColor={colorA} />
+                    <stop offset="50%" stopColor={colorB} />
+                    <stop offset="100%" stopColor={colorB} />
+                </linearGradient>
+            </defs>
+            <rect
+                x="4"
+                y="4"
+                width="192"
+                height="80"
+                rx="40"
+                fill={`url(#cap-${colorA}-${colorB})`}
+            />
+            <rect
+                x="4"
+                y="4"
+                width="192"
+                height="80"
+                rx="40"
+                fill="none"
+                stroke="rgba(255,255,255,0.18)"
+                strokeWidth="1.5"
+            />
+            <ellipse
+                cx="55"
+                cy="26"
+                rx="20"
+                ry="9"
+                fill="rgba(255,255,255,0.35)"
+            />
+        </svg>
+    );
+}
+
+function Tablet({ className, color, style }) {
+    return (
+        <svg
+            viewBox="0 0 100 100"
+            className={className}
+            style={style}
+            aria-hidden="true"
+        >
+            <circle cx="50" cy="50" r="46" fill={color} opacity="0.9" />
+            <circle
+                cx="50"
+                cy="50"
+                r="46"
+                fill="none"
+                stroke="rgba(255,255,255,0.2)"
+                strokeWidth="1.5"
+            />
+            <line
+                x1="12"
+                y1="50"
+                x2="88"
+                y2="50"
+                stroke="rgba(255,255,255,0.3)"
+                strokeWidth="2"
+            />
+            <ellipse
+                cx="34"
+                cy="30"
+                rx="12"
+                ry="6"
+                fill="rgba(255,255,255,0.3)"
+            />
+        </svg>
+    );
+}
+>>>>>>> Stashed changes
 
 export default function Login({ status, canResetPassword }) {
     const { data, setData, post, processing, errors, reset } = useForm({
