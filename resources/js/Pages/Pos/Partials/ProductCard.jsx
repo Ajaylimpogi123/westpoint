@@ -1,5 +1,5 @@
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/Components/ui/card";
+import { Button } from "@/Components/ui/button";
 import { Plus } from "lucide-react";
 import GenericBadge from "./GenericBadge";
 import StockStatusBadge from "./StockStatusBadge";

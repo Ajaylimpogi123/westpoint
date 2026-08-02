@@ -1,6 +1,6 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import { Card, CardContent } from "@/Components/ui/card";
-import { Label } from "@/components/ui/label";
+import { Label } from "@/Components/ui/label";
 import {
     Table,
     TableBody,
@@ -8,7 +8,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/Components/ui/table";
 import { router } from "@inertiajs/react";
 import { Eye } from "lucide-react";
 import {

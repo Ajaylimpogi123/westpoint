@@ -4,13 +4,13 @@ import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import { CheckCircle2, Printer } from "lucide-react";
 import Swal from "sweetalert2";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/Components/ui/dialog";
 import {
     Table,
     TableBody,
@@ -18,7 +18,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/Components/ui/table";
 
 import { formatDateTime } from "@/lib/dates";
 import { isBoxUnit } from "@/lib/units";

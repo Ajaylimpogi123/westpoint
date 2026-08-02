@@ -1,12 +1,12 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router } from "@inertiajs/react";
 import { useForm } from "@inertiajs/react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import { Plus } from "lucide-react";
 import AddModal from "./Partials/AddModal";
 import React from "react";
 import { Search, X } from "lucide-react";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/Components/ui/input";
 
 import {
     Select,
@@ -16,7 +16,7 @@ import {
     SelectValue,
     SelectGroup,
     SelectLabel,
-} from "@/components/ui/select";
+} from "@/Components/ui/select";
 
 import Card from "./Partials/Card";
 import { handler } from "tailwindcss-animate";

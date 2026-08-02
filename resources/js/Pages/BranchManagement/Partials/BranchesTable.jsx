@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import {
     Table,
     TableBody,
@@ -6,7 +6,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/Components/ui/table";
 import { Card, CardContent } from "@/Components/ui/card";
 import { router, useForm } from "@inertiajs/react";
 import { Pencil, Trash2 } from "lucide-react";

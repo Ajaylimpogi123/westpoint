@@ -8,7 +8,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/Components/ui/table";
 import InputLabel from "@/Components/InputLabel";
 import { DollarSign, Receipt } from "lucide-react";
 import RevenueTrendChart from "./Dashboard/Partials/RevenueTrendChart";

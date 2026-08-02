@@ -23,21 +23,21 @@ import {
     TableHeader,
     TableRow,
     TableFooter,
-} from "@/components/ui/table";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
-import { Calendar } from "@/components/ui/calendar";
+} from "@/Components/ui/table";
+import { Input } from "@/Components/ui/input";
+import { Button } from "@/Components/ui/button";
+import { Calendar } from "@/Components/ui/calendar";
 import {
     Popover,
     PopoverContent,
     PopoverTrigger,
-} from "@/components/ui/popover";
+} from "@/Components/ui/popover";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/Components/ui/dropdown-menu";
 import { cn } from "@/lib/utils";
 import { formatPaymentMethod } from "../lib/historyHelpers";
 

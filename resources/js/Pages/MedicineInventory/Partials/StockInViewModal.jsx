@@ -2,13 +2,13 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Printer } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
-} from "@/components/ui/dialog";
+} from "@/Components/ui/dialog";
 import {
     Table,
     TableBody,
@@ -16,7 +16,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/Components/ui/table";
 
 import { formatDate, formatDateTime } from "@/lib/dates";
 

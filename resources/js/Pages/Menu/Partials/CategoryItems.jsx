@@ -5,9 +5,9 @@ import { router, useForm } from "@inertiajs/react";
 import { Card, CardContent } from "@/Components/ui/card";
 import { toast } from "sonner";
 import { CircleCheck, Utensils, Minus, Plus } from "lucide-react";
-import { ButtonGroup } from "@/components/ui/button-group";
-import { Field, FieldLabel } from "@/components/ui/field";
-import { Input } from "@/components/ui/input";
+import { ButtonGroup } from "@/Components/ui/button-group";
+import { Field, FieldLabel } from "@/Components/ui/field";
+import { Input } from "@/Components/ui/input";
 
 export default function CategoryItems({
     children,

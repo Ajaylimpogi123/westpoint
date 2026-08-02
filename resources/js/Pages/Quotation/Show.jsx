@@ -8,7 +8,7 @@ import {
 } from "./lib/quotationStatus";
 import { formatCustomerName } from "./lib/customerName";
 import { formatDate } from "@/lib/dates";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import { ArrowLeft } from "lucide-react";
 
 export default function Show({ quotation }) {

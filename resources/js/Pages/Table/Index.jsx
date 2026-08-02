@@ -1,7 +1,7 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, Link, router } from "@inertiajs/react";
 import { useForm, usePage } from "@inertiajs/react";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import { Plus, Trash, Edit, Search } from "lucide-react";
 import AddModal from "./Partials/AddModal";
 import React from "react";
