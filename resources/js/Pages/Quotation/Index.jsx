@@ -137,28 +137,32 @@ export default function Index({ quotations, filters }) {
         <AuthenticatedLayout>
             <Head title="Quotations" />
 
-            <div className="mx-auto max-w-6xl px-4 py-8 relative z-10">
-                <div className="mb-6 flex items-center justify-between">
-                    <h1 className="text-3xl font-bold tracking-tight text-white">
-                        Quotations
-                    </h1>
-                    <Link href={route("quotations.create")}>
-                        <Button size="sm" className="flex items-center gap-2">
-                            <Plus className="h-4 w-4" />
-                            New Quotation
-                        </Button>
-                    </Link>
-                </div>
+            <div className="py-8 relative z-10">
+                <div className="mx-auto w-full min-w-0 max-w-full space-y-6 px-4 sm:px-6 lg:px-8">
+                    <div className="mb-6 flex items-center justify-between">
+                        <h1 className="text-3xl font-bold tracking-tight text-white">
+                            Quotations
+                        </h1>
+                        <Link href={route("quotations.create")}>
+                            <Button
+                                size="sm"
+                                className="flex items-center gap-2"
+                            >
+                                <Plus className="h-4 w-4" />
+                                New Quotation
+                            </Button>
+                        </Link>
+                    </div>
 
-                <div className="mb-4 flex flex-wrap items-center gap-3">
-                    <input
-                        type="text"
-                        value={search}
-                        onChange={handleSearchChange}
-                        placeholder="Search Q.F. No. or customer..."
-                        className="w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
-                    />
-                    {/* <select
+                    <div className="mb-4 flex flex-wrap items-center gap-3">
+                        <input
+                            type="text"
+                            value={search}
+                            onChange={handleSearchChange}
+                            placeholder="Search Q.F. No. or customer..."
+                            className="w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                        />
+                        {/* <select
                         value={status}
                         onChange={(e) => changeStatus(e.target.value)}
                         className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
@@ -169,45 +173,48 @@ export default function Index({ quotations, filters }) {
                         <option value="approved">Approved</option>
                         <option value="cancelled">Cancelled</option>
                     </select> */}
-                </div>
-
-                <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
-                    <table className="w-full text-sm">
-                        <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
-                            <tr>
-                                <th className="px-4 py-3">Q.F. No.</th>
-                                <th className="px-4 py-3">Customer</th>
-                                <th className="px-4 py-3">Date</th>
-                                <th className="px-4 py-3">Items</th>
-                                <th className="px-4 py-3 text-right">Total</th>
-                                {/* <th className="px-4 py-3">Status</th> */}
-                                <th className="px-4 py-3 text-center">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody className="divide-y divide-slate-100">
-                            {quotations.data.length === 0 ? (
-                                <tr>
-                                    <td
-                                        colSpan={7}
-                                        className="px-4 py-8 text-center text-slate-400"
-                                    >
-                                        No quotations found.
-                                    </td>
-                                </tr>
-                            ) : (
-                                rows
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-
-                {paginationLinks && (
-                    <div className="mt-4 flex flex-wrap items-center justify-center gap-1">
-                        {paginationLinks}
                     </div>
-                )}
+
+                    <div className="overflow-x-auto rounded-xl border border-slate-200 bg-white">
+                        <table className="w-full text-sm">
+                            <thead className="bg-slate-50 text-left text-xs uppercase tracking-wide text-slate-500">
+                                <tr>
+                                    <th className="px-4 py-3">Q.F. No.</th>
+                                    <th className="px-4 py-3">Customer</th>
+                                    <th className="px-4 py-3">Date</th>
+                                    <th className="px-4 py-3">Items</th>
+                                    <th className="px-4 py-3 text-right">
+                                        Total
+                                    </th>
+                                    {/* <th className="px-4 py-3">Status</th> */}
+                                    <th className="px-4 py-3 text-center">
+                                        Actions
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                                {quotations.data.length === 0 ? (
+                                    <tr>
+                                        <td
+                                            colSpan={7}
+                                            className="px-4 py-8 text-center text-slate-400"
+                                        >
+                                            No quotations found.
+                                        </td>
+                                    </tr>
+                                ) : (
+                                    rows
+                                )}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {paginationLinks && (
+                        <div className="mt-4 flex flex-wrap items-center justify-center gap-1">
+                            {paginationLinks}
+                        </div>
+                    )}
+                </div>
             </div>
         </AuthenticatedLayout>
     );

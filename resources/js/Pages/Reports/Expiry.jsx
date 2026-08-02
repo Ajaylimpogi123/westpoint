@@ -32,7 +32,7 @@ export default function Expiry({ filters, batches, branches }) {
             header={<h2 className="text-xl font-semibold">Expiry Report</h2>}
         >
             <div className="relative z-10 py-8">
-                <div className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto w-full min-w-0 max-w-full space-y-6 px-4 sm:px-6 lg:px-8">
                     <div>
                         <h1 className="text-3xl font-bold tracking-tight text-white">
                             Expiration

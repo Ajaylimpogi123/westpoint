@@ -1,5 +1,5 @@
 import { Head, Link } from "@inertiajs/react";
-import { formatDate, formatDateTime } from "./lib/TransferHelpers";
+import { formatDate, formatDateTime } from "./lib/transferHelpers";
 
 /**
  * TransferSlip
@@ -12,12 +12,12 @@ import { formatDate, formatDateTime } from "./lib/TransferHelpers";
  * Props: transfer (with fromBranch, toBranch, requester, approver, items.product)
  */
 export default function TransferSlip({ transfer }) {
-    const totalQty = transfer.items?.reduce(
-        (sum, item) =>
-            sum +
-            (item.quantity_approved ?? item.quantity_requested ?? 0),
-        0,
-    ) ?? 0;
+    const totalQty =
+        transfer.items?.reduce(
+            (sum, item) =>
+                sum + (item.quantity_approved ?? item.quantity_requested ?? 0),
+            0,
+        ) ?? 0;
 
     return (
         <>

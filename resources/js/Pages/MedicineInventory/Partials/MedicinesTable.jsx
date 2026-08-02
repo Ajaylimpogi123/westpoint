@@ -37,7 +37,8 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
     const status = filters?.status || DEFAULT_STATUS;
     const stockLevel = filters?.stock_level || DEFAULT_STOCK_LEVEL;
     const form = filters?.form || "";
-    const genericOnly = Boolean(filters?.generic_only) &&
+    const genericOnly =
+        Boolean(filters?.generic_only) &&
         filters?.generic_only !== "0" &&
         filters?.generic_only !== "false";
 
@@ -110,7 +111,8 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
     );
 
     const handleGenericOnlyFilter = useCallback(
-        (pressed) => runFilterRequest({ generic_only: pressed ? 1 : 0, page: 1 }),
+        (pressed) =>
+            runFilterRequest({ generic_only: pressed ? 1 : 0, page: 1 }),
         [runFilterRequest],
     );
 
@@ -202,7 +204,11 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
                         )}
                     </Button>
 
-                    <Button type="button" onClick={executeSearch} disabled={loading}>
+                    <Button
+                        type="button"
+                        onClick={executeSearch}
+                        disabled={loading}
+                    >
                         {loading ? (
                             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                         ) : (
@@ -304,7 +310,9 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
                                         value={form || "__all__"}
                                         onValueChange={(value) =>
                                             handleFormFilter(
-                                                value === "__all__" ? "" : value,
+                                                value === "__all__"
+                                                    ? ""
+                                                    : value,
                                             )
                                         }
                                     >
@@ -315,14 +323,16 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
                                             <SelectItem value="__all__">
                                                 All forms
                                             </SelectItem>
-                                            {MEDICINE_FORMS.map((formOption) => (
-                                                <SelectItem
-                                                    key={formOption}
-                                                    value={formOption}
-                                                >
-                                                    {formOption}
-                                                </SelectItem>
-                                            ))}
+                                            {MEDICINE_FORMS.map(
+                                                (formOption) => (
+                                                    <SelectItem
+                                                        key={formOption}
+                                                        value={formOption}
+                                                    >
+                                                        {formOption}
+                                                    </SelectItem>
+                                                ),
+                                            )}
                                         </SelectContent>
                                     </Select>
                                 </div>
@@ -336,7 +346,9 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
                                             variant="outline"
                                             size="sm"
                                             pressed={genericOnly}
-                                            onPressedChange={handleGenericOnlyFilter}
+                                            onPressedChange={
+                                                handleGenericOnlyFilter
+                                            }
                                             className="h-9 gap-1.5 text-xs"
                                             aria-label="Generic Only"
                                         >
@@ -362,7 +374,7 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
                                 <TableHead>Pack Size</TableHead>
                                 <TableHead>Price (pc)</TableHead>
                                 <TableHead>Branch Stock (pcs)</TableHead>
-                                <TableHead className="text-right">
+                                <TableHead className="text-center">
                                     Actions
                                 </TableHead>
                             </TableRow>

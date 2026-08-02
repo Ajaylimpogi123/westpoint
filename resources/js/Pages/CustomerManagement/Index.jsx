@@ -16,14 +16,14 @@ export default function Index({
             <Head title="Customer Management" />
 
             <div className="relative z-10 py-8">
-                <div className="mx-auto max-w-7xl space-y-8 px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto w-full min-w-0 max-w-full space-y-6 px-4 sm:px-6 lg:px-8">
                     <div className="mb-8">
                         <h1 className="text-3xl font-bold tracking-tight text-white">
                             Customer Management
                         </h1>
                         <p className="mt-2 text-sm text-white">
-                            Register customers and manage the customer
-                            directory by branch
+                            Register customers and manage the customer directory
+                            by branch
                         </p>
                     </div>
 

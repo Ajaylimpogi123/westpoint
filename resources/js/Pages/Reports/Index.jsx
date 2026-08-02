@@ -126,7 +126,7 @@ export default function Index() {
             header={<h2 className="text-xl font-semibold">Reports</h2>}
         >
             <div className="relative z-10 py-8">
-                <div className="mx-auto max-w-7xl space-y-6 px-4 sm:px-6 lg:px-8">
+                <div className="mx-auto w-full min-w-0 max-w-full space-y-6 px-4 sm:px-6 lg:px-8">
                     <div className="mb-8 rounded-2xl bg-gradient-to-br from-teal-600 to-emerald-800 px-6 py-8 text-white shadow-sm">
                         {/* <p className="text-xs font-semibold uppercase tracking-wider text-teal-100">
                         Back office

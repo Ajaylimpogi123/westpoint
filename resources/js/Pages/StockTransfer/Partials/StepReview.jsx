@@ -1,4 +1,4 @@
-import { formatDate, PRIORITY_CONFIG } from "../lib/TransferHelpers";
+import { formatDate, PRIORITY_CONFIG } from "../lib/transferHelpers";
 
 /**
  * StepReview — Wizard Step 3
