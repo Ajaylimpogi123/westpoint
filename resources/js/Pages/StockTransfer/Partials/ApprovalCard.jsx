@@ -1,6 +1,6 @@
 import RejectForm from "./RejectForm";
 import TransferStatusBadge from "./TransferStatusBadge";
-import { formatDate, PRIORITY_CONFIG } from "../lib/transferHelpers";
+import { formatDate, PRIORITY_CONFIG } from "../lib/TransferHelpers";
 
 /**
  * ApprovalCard

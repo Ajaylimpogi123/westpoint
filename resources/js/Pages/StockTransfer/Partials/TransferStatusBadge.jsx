@@ -1,4 +1,4 @@
-import { STATUS_CONFIG } from "../lib/transferHelpers";
+import { STATUS_CONFIG } from "../lib/TransferHelpers";
 
 /**
  * TransferStatusBadge

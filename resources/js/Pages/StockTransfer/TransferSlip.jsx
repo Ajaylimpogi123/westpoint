@@ -1,5 +1,5 @@
 import { Head, Link } from "@inertiajs/react";
-import { formatDate, formatDateTime } from "./lib/transferHelpers";
+import { formatDate, formatDateTime } from "./lib/TransferHelpers";
 
 /**
  * TransferSlip

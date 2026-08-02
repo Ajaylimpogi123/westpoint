@@ -1,4 +1,4 @@
-import { getPipelineStep } from "../lib/transferHelpers";
+import { getPipelineStep } from "../lib/TransferHelpers";
 
 const STEPS = ["Requested", "Admin review", "Stock moved", "Slip ready"];
 

@@ -1,4 +1,4 @@
-import { getExpiryStatus, formatDate } from "../lib/transferHelpers";
+import { getExpiryStatus, formatDate } from "../lib/TransferHelpers";
 
 /**
  * LotRow
