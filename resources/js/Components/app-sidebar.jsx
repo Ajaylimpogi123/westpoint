@@ -99,12 +99,6 @@ export function AppSidebar({ ...props }) {
         roleId === 3
             ? [
                   {
-                      title: "User Management",
-                      url:
-                          route("user-management.index") + "#user-registration",
-                      icon: UserRound,
-                  },
-                  {
                       title: "Branch management",
                       url: route("branch-management.index"),
                       icon: LayoutDashboardIcon,
@@ -138,6 +132,17 @@ export function AppSidebar({ ...props }) {
                       title: "Quotation",
                       url: route("quotations.index"),
                       icon: FolderIcon,
+                  },
+                  {
+                      title: "Reports",
+                      url: route("reports.index"),
+                      icon: BarChartIcon,
+                  },
+                  {
+                      title: "User Management",
+                      url:
+                          route("user-management.index") + "#user-registration",
+                      icon: UserRound,
                   },
               ]
             : roleId === 2
@@ -176,6 +181,11 @@ export function AppSidebar({ ...props }) {
                         title: "Stock Transfer",
                         url: route("stock-transfers.index"),
                         icon: ArrowUpCircleIcon,
+                    },
+                    {
+                        title: "Reports",
+                        url: route("reports.index"),
+                        icon: BarChartIcon,
                     },
                     {
                         title: "User Management",

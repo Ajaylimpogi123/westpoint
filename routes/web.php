@@ -41,3 +41,4 @@ require __DIR__ . '/pos.php';
 require __DIR__ . '/stocktransfer.php';
 require __DIR__ . '/quotation.php';
 require __DIR__ . '/customer-management.php';
+require __DIR__ . '/report.php';
