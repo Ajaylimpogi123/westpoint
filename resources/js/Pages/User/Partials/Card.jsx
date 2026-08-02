@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import { Pencil, Trash2, Eye, MoreVertical, User } from "lucide-react";
 import EditModal from "./EditModal";
 
@@ -8,7 +8,7 @@ import {
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/Components/ui/dropdown-menu";
 
 export default function Card({ children, users }) {
     const handleDelete = (id) => {

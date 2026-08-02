@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Input } from "@/components/ui/input";
-import { Button } from "@/components/ui/button";
+import { Input } from "@/Components/ui/input";
+import { Button } from "@/Components/ui/button";
 import { cn } from "@/lib/utils";
 import { searchCustomers } from "../lib/posCustomerApi";
 import { formatCustomerName } from "../lib/customerDiscount";

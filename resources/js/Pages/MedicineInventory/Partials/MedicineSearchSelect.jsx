@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Input } from "@/components/ui/input";
+import { Input } from "@/Components/ui/input";
 import { cn } from "@/lib/utils";
 
 function formatMedicineLabel(product) {

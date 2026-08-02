@@ -1,5 +1,5 @@
-import { Button } from "@/components/ui/button";
-import { Label } from "@/components/ui/label";
+import { Button } from "@/Components/ui/button";
+import { Label } from "@/Components/ui/label";
 import {
     Table,
     TableBody,
@@ -7,7 +7,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/components/ui/table";
+} from "@/Components/ui/table";
 import { router } from "@inertiajs/react";
 import { Eye, Printer } from "lucide-react";
 import StockInViewModal from "./StockInViewModal";

@@ -5,7 +5,7 @@ import StatusBadge from "./Partials/StatusBadge";
 import { formatCustomerName } from "./lib/customerName";
 import { formatCurrency } from "./lib/quotationStatus";
 import { formatDate } from "@/lib/dates";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import { Plus } from "lucide-react";
 
 const SEARCH_DEBOUNCE_MS = 400;

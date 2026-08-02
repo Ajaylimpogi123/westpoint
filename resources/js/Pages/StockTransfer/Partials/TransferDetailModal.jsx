@@ -6,7 +6,7 @@ import {
     formatDate,
     formatDateTime,
     PRIORITY_CONFIG,
-} from "../lib/transferHelpers";
+} from "../lib/TransferHelpers";
 
 /**
  * TransferDetailModal

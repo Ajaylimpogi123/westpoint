@@ -3,7 +3,7 @@ import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import CheckoutReview from "./CheckoutReview";
 import { fetchCheckoutPreview } from "../lib/posCartApi";
-import { Button } from "@/components/ui/button";
+import { Button } from "@/Components/ui/button";
 import {
     Dialog,
     DialogContent,
@@ -12,16 +12,16 @@ import {
     DialogHeader,
     DialogTitle,
     DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
+} from "@/Components/ui/dialog";
+import { Input } from "@/Components/ui/input";
+import { Label } from "@/Components/ui/label";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/components/ui/select";
+} from "@/Components/ui/select";
 import { formatCurrency } from "../lib/pricing";
 import { formatCustomerName } from "../lib/customerDiscount";
 import { newIdempotencyKey } from "@/lib/idempotency";
