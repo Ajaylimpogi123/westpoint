@@ -111,10 +111,6 @@ export default function CheckoutDialog({
 
         setProcessing(true);
 
-        // Must open synchronously within the click handler so the browser
-        // does not treat it as a blocked popup once the request resolves.
-        const invoiceWindow = window.open("", "_blank");
-
         router.post(
             route("pos.store"),
             {
@@ -147,15 +143,10 @@ export default function CheckoutDialog({
                     setIdempotencyKey(newIdempotencyKey());
                     onCheckoutSuccess?.();
 
-                    const saleId = page?.props?.flash?.sale_id;
-
-                    if (invoiceWindow && saleId) {
-                        invoiceWindow.location = route(
-                            "pos.sales.invoice",
-                            saleId,
+                    if (page?.props?.flash?.printed === false) {
+                        toast.warning(
+                            "Sale saved, but the receipt printer wasn't reachable.",
                         );
-                    } else {
-                        invoiceWindow?.close();
                     }
                 },
                 onError: (errors) => {
@@ -163,7 +154,6 @@ export default function CheckoutDialog({
                         Object.values(errors)[0] ||
                         "Failed to complete sale. Please try again.";
                     toast.error(message);
-                    invoiceWindow?.close();
                 },
                 onFinish: () => {
                     setProcessing(false);
@@ -173,10 +163,7 @@ export default function CheckoutDialog({
     };
 
     return (
-        <Dialog
-            open={open}
-            onOpenChange={setOpen}
-        >
+        <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>{children}</DialogTrigger>
             <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
                 <DialogHeader>
@@ -226,7 +213,7 @@ export default function CheckoutDialog({
                                 <div className="mt-1 text-muted-foreground">
                                     {[
                                         selectedCustomer.customer_type ===
-                                            "Senior Citizen"
+                                        "Senior Citizen"
                                             ? selectedCustomer.senior_id_number
                                             : null,
                                         selectedCustomer.customer_type,
