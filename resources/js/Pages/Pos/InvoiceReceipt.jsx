@@ -139,9 +139,9 @@ export default function InvoiceReceipt({ sale }) {
                 }
             `}</style>
 
-            <div className="logo-wrap">
+            {/* <div className="logo-wrap">
                 <img src="/storage/westpoint_logo.png" alt="Westpoint Pharma & Medical Supplies Distribution" />
-            </div>
+            </div> */}
 
             <div className="header">
                 <h1>WESTPOINT PHARMA &amp; MEDICAL SUPPLIES DISTRIBUTION</h1>
@@ -237,6 +237,13 @@ export default function InvoiceReceipt({ sale }) {
                 </p>
                 <p>This serves as your official sales invoice.</p>
             </div> */}
+
+            <div className="footer">
+                <p style={{ fontSize: "9px" }}>
+                    This Document is not valid for claim if input taxes.
+                    Please ask for the official Sales Invoice
+                </p>
+            </div>
         </>
     );
 }

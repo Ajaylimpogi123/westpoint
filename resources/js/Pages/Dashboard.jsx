@@ -58,6 +58,8 @@ const PAYMENT_METHOD_OPTIONS = [
     { value: "all", label: "All Payments" },
     { value: "cash", label: "Cash" },
     { value: "gcash", label: "GCash" },
+    { value: "debit_card", label: "Debit Card" },
+    { value: "credit_card", label: "Credit Card" },
 ];
 
 function statsCardTitle(baseTitle, statsPeriod) {

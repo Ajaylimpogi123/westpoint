@@ -196,11 +196,11 @@ export default function StockOutReceipt({ stockOut }) {
                 >
                     {/* Letterhead */}
                     <div className="flex items-start gap-3 border-b-2 border-gray-900 pb-2 mb-1">
-                        <img
+                        {/* <img
                             src="/images/logo/Westpoint.png"
                             alt="Westpoint Pharma and Medical Supplies Distribution"
                             className="h-28 w-28 shrink-0 object-contain"
-                        />
+                        /> */}
                         <div className="flex-1 text-center pt-0.5">
                             <h1 className="text-[15px] font-bold uppercase leading-tight tracking-tight">
                                 Westpoint Pharma and Medical Supplies

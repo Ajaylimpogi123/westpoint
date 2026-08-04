@@ -36,13 +36,13 @@ class DashboardController extends Controller
                 'totalRevenue' => (float) $totalRevenue,
                 'totalTransactions' => $totalTransactions,
             ],
-            'topMedicines' => $this->topSellingMedicines($roleId, $selectedBranchId),
-            'branchPerformance' => $canViewAllBranches ? $this->branchPerformance() : [],
+            'topMedicines' => $this->topSellingMedicines($roleId, $selectedBranchId, $paymentMethod),
+            'branchPerformance' => $canViewAllBranches ? $this->branchPerformance($paymentMethod) : [],
             'charts' => [
-                'revenueTrend' => $this->revenueTrend($roleId, $selectedBranchId),
-                'productBreakdown' => $this->productBreakdown($roleId, $selectedBranchId),
+                'revenueTrend' => $this->revenueTrend($roleId, $selectedBranchId, $paymentMethod),
+                'productBreakdown' => $this->productBreakdown($roleId, $selectedBranchId, $paymentMethod),
                 'branchComparison' => $canViewAllBranches
-                    ? $this->branchComparisonChartData()
+                    ? $this->branchComparisonChartData($paymentMethod)
                     : null,
             ],
             'branches' => $canViewAllBranches
@@ -153,7 +153,9 @@ class DashboardController extends Controller
     {
         $paymentMethod = $request->input('payment_method', 'all');
 
-        return in_array($paymentMethod, ['all', 'cash', 'gcash'], true) ? $paymentMethod : 'all';
+        return in_array($paymentMethod, ['all', 'cash', 'gcash', 'debit_card', 'credit_card'], true)
+            ? $paymentMethod
+            : 'all';
     }
 
     private function applyPaymentMethodFilter($query, string $paymentMethod)
@@ -170,6 +172,8 @@ class DashboardController extends Controller
         return match ($paymentMethod) {
             'cash' => 'Cash',
             'gcash' => 'GCash',
+            'debit_card' => 'Debit Card',
+            'credit_card' => 'Credit Card',
             default => null,
         };
     }
@@ -188,7 +192,7 @@ class DashboardController extends Controller
         };
     }
 
-    private function topSellingMedicines(int $roleId, string $selectedBranchId): array
+    private function topSellingMedicines(int $roleId, string $selectedBranchId, string $paymentMethod): array
     {
         return SaleItem::query()
             ->join('tbl_sales', 'tbl_sales_items.sale_id', '=', 'tbl_sales.id')
@@ -197,6 +201,10 @@ class DashboardController extends Controller
             ->when(
                 $roleId !== 1 && $selectedBranchId !== 'all',
                 fn ($query) => $query->where('tbl_sales.branch_id', (int) $selectedBranchId)
+            )
+            ->when(
+                $paymentMethod !== 'all',
+                fn ($query) => $query->where('tbl_sales.payment_method', $paymentMethod)
             )
             ->select([
                 'tbl_products.id',
@@ -228,12 +236,13 @@ class DashboardController extends Controller
             ->all();
     }
 
-    private function revenueTrend(int $roleId, string $selectedBranchId): array
+    private function revenueTrend(int $roleId, string $selectedBranchId, string $paymentMethod): array
     {
         $months = 6;
         $startDate = now()->subMonths($months - 1)->startOfMonth();
 
         $rows = $this->scopedSalesQuery($roleId, $selectedBranchId)
+            ->when($paymentMethod !== 'all', fn ($query) => $query->where('payment_method', $paymentMethod))
             ->where('created_at', '>=', $startDate)
             ->selectRaw("DATE_FORMAT(created_at, '%Y-%m') as period, SUM(net_amount) as revenue")
             ->groupByRaw("DATE_FORMAT(created_at, '%Y-%m')")
@@ -257,7 +266,7 @@ class DashboardController extends Controller
         ];
     }
 
-    private function productBreakdown(int $roleId, string $selectedBranchId): array
+    private function productBreakdown(int $roleId, string $selectedBranchId, string $paymentMethod): array
     {
         $rows = SaleItem::query()
             ->join('tbl_sales', 'tbl_sales_items.sale_id', '=', 'tbl_sales.id')
@@ -266,6 +275,10 @@ class DashboardController extends Controller
             ->when(
                 $roleId !== 1 && $selectedBranchId !== 'all',
                 fn ($query) => $query->where('tbl_sales.branch_id', (int) $selectedBranchId)
+            )
+            ->when(
+                $paymentMethod !== 'all',
+                fn ($query) => $query->where('tbl_sales.payment_method', $paymentMethod)
             )
             ->select([
                 DB::raw("COALESCE(NULLIF(TRIM(tbl_products.form), ''), 'Uncategorized') as category"),
@@ -281,9 +294,9 @@ class DashboardController extends Controller
         ];
     }
 
-    private function branchComparisonChartData(): array
+    private function branchComparisonChartData(string $paymentMethod): array
     {
-        $branches = $this->branchPerformance();
+        $branches = $this->branchPerformance($paymentMethod);
 
         return [
             'labels' => array_column($branches, 'branch_name'),
@@ -291,10 +304,11 @@ class DashboardController extends Controller
         ];
     }
 
-    private function branchPerformance(): array
+    private function branchPerformance(string $paymentMethod): array
     {
-        return Sale::query()
+        $query = Sale::query()
             ->join('branches', 'tbl_sales.branch_id', '=', 'branches.id')
+            ->when($paymentMethod !== 'all', fn ($query) => $query->where('tbl_sales.payment_method', $paymentMethod))
             ->select([
                 'branches.id',
                 'branches.branch_name',
