@@ -6,6 +6,7 @@ use App\Models\Sale;
 use Mike42\Escpos\Printer;
 use Mike42\Escpos\PrintConnectors\FilePrintConnector;
 use Mike42\Escpos\PrintConnectors\NetworkPrintConnector;
+use Mike42\Escpos\PrintConnectors\WindowsPrintConnector;
 use Illuminate\Support\Facades\Log;
 
 class ReceiptPrinterService
@@ -63,9 +64,33 @@ class ReceiptPrinterService
     {
         return match ($profile['method']) {
             'com' => $this->resolveComConnector($profile),
+            'windows' => $this->resolveWindowsConnector($profile),
             'network' => $this->resolveNetworkConnector($profile),
             default => null,
         };
+    }
+
+    /**
+     * For printers installed as a normal Windows printer (e.g. on a
+     * virtual USB0xx port like POS-80). Sends raw ESC/POS bytes through
+     * the print spooler using the printer's share name — no COM port
+     * or fopen() involved.
+     */
+    private function resolveWindowsConnector(array $profile): ?WindowsPrintConnector
+    {
+        $printerName = $profile['printer_name'] ?? null;
+
+        if (!$printerName) {
+            Log::warning("Windows printer method selected but no 'printer_name' configured.");
+            return null;
+        }
+
+        try {
+            return new WindowsPrintConnector($printerName);
+        } catch (\Exception $e) {
+            Log::warning("Could not open Windows printer '{$printerName}': " . $e->getMessage());
+            return null;
+        }
     }
 
     private function resolveComConnector(array $profile): ?FilePrintConnector
@@ -73,13 +98,33 @@ class ReceiptPrinterService
         $port = $profile['com_port'];
         $baud = $profile['com_baud'] ?? 9600;
 
-        @exec("mode {$port}: baud={$baud} parity=N data=8 stop=1");
+        // Windows' `mode` command only understands bare port names
+        // (COM12:), not the \\.\COM12 form fopen() needs for ports 10+.
+        // Passing the \\.\ form to `mode` fails silently, so the baud
+        // rate/parity never actually gets set on the port.
+        $modePortName = $this->shortPortName($port);
+
+        @exec("mode {$modePortName}: baud={$baud} parity=N data=8 stop=1");
 
         try {
             return new FilePrintConnector($port);
         } catch (\Exception $e) {
+            Log::warning("Could not open COM port '{$port}': " . $e->getMessage());
             return null;
         }
+    }
+
+    /**
+     * Strips the \\.\ prefix (needed for fopen on COM10+) down to the
+     * bare port name (e.g. \\.\COM12 -> COM12) for use with `mode`.
+     */
+    private function shortPortName(string $port): string
+    {
+        $prefix = '\\\\.\\'; // literal \\.\
+
+        return str_starts_with($port, $prefix)
+            ? substr($port, strlen($prefix))
+            : $port;
     }
 
     private function resolveNetworkConnector(array $profile): ?NetworkPrintConnector
