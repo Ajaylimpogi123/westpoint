@@ -6,6 +6,7 @@ import DataTable from "./Partials/DataTable";
 export default function StockOnHand({ stock, filters, branches }) {
     const [form, setForm] = useState({
         branch_id: filters?.branch_id || "",
+        product_name: filters?.product_name || "",
         brand_name: filters?.brand_name || "",
         lot_number: filters?.lot_number || "",
         shelf_number: filters?.shelf_number || "",
@@ -29,6 +30,7 @@ export default function StockOnHand({ stock, filters, branches }) {
     const reset = () => {
         setForm({
             branch_id: "",
+            product_name: "",
             brand_name: "",
             lot_number: "",
             shelf_number: "",
@@ -77,6 +79,19 @@ export default function StockOnHand({ stock, filters, branches }) {
                                     </option>
                                 ))}
                             </select>
+                        </div>
+
+                        <div>
+                            <label className="block text-xs font-medium text-gray-600 mb-1">
+                                Product Name
+                            </label>
+                            <input
+                                type="text"
+                                value={form.product_name}
+                                onChange={set("product_name")}
+                                placeholder="e.g. Paracetamol"
+                                className="border-gray-300 rounded-md text-sm"
+                            />
                         </div>
 
                         <div>

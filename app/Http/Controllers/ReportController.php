@@ -75,17 +75,17 @@ public function salesDetail(Request $request)
     }
 
     public function stockOnHand(Request $request)
-    {
-        $filters = $request->only([
-            'branch_id', 'product_id', 'brand_name', 'lot_number', 'shelf_number', 'expiry_from', 'expiry_to',
-        ]);
+{
+    $filters = $request->only([
+        'branch_id', 'product_id', 'product_name', 'brand_name', 'lot_number', 'shelf_number', 'expiry_from', 'expiry_to',
+    ]);
 
-        return Inertia::render('Reports/StockOnHand', [
-            'filters' => $filters,
-            'stock' => Report::stockOnHand($filters),
-            'branches' => $this->branchOptions(),
-        ]);
-    }
+    return Inertia::render('Reports/StockOnHand', [
+        'filters' => $filters,
+        'stock' => Report::stockOnHand($filters),
+        'branches' => $this->branchOptions(),
+    ]);
+}
 
     public function lowStock(Request $request)
     {

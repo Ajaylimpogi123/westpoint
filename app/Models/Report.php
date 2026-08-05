@@ -199,7 +199,7 @@ public static function salesDetailByPaymentMethod(array $filters)
 
     /* ─────────────────────── INVENTORY ─────────────────────── */
 
-  public static function stockOnHand(array $filters)
+ public static function stockOnHand(array $filters)
 {
     $query = DB::table('products_qty as pq')
         ->join('tbl_products as p', 'p.id', '=', 'pq.product_id')
@@ -222,6 +222,10 @@ public static function salesDetailByPaymentMethod(array $filters)
 
     if (!empty($filters['product_id'])) {
         $query->where('p.id', $filters['product_id']);
+    }
+
+    if (!empty($filters['product_name'])) {
+        $query->where('p.med_name', 'like', '%' . $filters['product_name'] . '%');
     }
 
     if (!empty($filters['brand_name'])) {
