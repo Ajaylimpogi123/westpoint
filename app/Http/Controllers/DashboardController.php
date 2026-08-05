@@ -306,7 +306,7 @@ class DashboardController extends Controller
 
     private function branchPerformance(string $paymentMethod): array
     {
-        $query = Sale::query()
+        return Sale::query()
             ->join('branches', 'tbl_sales.branch_id', '=', 'branches.id')
             ->when($paymentMethod !== 'all', fn ($query) => $query->where('tbl_sales.payment_method', $paymentMethod))
             ->select([
