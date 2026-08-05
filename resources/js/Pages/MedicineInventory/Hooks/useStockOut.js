@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "@inertiajs/react";
 import {
     UNIT_PIECE,
@@ -11,6 +11,7 @@ import {
     toPieces,
 } from "@/lib/units";
 import { newIdempotencyKey } from "@/lib/idempotency";
+import { fetchBranchProducts } from "../lib/inventoryMedicinesApi";
 
 const TRANSACTION_SUBTYPES = ["Dispensed to patient", "Returned to supplier"];
 
@@ -33,12 +34,57 @@ const emptyForm = (branchId) => ({
     items: [],
 });
 
-export default function useStockOut({ branchId, products }) {
+export default function useStockOut({
+    branchId,
+    products: initialProducts = [],
+    canAssignBranch = false,
+    branches = [],
+}) {
+    const defaultBranchId = branchId ?? branches[0]?.id ?? null;
+
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(emptyDraft);
+    const [products, setProducts] = useState(initialProducts ?? []);
+    const [productsLoading, setProductsLoading] = useState(false);
+    const [productsError, setProductsError] = useState(null);
 
     const { data, setData, post, errors, processing, reset, clearErrors } =
-        useForm(emptyForm(branchId));
+        useForm(emptyForm(defaultBranchId));
+
+    const loadProductsForBranch = useCallback(async (targetBranchId) => {
+        if (!targetBranchId) {
+            setProducts([]);
+            return;
+        }
+
+        setProductsLoading(true);
+        setProductsError(null);
+
+        try {
+            const response = await fetchBranchProducts(targetBranchId);
+            setProducts(response.products ?? []);
+        } catch {
+            setProducts([]);
+            setProductsError("Could not load medicines for the selected branch.");
+        } finally {
+            setProductsLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        if (!open || !canAssignBranch) {
+            return;
+        }
+
+        const selectedBranchId = Number(data.branch_id);
+
+        if (!selectedBranchId) {
+            setProducts([]);
+            return;
+        }
+
+        loadProductsForBranch(selectedBranchId);
+    }, [open, canAssignBranch, data.branch_id, loadProductsForBranch]);
 
     const productMap = useMemo(() => {
         return Object.fromEntries(
@@ -56,9 +102,6 @@ export default function useStockOut({ branchId, products }) {
             Number(lot.quantity) > 0,
     );
 
-    // Lots are addressed by primary key, not lot number: the same lot number
-    // can exist on several batches with different expiries or shelves, and
-    // matching by name could target a different batch than the one shown.
     const selectedLot = draft.products_qty_id
         ? availableLots.find(
               (lot) => String(lot.id) === String(draft.products_qty_id),
@@ -109,15 +152,25 @@ export default function useStockOut({ branchId, products }) {
     const openModal = () => {
         clearErrors();
         setDraft(emptyDraft());
-        setData(emptyForm(branchId));
+        setProductsError(null);
+        setProducts(initialProducts ?? []);
+        setData(emptyForm(defaultBranchId));
         setOpen(true);
     };
 
     const closeModal = () => {
         setOpen(false);
         setDraft(emptyDraft());
+        setProducts(initialProducts ?? []);
+        setProductsError(null);
         reset();
         clearErrors();
+    };
+
+    const handleBranchChange = (value) => {
+        setData("branch_id", value);
+        setDraft(emptyDraft());
+        setProductsError(null);
     };
 
     const updateDraft = (field, value) => {
@@ -143,9 +196,6 @@ export default function useStockOut({ branchId, products }) {
                 return next;
             }
 
-            // Changing the unit changes what the number means, so the entered
-            // quantity has to be re-clamped against the new ceiling rather
-            // than carried across as-is.
             if (field === "unit_type") {
                 next.quantity_deducted = clampQuantity(
                     current.quantity_deducted,
@@ -162,9 +212,6 @@ export default function useStockOut({ branchId, products }) {
             }
 
             if (field === "quantity_deducted") {
-                // Allow the field to be temporarily empty while the user is
-                // clearing it to type a new value. It is normalized on blur
-                // and re-validated before it can be added to the basket.
                 if (value === "") {
                     next.quantity_deducted = "";
 
@@ -287,7 +334,12 @@ export default function useStockOut({ branchId, products }) {
         boxesUnavailable,
         canAddToBasket,
         productMap,
-        products: products ?? [],
+        products,
+        productsLoading,
+        productsError,
+        canAssignBranch,
+        branches,
+        handleBranchChange,
         addItemToBasket,
         removeItemFromBasket,
         errors,

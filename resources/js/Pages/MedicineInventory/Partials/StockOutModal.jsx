@@ -16,6 +16,13 @@ import useStockOut from "../Hooks/useStockOut";
 import MedicineSearchSelect from "./MedicineSearchSelect";
 import { formatDate } from "@/lib/dates";
 import { isBoxUnit, unitLabel } from "@/lib/units";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/Components/ui/select";
 
 function formatLotLabel(lot) {
     const shelf = lot.shelf_number ? ` — Shelf: ${lot.shelf_number}` : "";
@@ -27,6 +34,8 @@ export default function StockOutModal({
     branchId,
     branchName,
     products,
+    branches = [],
+    canAssignBranch = false,
     children,
 }) {
     const {
@@ -49,13 +58,18 @@ export default function StockOutModal({
         boxesUnavailable,
         canAddToBasket,
         productMap,
-        products: productList,
+        products: branchProducts,
+        productsLoading,
+        productsError,
+        canAssignBranch: canChangeBranch,
+        branches: branchOptions,
+        handleBranchChange,
         addItemToBasket,
         removeItemFromBasket,
         errors,
         processing,
         handleSubmit,
-    } = useStockOut({ branchId, products });
+    } = useStockOut({ branchId, products, canAssignBranch, branches });
 
     return (
         <>
@@ -106,17 +120,39 @@ export default function StockOutModal({
                                 </div>
 
                                 <div className="grid gap-3">
-                                    <Label htmlFor="branch_name">
+                                    <Label htmlFor="branch_id">
                                         Source Warehouse
                                     </Label>
-                                    <Input
-                                        id="branch_name"
-                                        value={
-                                            branchName ?? "No branch assigned"
-                                        }
-                                        readOnly
-                                        className="bg-muted"
-                                    />
+                                    {canChangeBranch ? (
+                                        <Select
+                                            value={data.branch_id || undefined}
+                                            onValueChange={handleBranchChange}
+                                        >
+                                            <SelectTrigger id="branch_id">
+                                                <SelectValue placeholder="Select branch" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {branchOptions.map((branch) => (
+                                                    <SelectItem
+                                                        key={branch.id}
+                                                        value={String(branch.id)}
+                                                    >
+                                                        {branch.branch_name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Input
+                                            id="branch_name"
+                                            value={
+                                                branchName ??
+                                                "No branch assigned"
+                                            }
+                                            readOnly
+                                            className="bg-muted"
+                                        />
+                                    )}
                                     <input
                                         type="hidden"
                                         name="branch_id"
@@ -231,13 +267,36 @@ export default function StockOutModal({
                                     </Label>
                                     <MedicineSearchSelect
                                         id="product_select"
-                                        products={productList}
+                                        products={branchProducts}
                                         value={draft.pd_id}
                                         onChange={(productId) =>
                                             updateDraft("pd_id", productId)
                                         }
-                                        placeholder="Search medicine..."
+                                        placeholder={
+                                            productsLoading
+                                                ? "Loading medicines..."
+                                                : "Search medicine..."
+                                        }
+                                        disabled={
+                                            productsLoading ||
+                                            !data.branch_id ||
+                                            branchProducts.length === 0
+                                        }
                                     />
+                                    {productsError && (
+                                        <p className="text-sm text-destructive">
+                                            {productsError}
+                                        </p>
+                                    )}
+                                    {!productsLoading &&
+                                        data.branch_id &&
+                                        branchProducts.length === 0 &&
+                                        !productsError && (
+                                            <p className="text-sm text-muted-foreground">
+                                                No active medicines found for
+                                                this branch.
+                                            </p>
+                                        )}
                                 </div>
 
                                 {selectedProduct && (

@@ -30,7 +30,8 @@ class StockOutController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $branchId = $this->branchIdOrFail();
+        $sessionBranchId = $this->branchIdOrFail();
+        $canAssignBranch = $this->canAssignBranch();
 
         $validated = $request->validate([
             'transaction_subtype' => ['required', 'string', Rule::in([
@@ -50,7 +51,11 @@ class StockOutController extends Controller
             'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
         ]);
 
-        if ((int) $validated['branch_id'] !== $branchId) {
+        $branchId = $canAssignBranch
+            ? (int) $validated['branch_id']
+            : $sessionBranchId;
+
+        if (! $canAssignBranch && (int) $validated['branch_id'] !== $sessionBranchId) {
             return redirect()->back()
                 ->withInput()
                 ->with('error', 'The source branch does not match your session branch.');
@@ -399,6 +404,11 @@ class StockOutController extends Controller
         }
 
         return $batch;
+    }
+
+    private function canAssignBranch(): bool
+    {
+        return in_array((int) session('role_id'), [2, 3], true);
     }
 
     private function branchIdOrFail(): int
