@@ -1,3 +1,25 @@
+export async function fetchBranchProducts(branchId) {
+    const params = new URLSearchParams({
+        branch_id: String(branchId),
+    });
+
+    const response = await fetch(
+        `${route("medicine-inventory.products")}?${params.toString()}`,
+        {
+            headers: {
+                Accept: "application/json",
+                "X-Requested-With": "XMLHttpRequest",
+            },
+        },
+    );
+
+    if (!response.ok) {
+        throw new Error("Failed to fetch branch medicines");
+    }
+
+    return response.json();
+}
+
 export async function searchInventoryMedicines(query, context = "stock_in") {
     const params = new URLSearchParams({
         search: query,

@@ -4,6 +4,8 @@ use App\Http\Controllers\MedicineInventoryController;
 use Illuminate\Support\Facades\Route;
 
 Route::middleware('auth')->group(function () {
+    Route::get('/medicine-inventory/products', [MedicineInventoryController::class, 'branchProducts'])
+        ->name('medicine-inventory.products');
     Route::get('/medicine-inventory', [MedicineInventoryController::class, 'index'])
         ->name('medicine-inventory.index');
     Route::post('/medicine-inventory', [MedicineInventoryController::class, 'store'])

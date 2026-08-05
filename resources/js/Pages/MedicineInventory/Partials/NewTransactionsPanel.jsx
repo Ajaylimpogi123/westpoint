@@ -10,6 +10,8 @@ import StockOutHistoryTable from "./StockOutHistoryTable";
 export default function NewTransactionsPanel({
     branchId,
     branchName,
+    branches = [],
+    canAssignBranch = false,
     products,
     stockIns,
     stockOuts,
@@ -39,6 +41,8 @@ export default function NewTransactionsPanel({
                             <StockInModal
                                 branchId={branchId}
                                 branchName={branchName}
+                                branches={branches}
+                                canAssignBranch={canAssignBranch}
                                 products={products}
                             >
                                 <Button className="flex items-center gap-2">
@@ -48,14 +52,14 @@ export default function NewTransactionsPanel({
                             </StockInModal>
                         </div>
 
-                        {!branchId && (
+                        {!branchId && !canAssignBranch && (
                             <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
                                 Assign a branch to your account before recording
                                 stock-in transactions.
                             </div>
                         )}
 
-                        {branchId && (
+                        {(branchId || canAssignBranch) && (
                             <StockInHistoryTable
                                 stockIns={stockIns}
                                 filters={filters}

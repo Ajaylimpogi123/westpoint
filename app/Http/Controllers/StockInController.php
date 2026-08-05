@@ -26,7 +26,8 @@ class StockInController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        $branchId = $this->branchIdOrFail();
+        $sessionBranchId = $this->branchIdOrFail();
+        $canAssignBranch = $this->canAssignBranch();
 
         $validated = $request->validate([
             'supplier_name' => ['required', 'string', 'max:255'],
@@ -48,7 +49,11 @@ class StockInController extends Controller
             'items.*.expiry_date.after' => 'The expiry date must be in the future. Expired stock cannot be received.',
         ]);
 
-        if ((int) $validated['branch_id'] !== $branchId) {
+        $branchId = $canAssignBranch
+            ? (int) $validated['branch_id']
+            : $sessionBranchId;
+
+        if (! $canAssignBranch && (int) $validated['branch_id'] !== $sessionBranchId) {
             return redirect()->back()
                 ->withInput()
                 ->with('error', 'The destination branch does not match your session branch.');
@@ -229,6 +234,11 @@ class StockInController extends Controller
         return Inertia::render('MedicineInventory/StockInReceipt', [
             'stockIn' => $stockIn,
         ]);
+    }
+
+    private function canAssignBranch(): bool
+    {
+        return in_array((int) session('role_id'), [2, 3], true);
     }
 
     private function branchIdOrFail(): int

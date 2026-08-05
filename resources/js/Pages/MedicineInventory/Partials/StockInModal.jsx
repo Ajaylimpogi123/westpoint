@@ -15,6 +15,13 @@ import { Plus, Trash2 } from "lucide-react";
 import useStockIn from "../Hooks/useStockIn";
 import MedicineSearchSelect from "./MedicineSearchSelect";
 import { isBoxUnit, unitLabel } from "@/lib/units";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/Components/ui/select";
 
 function BatchIntentNotice({
     batchIntent,
@@ -75,6 +82,8 @@ export default function StockInModal({
     branchId,
     branchName,
     products,
+    branches = [],
+    canAssignBranch = false,
     children,
 }) {
     const {
@@ -91,6 +100,12 @@ export default function StockInModal({
         boxesUnavailable,
         canAddToBasket,
         productMap,
+        products: branchProducts,
+        productsLoading,
+        productsError,
+        canAssignBranch: canChangeBranch,
+        branches: branchOptions,
+        handleBranchChange,
         addItemToBasket,
         removeItemFromBasket,
         piecesLabel,
@@ -102,7 +117,7 @@ export default function StockInModal({
         errors,
         processing,
         handleSubmit,
-    } = useStockIn({ branchId, products });
+    } = useStockIn({ branchId, products, canAssignBranch, branches });
 
     return (
         <>
@@ -160,15 +175,39 @@ export default function StockInModal({
                                 </div>
 
                                 <div className="grid gap-3">
-                                    <Label htmlFor="branch_name">
+                                    <Label htmlFor="branch_id">
                                         Destination Branch
                                     </Label>
-                                    <Input
-                                        id="branch_name"
-                                        value={branchName ?? "No branch assigned"}
-                                        readOnly
-                                        className="bg-muted"
-                                    />
+                                    {canChangeBranch ? (
+                                        <Select
+                                            value={data.branch_id || undefined}
+                                            onValueChange={handleBranchChange}
+                                        >
+                                            <SelectTrigger id="branch_id">
+                                                <SelectValue placeholder="Select branch" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                {branchOptions.map((branch) => (
+                                                    <SelectItem
+                                                        key={branch.id}
+                                                        value={String(branch.id)}
+                                                    >
+                                                        {branch.branch_name}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    ) : (
+                                        <Input
+                                            id="branch_name"
+                                            value={
+                                                branchName ??
+                                                "No branch assigned"
+                                            }
+                                            readOnly
+                                            className="bg-muted"
+                                        />
+                                    )}
                                     <input
                                         type="hidden"
                                         name="branch_id"
@@ -218,13 +257,36 @@ export default function StockInModal({
                                     <Label htmlFor="product_select">Medicine</Label>
                                     <MedicineSearchSelect
                                         id="product_select"
-                                        products={products}
+                                        products={branchProducts}
                                         value={draft.pd_id}
                                         onChange={(productId) =>
                                             updateDraft("pd_id", productId)
                                         }
-                                        placeholder="Search medicine..."
+                                        placeholder={
+                                            productsLoading
+                                                ? "Loading medicines..."
+                                                : "Search medicine..."
+                                        }
+                                        disabled={
+                                            productsLoading ||
+                                            !data.branch_id ||
+                                            branchProducts.length === 0
+                                        }
                                     />
+                                    {productsError && (
+                                        <p className="text-sm text-destructive">
+                                            {productsError}
+                                        </p>
+                                    )}
+                                    {!productsLoading &&
+                                        data.branch_id &&
+                                        branchProducts.length === 0 &&
+                                        !productsError && (
+                                            <p className="text-sm text-muted-foreground">
+                                                No active medicines found for
+                                                this branch.
+                                            </p>
+                                        )}
                                 </div>
 
                                 {selectedProduct && (

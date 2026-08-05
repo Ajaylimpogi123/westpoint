@@ -12,6 +12,7 @@ use App\Models\StockIn;
 use App\Models\StockOut;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -36,7 +37,12 @@ class MedicineInventoryController extends Controller
 
     public function index(Request $request): Response
     {
-        $branchId = $this->branchId();
+        $roleId = $this->roleId();
+        $canViewAllBranches = $this->canViewAllBranches();
+        $sessionBranchId = $this->branchId();
+        $inventoryBranchId = $this->resolveInventoryBranchId($request, $canViewAllBranches, $sessionBranchId);
+        $inventoryBranchFilter = $this->inventoryBranchFilterValue($request, $canViewAllBranches, $sessionBranchId);
+
         $search = $request->input('search');
         $status = $request->input('status', 'Active');
         $stockLevel = $request->input('stock_level', 'all');
@@ -44,19 +50,23 @@ class MedicineInventoryController extends Controller
         $genericOnly = $request->boolean('generic_only');
 
         $medicines = MedicineProduct::query()
-            ->when($branchId, fn ($query) => $query->forBranch($branchId))
+            ->when(
+                ! $canViewAllBranches && ! $sessionBranchId,
+                fn ($query) => $query->whereRaw('0 = 1'),
+            )
+            ->when($inventoryBranchId, fn ($query) => $query->forBranch($inventoryBranchId))
             ->stockLevel($stockLevel)
-            ->when($branchId, function ($query) {
-                $query
-                    ->withSum(['batches as total_stock' => function ($batchQuery) {
-                        $batchQuery->available();
-                    }], 'quantity')
-                    ->with(['batches' => function ($batchQuery) {
-                        $batchQuery
-                            ->where('status', '!=', 'Deleted')
-                            ->orderBy('expiry')
-                            ->select(['id', 'product_id', 'lot_number', 'expiry', 'shelf_number', 'quantity', 'status']);
-                    }]);
+            ->withSum(['batches as total_stock' => function ($batchQuery) {
+                $batchQuery->available();
+            }], 'quantity')
+            ->with(['batches' => function ($batchQuery) {
+                $batchQuery
+                    ->where('status', '!=', 'Deleted')
+                    ->orderBy('expiry')
+                    ->select(['id', 'product_id', 'lot_number', 'expiry', 'shelf_number', 'quantity', 'status']);
+            }])
+            ->when($canViewAllBranches && ! $inventoryBranchId, function ($query) {
+                $query->with('branch:id,branch_name');
             })
             ->when($search, function ($query, $search) {
                 $query->where(function ($query) use ($search) {
@@ -79,44 +89,13 @@ class MedicineInventoryController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $roleId = (int) session('role_id');
-        $branchName = $branchId
-            ? Branch::query()->whereKey($branchId)->value('branch_name')
+        $branchName = $sessionBranchId
+            ? Branch::query()->whereKey($sessionBranchId)->value('branch_name')
             : null;
 
-        $products = $branchId
-            ? MedicineProduct::query()
-                ->active()
-                ->forBranch($branchId)
-                ->with(['batches' => function ($batchQuery) {
-                    $batchQuery
-                        ->whereNotIn('status', [
-                            ProductQty::STATUS_DELETED,
-                            ProductQty::STATUS_EXPIRED,
-                        ])
-                        ->orderBy('expiry')
-                        ->select([
-                            'id',
-                            'product_id',
-                            'lot_number',
-                            'expiry',
-                            'shelf_number',
-                            'quantity',
-                            'status',
-                        ]);
-                }])
-                ->orderBy('med_name')
-                ->get([
-                    'id',
-                    'med_name',
-                    'brand_name',
-                    'dose',
-                    'form',
-                    'retail_price',
-                    'wholesale_price',
-                    'pack_size',
-                    'stock_threshold',
-                ])
+        $defaultProductBranchId = $sessionBranchId ?? $inventoryBranchId;
+        $products = $defaultProductBranchId
+            ? $this->productsForBranch($defaultProductBranchId)
             : collect();
 
         $stockInPerPage = (int) $request->input('stock_in_per_page', 10);
@@ -129,9 +108,9 @@ class MedicineInventoryController extends Controller
             ? $stockOutPerPage
             : 10;
 
-        $stockIns = $branchId
+        $stockIns = $sessionBranchId
             ? StockIn::query()
-                ->where('branch_id', $branchId)
+                ->where('branch_id', $sessionBranchId)
                 ->orderByDesc('delivery_date')
                 ->orderByDesc('stock_in_id')
                 ->paginate(
@@ -142,9 +121,9 @@ class MedicineInventoryController extends Controller
                 ->withQueryString()
             : null;
 
-        $stockOuts = $branchId
+        $stockOuts = $sessionBranchId
             ? StockOut::query()
-                ->where('branch_id', $branchId)
+                ->where('branch_id', $sessionBranchId)
                 ->orderByDesc('created_at')
                 ->orderByDesc('stock_out_id')
                 ->paginate(
@@ -160,9 +139,9 @@ class MedicineInventoryController extends Controller
             ? $movementLogPerPage
             : 15;
 
-        $movementLogs = $branchId
+        $movementLogs = $sessionBranchId
             ? InventoryMovementLog::query()
-                ->where('branch_id', $branchId)
+                ->where('branch_id', $sessionBranchId)
                 ->with('performer:id,name')
                 ->orderByDesc('created_at')
                 ->orderByDesc('log_id')
@@ -172,23 +151,52 @@ class MedicineInventoryController extends Controller
 
         return Inertia::render('MedicineInventory/Index', [
             'medicines' => $medicines,
-            'filters' => $request->only([
-                'search',
-                'status',
-                'stock_level',
-                'form',
-                'generic_only',
-                'movement_log_per_page',
-                'stock_in_per_page',
-                'stock_out_per_page',
-            ]),
-            'branchId' => $branchId,
+            'filters' => array_merge(
+                $request->only([
+                    'search',
+                    'status',
+                    'stock_level',
+                    'form',
+                    'generic_only',
+                    'movement_log_per_page',
+                    'stock_in_per_page',
+                    'stock_out_per_page',
+                ]),
+                $canViewAllBranches ? ['branch_id' => $inventoryBranchFilter] : [],
+            ),
+            'branchId' => $sessionBranchId,
             'branchName' => $branchName,
+            'branches' => $canViewAllBranches
+                ? Branch::orderBy('branch_name')->get(['id', 'branch_name'])
+                : [],
+            'canViewAllBranches' => $canViewAllBranches,
+            'canAssignBranch' => $canViewAllBranches,
             'products' => $products,
             'stockIns' => $stockIns,
             'stockOuts' => $stockOuts,
             'movementLogs' => $movementLogs,
             'canEditMedicine' => in_array($roleId, [2, 3], true),
+        ]);
+    }
+
+    public function branchProducts(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+        ]);
+
+        $branchId = (int) $validated['branch_id'];
+
+        if (! $this->canViewAllBranches()) {
+            $sessionBranchId = $this->branchIdOrFail();
+
+            if ($branchId !== $sessionBranchId) {
+                abort(403, 'You can only load medicines for your assigned branch.');
+            }
+        }
+
+        return response()->json([
+            'products' => $this->productsForBranch($branchId),
         ]);
     }
 
@@ -492,6 +500,88 @@ class MedicineInventoryController extends Controller
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', 'Medicine has been restored.');
+    }
+
+    private function roleId(): int
+    {
+        return (int) session('role_id');
+    }
+
+    private function canViewAllBranches(): bool
+    {
+        return in_array($this->roleId(), [2, 3], true);
+    }
+
+    private function resolveInventoryBranchId(
+        Request $request,
+        bool $canViewAllBranches,
+        ?int $sessionBranchId,
+    ): ?int {
+        if ($canViewAllBranches) {
+            $branchFilter = $request->input('branch_id', 'all');
+
+            if ($branchFilter === 'all' || $branchFilter === '' || $branchFilter === null) {
+                return null;
+            }
+
+            return (int) $branchFilter;
+        }
+
+        return $sessionBranchId;
+    }
+
+    private function inventoryBranchFilterValue(
+        Request $request,
+        bool $canViewAllBranches,
+        ?int $sessionBranchId,
+    ): string {
+        if (! $canViewAllBranches) {
+            return $sessionBranchId ? (string) $sessionBranchId : 'all';
+        }
+
+        $branchFilter = $request->input('branch_id', 'all');
+
+        if ($branchFilter === 'all' || $branchFilter === '' || $branchFilter === null) {
+            return 'all';
+        }
+
+        return (string) (int) $branchFilter;
+    }
+
+    private function productsForBranch(int $branchId)
+    {
+        return MedicineProduct::query()
+            ->active()
+            ->forBranch($branchId)
+            ->with(['batches' => function ($batchQuery) {
+                $batchQuery
+                    ->whereNotIn('status', [
+                        ProductQty::STATUS_DELETED,
+                        ProductQty::STATUS_EXPIRED,
+                    ])
+                    ->orderBy('expiry')
+                    ->select([
+                        'id',
+                        'product_id',
+                        'lot_number',
+                        'expiry',
+                        'shelf_number',
+                        'quantity',
+                        'status',
+                    ]);
+            }])
+            ->orderBy('med_name')
+            ->get([
+                'id',
+                'med_name',
+                'brand_name',
+                'dose',
+                'form',
+                'retail_price',
+                'wholesale_price',
+                'pack_size',
+                'stock_threshold',
+            ]);
     }
 
     private function branchId(): ?int

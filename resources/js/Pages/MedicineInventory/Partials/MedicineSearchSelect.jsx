@@ -32,6 +32,7 @@ export default function MedicineSearchSelect({
     onChange,
     placeholder = "Search medicine...",
     className,
+    disabled = false,
 }) {
     const [query, setQuery] = useState("");
     const [open, setOpen] = useState(false);
@@ -111,12 +112,17 @@ export default function MedicineSearchSelect({
             <Input
                 id={id}
                 type="text"
+                disabled={disabled}
                 value={open ? query : formatMedicineLabel(selected)}
                 onChange={(event) => {
                     setQuery(event.target.value);
                     setOpen(true);
                 }}
                 onFocus={() => {
+                    if (disabled) {
+                        return;
+                    }
+
                     setOpen(true);
                     setQuery("");
                 }}

@@ -14,6 +14,9 @@ export default function Index({
     filters,
     branchId,
     branchName,
+    branches = [],
+    canViewAllBranches = false,
+    canAssignBranch = false,
     products,
     stockIns,
     stockOuts,
@@ -64,6 +67,8 @@ export default function Index({
                             <NewTransactionsPanel
                                 branchId={branchId}
                                 branchName={branchName}
+                                branches={branches}
+                                canAssignBranch={canAssignBranch}
                                 products={products}
                                 stockIns={stockIns}
                                 stockOuts={stockOuts}
@@ -89,6 +94,8 @@ export default function Index({
                                 filters={filters}
                                 branchId={branchId}
                                 canEditMedicine={canEditMedicine}
+                                canViewAllBranches={canViewAllBranches}
+                                branches={branches}
                             />
                         </TabsContent>
 

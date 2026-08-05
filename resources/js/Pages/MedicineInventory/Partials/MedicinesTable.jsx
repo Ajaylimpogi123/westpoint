@@ -28,7 +28,14 @@ import { MEDICINE_FORMS } from "../lib/medicineForms";
 const DEFAULT_STATUS = "Active";
 const DEFAULT_STOCK_LEVEL = "all";
 
-function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
+function MedicinesTable({
+    medicines,
+    filters,
+    branchId,
+    canEditMedicine,
+    canViewAllBranches = false,
+    branches = [],
+}) {
     const [expandedRows, setExpandedRows] = useState({});
     const [search, setSearch] = useState(filters?.search || "");
     const [showFilters, setShowFilters] = useState(false);
@@ -37,12 +44,16 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
     const status = filters?.status || DEFAULT_STATUS;
     const stockLevel = filters?.stock_level || DEFAULT_STOCK_LEVEL;
     const form = filters?.form || "";
+    const branchFilter = filters?.branch_id ?? "all";
+    const showBranchColumn =
+        canViewAllBranches && (branchFilter === "all" || branchFilter === "");
     const genericOnly =
         Boolean(filters?.generic_only) &&
         filters?.generic_only !== "0" &&
         filters?.generic_only !== "false";
 
     const activeFilterCount = [
+        canViewAllBranches && branchFilter !== "all",
         status !== DEFAULT_STATUS,
         stockLevel !== DEFAULT_STOCK_LEVEL,
         form !== "",
@@ -116,8 +127,14 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
         [runFilterRequest],
     );
 
+    const handleBranchFilter = useCallback(
+        (value) => runFilterRequest({ branch_id: value, page: 1 }),
+        [runFilterRequest],
+    );
+
     const clearFilters = useCallback(() => {
         runFilterRequest({
+            branch_id: "all",
             status: DEFAULT_STATUS,
             stock_level: DEFAULT_STOCK_LEVEL,
             form: "",
@@ -151,25 +168,57 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
                 isExpanded={!!expandedRows[medicine.id]}
                 onToggle={() => toggleRow(medicine.id)}
                 canEditMedicine={canEditMedicine}
+                showBranchColumn={showBranchColumn}
             />
         ));
-    }, [medicines.data, expandedRows, toggleRow, canEditMedicine]);
+    }, [medicines.data, expandedRows, toggleRow, canEditMedicine, showBranchColumn]);
 
     return (
         <Card>
             <CardContent className="space-y-4 pt-6">
-                {!branchId && (
+                {!branchId && !canViewAllBranches && (
                     <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
                         No branch is assigned to your session. Inventory data is
                         hidden until a branch is linked to your account.
                     </div>
                 )}
 
-                {branchId && (
+                {(branchId || canViewAllBranches) && (
                     <div className="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">
                         Empty or deactivated lots are hidden from the batch
                         breakdown. Lots that reach zero stock are automatically
                         marked inactive.
+                    </div>
+                )}
+
+                {canViewAllBranches && (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+                        <div className="space-y-1.5 sm:max-w-xs">
+                            <Label className="text-xs text-muted-foreground">
+                                Branch
+                            </Label>
+                            <Select
+                                value={branchFilter}
+                                onValueChange={handleBranchFilter}
+                            >
+                                <SelectTrigger className="h-9 text-sm">
+                                    <SelectValue placeholder="All branches" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All branches
+                                    </SelectItem>
+                                    {branches.map((branch) => (
+                                        <SelectItem
+                                            key={branch.id}
+                                            value={String(branch.id)}
+                                        >
+                                            {branch.branch_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
                     </div>
                 )}
 
@@ -371,6 +420,9 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
                                 <TableHead>Brand</TableHead>
                                 <TableHead>Dose</TableHead>
                                 <TableHead>Form</TableHead>
+                                {showBranchColumn && (
+                                    <TableHead>Branch</TableHead>
+                                )}
                                 <TableHead>Pack Size</TableHead>
                                 <TableHead>Price (pc)</TableHead>
                                 <TableHead>Branch Stock (pcs)</TableHead>
@@ -385,7 +437,7 @@ function MedicinesTable({ medicines, filters, branchId, canEditMedicine }) {
                             ) : (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={9}
+                                        colSpan={showBranchColumn ? 10 : 9}
                                         className="h-24 text-center"
                                     >
                                         No medicines found.

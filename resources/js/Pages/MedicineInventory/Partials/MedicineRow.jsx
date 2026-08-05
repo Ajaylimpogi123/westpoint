@@ -22,6 +22,7 @@ export default function MedicineRow({
     isExpanded,
     onToggle,
     canEditMedicine = false,
+    showBranchColumn = false,
 }) {
     const { delete: destroy, patch: restore } = useForm();
 
@@ -116,6 +117,11 @@ export default function MedicineRow({
                 <TableCell onClick={onToggle}>
                     {medicine.form || "-"}
                 </TableCell>
+                {showBranchColumn && (
+                    <TableCell onClick={onToggle}>
+                        {medicine.branch?.branch_name ?? "-"}
+                    </TableCell>
+                )}
                 <TableCell onClick={onToggle}>
                     {medicine.pack_size ?? "-"}
                 </TableCell>
@@ -183,7 +189,10 @@ export default function MedicineRow({
 
             {isExpanded && (
                 <TableRow>
-                    <TableCell colSpan={COLUMN_COUNT} className="p-0">
+                    <TableCell
+                        colSpan={showBranchColumn ? COLUMN_COUNT + 1 : COLUMN_COUNT}
+                        className="p-0"
+                    >
                         <BatchTable
                             medicine={medicine}
                             batches={medicine.batches}
