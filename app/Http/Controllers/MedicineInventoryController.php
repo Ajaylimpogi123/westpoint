@@ -281,7 +281,8 @@ class MedicineInventoryController extends Controller
 
     public function update(Request $request, int $id): RedirectResponse
     {
-        $medicine = $this->findBranchMedicineOrFail($id, $this->branchIdOrFail());
+        $medicine = $this->findMedicineForCurrentUserOrFail($id);
+        $branchId = (int) $medicine->branch_id;
 
         $validated = $request->validate([
             'med_name' => ['required', 'string', 'max:244'],
@@ -308,7 +309,7 @@ class MedicineInventoryController extends Controller
         );
 
         InventoryMovementLogger::log(
-            branchId: $this->branchIdOrFail(),
+            branchId: $branchId,
             movementType: InventoryMovementLog::TYPE_MEDICINE_UPDATED,
             referenceLabel: "Medicine #{$medicine->id}",
             referenceId: $medicine->id,
@@ -326,8 +327,8 @@ class MedicineInventoryController extends Controller
 
     public function destroy(int $id): RedirectResponse
     {
-        $branchId = $this->branchIdOrFail();
-        $medicine = $this->findBranchMedicineOrFail($id, $branchId);
+        $medicine = $this->findMedicineForCurrentUserOrFail($id);
+        $branchId = (int) $medicine->branch_id;
         $medicine->softDelete();
 
         ProductQty::where('product_id', $medicine->id)
@@ -412,8 +413,8 @@ class MedicineInventoryController extends Controller
      */
     public function updateBatch(Request $request, int $id): RedirectResponse
     {
-        $branchId = $this->branchIdOrFail();
-        $batch = $this->findBranchBatchOrFail($id, $branchId);
+        $batch = $this->findBatchForCurrentUserOrFail($id);
+        $branchId = (int) $batch->product?->branch_id;
 
         $validated = $request->validate([
             'lot_number' => ['nullable', 'string', 'max:100'],
@@ -483,8 +484,8 @@ class MedicineInventoryController extends Controller
 
     public function destroyBatch(int $id): RedirectResponse
     {
-        $branchId = $this->branchIdOrFail();
-        $batch = $this->findBranchBatchOrFail($id, $branchId);
+        $batch = $this->findBatchForCurrentUserOrFail($id);
+        $branchId = (int) $batch->product?->branch_id;
 
         $medicine = MedicineProduct::findOrFail($batch->product_id);
 
@@ -508,8 +509,8 @@ class MedicineInventoryController extends Controller
 
     public function restore(int $id): RedirectResponse
     {
-        $branchId = $this->branchIdOrFail();
-        $medicine = $this->findBranchMedicineOrFail($id, $branchId);
+        $medicine = $this->findMedicineForCurrentUserOrFail($id);
+        $branchId = (int) $medicine->branch_id;
 
         if ($medicine->status !== 'Deleted') {
             return redirect()->route('medicine-inventory.index')
@@ -674,12 +675,49 @@ class MedicineInventoryController extends Controller
         return $branchId;
     }
 
+    private function findMedicineForCurrentUserOrFail(int $id): MedicineProduct
+    {
+        $medicine = MedicineProduct::query()->whereKey($id)->firstOrFail();
+
+        if ($this->canViewAllBranches()) {
+            return $medicine;
+        }
+
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $medicine->branch_id !== $branchId) {
+            abort(403, 'You can only edit medicines for your assigned branch.');
+        }
+
+        return $medicine;
+    }
+
     private function findBranchMedicineOrFail(int $id, int $branchId): MedicineProduct
     {
         return MedicineProduct::query()
             ->where('id', $id)
             ->forBranch($branchId)
             ->firstOrFail();
+    }
+
+    private function findBatchForCurrentUserOrFail(int $id): ProductQty
+    {
+        $batch = ProductQty::query()
+            ->where('id', $id)
+            ->where('status', '!=', 'Deleted')
+            ->firstOrFail();
+
+        if ($this->canViewAllBranches()) {
+            return $batch;
+        }
+
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $batch->product?->branch_id !== $branchId) {
+            abort(403, 'You can only edit batches for your assigned branch.');
+        }
+
+        return $batch;
     }
 
     private function findBranchBatchOrFail(int $id, int $branchId): ProductQty
