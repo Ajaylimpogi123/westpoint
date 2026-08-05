@@ -155,11 +155,7 @@ class StockInController extends Controller
 
     public function show(StockIn $stockIn): JsonResponse
     {
-        $branchId = $this->branchIdOrFail();
-
-        if ((int) $stockIn->branch_id !== $branchId) {
-            abort(403, 'You do not have access to this stock-in transaction.');
-        }
+        $this->assertCanAccessBranchTransaction((int) $stockIn->branch_id);
 
         $stockIn->load([
             'items' => function ($query) {
@@ -207,11 +203,7 @@ class StockInController extends Controller
 
     public function receipt(StockIn $stockIn): Response
     {
-        $branchId = $this->branchIdOrFail();
-
-        if ((int) $stockIn->branch_id !== $branchId) {
-            abort(403, 'You do not have access to this stock-in transaction.');
-        }
+        $this->assertCanAccessBranchTransaction((int) $stockIn->branch_id);
 
         $stockIn->load([
             'branch',
@@ -234,6 +226,19 @@ class StockInController extends Controller
         return Inertia::render('MedicineInventory/StockInReceipt', [
             'stockIn' => $stockIn,
         ]);
+    }
+
+    private function assertCanAccessBranchTransaction(int $transactionBranchId): void
+    {
+        if ($this->canAssignBranch()) {
+            return;
+        }
+
+        $branchId = $this->branchIdOrFail();
+
+        if ($transactionBranchId !== $branchId) {
+            abort(403, 'You do not have access to this stock-in transaction.');
+        }
     }
 
     private function canAssignBranch(): bool

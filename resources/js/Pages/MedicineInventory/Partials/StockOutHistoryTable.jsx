@@ -1,6 +1,13 @@
 import { Button } from "@/Components/ui/button";
 import { Label } from "@/Components/ui/label";
 import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/Components/ui/select";
+import {
     Table,
     TableBody,
     TableCell,
@@ -16,8 +23,17 @@ import { formatDate } from "@/lib/dates";
 
 const PER_PAGE_OPTIONS = [10, 15, 25, 50];
 
-export default function StockOutHistoryTable({ stockOuts, filters }) {
+export default function StockOutHistoryTable({
+    stockOuts,
+    filters,
+    canViewAllBranches = false,
+    branches = [],
+}) {
     const perPage = Number(filters?.stock_out_per_page) || 10;
+    const branchFilter = filters?.stock_out_branch_id ?? "all";
+    const showBranchColumn =
+        canViewAllBranches &&
+        (branchFilter === "all" || branchFilter === "");
 
     const reload = (params) => {
         router.get(
@@ -43,6 +59,13 @@ export default function StockOutHistoryTable({ stockOuts, filters }) {
     const changePerPage = (value) => {
         reload({
             stock_out_per_page: value,
+            stock_out_page: 1,
+        });
+    };
+
+    const changeBranchFilter = (value) => {
+        reload({
+            stock_out_branch_id: value,
             stock_out_page: 1,
         });
     };
@@ -77,7 +100,43 @@ export default function StockOutHistoryTable({ stockOuts, filters }) {
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                 <h3 className="text-sm font-semibold">Transaction History</h3>
 
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-3">
+                    {canViewAllBranches && (
+                        <div className="flex items-center gap-2">
+                            <Label
+                                htmlFor="stock_out_branch_id"
+                                className="text-sm text-muted-foreground"
+                            >
+                                Branch
+                            </Label>
+                            <Select
+                                value={branchFilter}
+                                onValueChange={changeBranchFilter}
+                            >
+                                <SelectTrigger
+                                    id="stock_out_branch_id"
+                                    className="h-9 w-[180px]"
+                                >
+                                    <SelectValue placeholder="All branches" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                    <SelectItem value="all">
+                                        All branches
+                                    </SelectItem>
+                                    {branches.map((branch) => (
+                                        <SelectItem
+                                            key={branch.id}
+                                            value={String(branch.id)}
+                                        >
+                                            {branch.branch_name}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                        </div>
+                    )}
+
+                    <div className="flex items-center gap-2">
                     <Label
                         htmlFor="stock_out_per_page"
                         className="text-sm text-muted-foreground"
@@ -99,6 +158,7 @@ export default function StockOutHistoryTable({ stockOuts, filters }) {
                         ))}
                     </select>
                 </div>
+                </div>
             </div>
 
             <div className="rounded-md border">
@@ -108,6 +168,9 @@ export default function StockOutHistoryTable({ stockOuts, filters }) {
                             <TableHead>ID</TableHead>
                             <TableHead>Subtype</TableHead>
                             <TableHead>Date</TableHead>
+                            {showBranchColumn && (
+                                <TableHead>Branch</TableHead>
+                            )}
                             <TableHead>Issued By</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
@@ -125,6 +188,12 @@ export default function StockOutHistoryTable({ stockOuts, filters }) {
                                     <TableCell>
                                         {formatDate(stockOut.created_at)}
                                     </TableCell>
+                                    {showBranchColumn && (
+                                        <TableCell>
+                                            {stockOut.branch?.branch_name ??
+                                                "—"}
+                                        </TableCell>
+                                    )}
                                     <TableCell>{stockOut.issued_by}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
@@ -192,7 +261,7 @@ export default function StockOutHistoryTable({ stockOuts, filters }) {
                         ) : (
                             <TableRow>
                                 <TableCell
-                                    colSpan={5}
+                                    colSpan={showBranchColumn ? 6 : 5}
                                     className="h-24 text-center text-sm text-muted-foreground"
                                 >
                                     No stock-out transactions recorded yet.

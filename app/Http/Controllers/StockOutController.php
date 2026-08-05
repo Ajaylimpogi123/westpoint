@@ -152,11 +152,7 @@ class StockOutController extends Controller
 
     public function show(StockOut $stockOut): JsonResponse
     {
-        $branchId = $this->branchIdOrFail();
-
-        if ((int) $stockOut->branch_id !== $branchId) {
-            abort(403, 'You do not have access to this stock-out transaction.');
-        }
+        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
 
         $stockOut->load([
             'items' => function ($query) {
@@ -210,11 +206,7 @@ class StockOutController extends Controller
 
     public function receipt(StockOut $stockOut): Response
     {
-        $branchId = $this->branchIdOrFail();
-
-        if ((int) $stockOut->branch_id !== $branchId) {
-            abort(403, 'You do not have access to this stock-out transaction.');
-        }
+        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
 
         $stockOut->load([
             'branch',
@@ -248,11 +240,7 @@ class StockOutController extends Controller
      */
     public function confirmDelivery(StockOut $stockOut): RedirectResponse
     {
-        $branchId = $this->branchIdOrFail();
-
-        if ((int) $stockOut->branch_id !== $branchId) {
-            abort(403, 'You do not have access to this stock-out transaction.');
-        }
+        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
 
         if ($stockOut->transaction_subtype !== 'Dispensed to patient') {
             return redirect()->back()
@@ -265,6 +253,8 @@ class StockOutController extends Controller
         }
 
         try {
+            $branchId = (int) $stockOut->branch_id;
+
             DB::transaction(function () use ($stockOut, $branchId) {
                 $items = StockOutItem::query()
                     ->where('stock_out_id', $stockOut->stock_out_id)
@@ -404,6 +394,19 @@ class StockOutController extends Controller
         }
 
         return $batch;
+    }
+
+    private function assertCanAccessBranchTransaction(int $transactionBranchId): void
+    {
+        if ($this->canAssignBranch()) {
+            return;
+        }
+
+        $branchId = $this->branchIdOrFail();
+
+        if ($transactionBranchId !== $branchId) {
+            abort(403, 'You do not have access to this stock-out transaction.');
+        }
     }
 
     private function canAssignBranch(): bool

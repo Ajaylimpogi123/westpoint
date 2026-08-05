@@ -108,27 +108,58 @@ class MedicineInventoryController extends Controller
             ? $stockOutPerPage
             : 10;
 
-        $stockIns = $sessionBranchId
+        $stockInBranchId = $this->resolveTransactionBranchFilter(
+            $request,
+            'stock_in_branch_id',
+            $canViewAllBranches,
+            $sessionBranchId,
+        );
+        $stockOutBranchId = $this->resolveTransactionBranchFilter(
+            $request,
+            'stock_out_branch_id',
+            $canViewAllBranches,
+            $sessionBranchId,
+        );
+        $stockInBranchFilter = $this->transactionBranchFilterValue(
+            $request,
+            'stock_in_branch_id',
+            $canViewAllBranches,
+        );
+        $stockOutBranchFilter = $this->transactionBranchFilterValue(
+            $request,
+            'stock_out_branch_id',
+            $canViewAllBranches,
+        );
+
+        $stockIns = ($canViewAllBranches || $sessionBranchId)
             ? StockIn::query()
-                ->where('branch_id', $sessionBranchId)
+                ->when($stockInBranchId, fn ($query) => $query->where('branch_id', $stockInBranchId))
+                ->when(
+                    $canViewAllBranches && ! $stockInBranchId,
+                    fn ($query) => $query->with('branch:id,branch_name'),
+                )
                 ->orderByDesc('delivery_date')
                 ->orderByDesc('stock_in_id')
                 ->paginate(
                     $stockInPerPage,
-                    ['stock_in_id', 'supplier_name', 'delivery_date', 'received_by'],
+                    ['stock_in_id', 'supplier_name', 'delivery_date', 'received_by', 'branch_id'],
                     'stock_in_page'
                 )
                 ->withQueryString()
             : null;
 
-        $stockOuts = $sessionBranchId
+        $stockOuts = ($canViewAllBranches || $sessionBranchId)
             ? StockOut::query()
-                ->where('branch_id', $sessionBranchId)
+                ->when($stockOutBranchId, fn ($query) => $query->where('branch_id', $stockOutBranchId))
+                ->when(
+                    $canViewAllBranches && ! $stockOutBranchId,
+                    fn ($query) => $query->with('branch:id,branch_name'),
+                )
                 ->orderByDesc('created_at')
                 ->orderByDesc('stock_out_id')
                 ->paginate(
                     $stockOutPerPage,
-                    ['stock_out_id', 'transaction_subtype', 'issued_by', 'patient_reference', 'delivery_confirmed', 'created_at'],
+                    ['stock_out_id', 'transaction_subtype', 'issued_by', 'patient_reference', 'delivery_confirmed', 'created_at', 'branch_id'],
                     'stock_out_page'
                 )
                 ->withQueryString()
@@ -162,7 +193,11 @@ class MedicineInventoryController extends Controller
                     'stock_in_per_page',
                     'stock_out_per_page',
                 ]),
-                $canViewAllBranches ? ['branch_id' => $inventoryBranchFilter] : [],
+                $canViewAllBranches ? [
+                    'branch_id' => $inventoryBranchFilter,
+                    'stock_in_branch_id' => $stockInBranchFilter,
+                    'stock_out_branch_id' => $stockOutBranchFilter,
+                ] : [],
             ),
             'branchId' => $sessionBranchId,
             'branchName' => $branchName,
@@ -546,6 +581,43 @@ class MedicineInventoryController extends Controller
         }
 
         return (string) (int) $branchFilter;
+    }
+
+    private function resolveTransactionBranchFilter(
+        Request $request,
+        string $key,
+        bool $canViewAllBranches,
+        ?int $sessionBranchId,
+    ): ?int {
+        if (! $canViewAllBranches) {
+            return $sessionBranchId;
+        }
+
+        $filter = $request->input($key, 'all');
+
+        if ($filter === 'all' || $filter === '' || $filter === null) {
+            return null;
+        }
+
+        return (int) $filter;
+    }
+
+    private function transactionBranchFilterValue(
+        Request $request,
+        string $key,
+        bool $canViewAllBranches,
+    ): string {
+        if (! $canViewAllBranches) {
+            return 'all';
+        }
+
+        $filter = $request->input($key, 'all');
+
+        if ($filter === 'all' || $filter === '' || $filter === null) {
+            return 'all';
+        }
+
+        return (string) (int) $filter;
     }
 
     private function productsForBranch(int $branchId)

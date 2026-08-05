@@ -12,6 +12,7 @@ export default function NewTransactionsPanel({
     branchName,
     branches = [],
     canAssignBranch = false,
+    canViewAllBranches = false,
     products,
     stockIns,
     stockOuts,
@@ -63,6 +64,8 @@ export default function NewTransactionsPanel({
                             <StockInHistoryTable
                                 stockIns={stockIns}
                                 filters={filters}
+                                canViewAllBranches={canViewAllBranches}
+                                branches={branches}
                             />
                         )}
                     </TabsContent>
@@ -104,6 +107,8 @@ export default function NewTransactionsPanel({
                             <StockOutHistoryTable
                                 stockOuts={stockOuts}
                                 filters={filters}
+                                canViewAllBranches={canViewAllBranches}
+                                branches={branches}
                             />
                         )}
                     </TabsContent>
