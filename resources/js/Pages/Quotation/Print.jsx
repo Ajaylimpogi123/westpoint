@@ -26,11 +26,11 @@ export default function Print({ quotation }) {
                     {/* Letterhead */}
                     <div className="flex items-center gap-4 border-b-2 border-slate-900 pb-3">
                         <div className="flex h-28 w-28 shrink-0 items-center justify-center">
-                            <img
+                            {/* <img
                                 src="/images/logo/Westpoint.png"
                                 alt="Westpoint Pharma &amp; Medical Supplies Distribution"
                                 className="h-30 w-30 object-contain"
-                            />
+                            /> */}
                         </div>
                         <div className="flex-1 text-center">
                             <h1 className="text-xl font-extrabold uppercase tracking-wide">
