@@ -104,18 +104,34 @@ export default function InvoiceReceipt({ sale }) {
                     width: 100%;
                     border-collapse: collapse;
                     margin: 10px 0;
+                    table-layout: fixed;
                 }
                 th, td {
-                    padding: 3px 0;
+                    padding: 3px 2px;
                     text-align: left;
                     font-size: 10px;
                     vertical-align: top;
+                    word-wrap: break-word;
+                    overflow-wrap: break-word;
                 }
                 th {
                     border-bottom: 1px solid #000;
                 }
                 td.num, th.num {
                     text-align: right;
+                    white-space: nowrap;
+                }
+                col.col-item {
+                    width: 46%;
+                }
+                col.col-unit {
+                    width: 18%;
+                }
+                col.col-qty {
+                    width: 12%;
+                }
+                col.col-total {
+                    width: 24%;
                 }
                 .totals {
                     border-top: 1px solid #000;
@@ -173,6 +189,12 @@ export default function InvoiceReceipt({ sale }) {
             </div>
 
             <table>
+                <colgroup>
+                    <col className="col-item" />
+                    <col className="col-unit" />
+                    <col className="col-qty" />
+                    <col className="col-total" />
+                </colgroup>
                 <thead>
                     <tr>
                         <th>Item</th>
