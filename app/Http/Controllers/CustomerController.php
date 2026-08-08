@@ -32,7 +32,8 @@ class CustomerController extends Controller
                 $query->where(function ($query) use ($search) {
                     $query->where('first_name', 'like', "%{$search}%")
                         ->orWhere('last_name', 'like', "%{$search}%")
-                        ->orWhere('senior_id_number', 'like', "%{$search}%");
+                        ->orWhere('senior_id_number', 'like', "%{$search}%")
+                        ->orWhere('pwd_id_number', 'like', "%{$search}%");
                 });
             })
             ->orderByDesc('created_at')
@@ -60,6 +61,7 @@ class CustomerController extends Controller
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
             'senior_id_number' => ['nullable', 'string', 'max:50', 'required_if:customer_type,Senior Citizen'],
+            'pwd_id_number' => ['nullable', 'string', 'max:50', 'required_if:customer_type,PWD'],
             'email' => ['nullable', 'email', 'max:100'],
             'address' => ['nullable', 'string'],
             'customer_type' => ['required', 'string', 'in:Regular,Senior Citizen,PWD'],
@@ -77,6 +79,9 @@ class CustomerController extends Controller
             'senior_id_number' => $validated['customer_type'] === 'Senior Citizen'
                 ? ($validated['senior_id_number'] ?? null)
                 : null,
+            'pwd_id_number' => $validated['customer_type'] === 'PWD'
+                ? ($validated['pwd_id_number'] ?? null)
+                : null,
             'email' => $validated['email'] ?? null,
             'address' => $validated['address'] ?? null,
             'customer_type' => $validated['customer_type'],
@@ -86,6 +91,59 @@ class CustomerController extends Controller
 
         return redirect()->route('customer-management.index')
             ->with('success', 'Customer registered successfully.');
+    }
+
+    public function update(Request $request, int $id): RedirectResponse
+    {
+        $customer = BranchCustomer::findOrFail($id);
+        $roleId = $this->roleId();
+        $canAssignBranch = $roleId === 2;
+        $branchId = $this->branchId();
+
+        if (! $canAssignBranch && $customer->branch_id !== $branchId) {
+            abort(403, 'You cannot edit customers outside your branch.');
+        }
+
+        $rules = [
+            'first_name' => ['required', 'string', 'max:100'],
+            'last_name' => ['required', 'string', 'max:100'],
+            'senior_id_number' => ['nullable', 'string', 'max:50', 'required_if:customer_type,Senior Citizen'],
+            'pwd_id_number' => ['nullable', 'string', 'max:50', 'required_if:customer_type,PWD'],
+            'email' => ['nullable', 'email', 'max:100'],
+            'address' => ['nullable', 'string'],
+            'customer_type' => ['required', 'string', 'in:Regular,Senior Citizen,PWD'],
+            'status' => ['required', 'string', 'in:active,inactive'],
+        ];
+
+        if ($canAssignBranch) {
+            $rules['branch_id'] = ['required', 'integer', 'exists:branches,id'];
+        }
+
+        $validated = $request->validate($rules);
+
+        $updateData = [
+            'first_name' => $validated['first_name'],
+            'last_name' => $validated['last_name'],
+            'senior_id_number' => $validated['customer_type'] === 'Senior Citizen'
+                ? ($validated['senior_id_number'] ?? null)
+                : null,
+            'pwd_id_number' => $validated['customer_type'] === 'PWD'
+                ? ($validated['pwd_id_number'] ?? null)
+                : null,
+            'email' => $validated['email'] ?? null,
+            'address' => $validated['address'] ?? null,
+            'customer_type' => $validated['customer_type'],
+            'status' => $validated['status'],
+        ];
+
+        if ($canAssignBranch) {
+            $updateData['branch_id'] = (int) $validated['branch_id'];
+        }
+
+        $customer->update($updateData);
+
+        return redirect()->route('customer-management.index')
+            ->with('success', 'Customer updated successfully.');
     }
 
     private function roleId(): int

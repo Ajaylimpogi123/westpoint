@@ -23,6 +23,7 @@ import {
     SelectValue,
 } from "@/Components/ui/select";
 import { formatCurrency } from "../lib/pricing";
+import { getCustomerIdNumber } from "@/Pages/CustomerManagement/lib/customerType";
 import { formatCustomerName } from "../lib/customerDiscount";
 import { newIdempotencyKey } from "@/lib/idempotency";
 
@@ -225,10 +226,7 @@ export default function CheckoutDialog({
                                 </div>
                                 <div className="mt-1 text-muted-foreground">
                                     {[
-                                        selectedCustomer.customer_type ===
-                                            "Senior Citizen"
-                                            ? selectedCustomer.senior_id_number
-                                            : null,
+                                        getCustomerIdNumber(selectedCustomer),
                                         selectedCustomer.customer_type,
                                     ]
                                         .filter(Boolean)

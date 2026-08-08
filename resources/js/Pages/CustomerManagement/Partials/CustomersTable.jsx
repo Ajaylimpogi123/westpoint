@@ -12,6 +12,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
 import { router } from "@inertiajs/react";
 import CustomerTypeBadge from "./CustomerTypeBadge";
 import StatusBadge from "./StatusBadge";
+import EditModal from "./EditModal";
+import { getCustomerIdNumber } from "../lib/customerType";
 
 export default function CustomersTable({
     customers,
@@ -76,7 +78,7 @@ export default function CustomersTable({
             <CardContent className="space-y-4">
                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                     <Input
-                        placeholder="Search by name or senior ID number..."
+                        placeholder="Search by name or ID number..."
                         defaultValue={filters?.search || ""}
                         className="max-w-sm"
                         onKeyDown={(e) => {
@@ -132,7 +134,7 @@ export default function CustomersTable({
                         <TableHeader>
                             <TableRow>
                                 <TableHead>Name</TableHead>
-                                <TableHead>Senior ID Number</TableHead>
+                                <TableHead>ID Number</TableHead>
                                 {canFilterBranches && (
                                     <TableHead>Branch</TableHead>
                                 )}
@@ -152,11 +154,8 @@ export default function CustomersTable({
                                             {customer.last_name}
                                         </TableCell>
                                         <TableCell>
-                                            {customer.customer_type ===
-                                                "Senior Citizen"
-                                                ? customer.senior_id_number ||
-                                                  "-"
-                                                : "-"}
+                                            {getCustomerIdNumber(customer) ||
+                                                "-"}
                                         </TableCell>
                                         {canFilterBranches && (
                                             <TableCell>
@@ -175,13 +174,21 @@ export default function CustomersTable({
                                             />
                                         </TableCell>
                                         <TableCell className="text-right">
-                                            <Button
-                                                type="button"
-                                                variant="outline"
-                                                size="sm"
+                                            <EditModal
+                                                customer={customer}
+                                                branches={branches}
+                                                canFilterBranches={
+                                                    canFilterBranches
+                                                }
                                             >
-                                                Edit
-                                            </Button>
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                >
+                                                    Edit
+                                                </Button>
+                                            </EditModal>
                                         </TableCell>
                                     </TableRow>
                                 ))

@@ -102,7 +102,8 @@ class PosController extends Controller
             ->where(function ($query) use ($search) {
                 $query->where('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
-                    ->orWhere('senior_id_number', 'like', "%{$search}%");
+                    ->orWhere('senior_id_number', 'like', "%{$search}%")
+                    ->orWhere('pwd_id_number', 'like', "%{$search}%");
             })
             ->orderBy('last_name')
             ->orderBy('first_name')
@@ -122,6 +123,7 @@ class PosController extends Controller
             'first_name' => ['required', 'string', 'max:100'],
             'last_name' => ['required', 'string', 'max:100'],
             'senior_id_number' => ['nullable', 'string', 'max:50', 'required_if:customer_type,Senior Citizen'],
+            'pwd_id_number' => ['nullable', 'string', 'max:50', 'required_if:customer_type,PWD'],
             'customer_type' => ['required', 'string', 'in:Regular,Senior Citizen,PWD'],
             'branch_id' => [$canAssignBranch ? 'required' : 'nullable', 'integer', 'exists:branches,id'],
         ]);
@@ -136,6 +138,9 @@ class PosController extends Controller
             'last_name' => $validated['last_name'],
             'senior_id_number' => $validated['customer_type'] === 'Senior Citizen'
                 ? ($validated['senior_id_number'] ?? null)
+                : null,
+            'pwd_id_number' => $validated['customer_type'] === 'PWD'
+                ? ($validated['pwd_id_number'] ?? null)
                 : null,
             'customer_type' => $validated['customer_type'],
             'status' => 'active',
@@ -897,6 +902,7 @@ class PosController extends Controller
      *     first_name: string,
      *     last_name: string,
      *     senior_id_number: ?string,
+     *     pwd_id_number: ?string,
      *     customer_type: string,
      *     branch_name: ?string
      * }
@@ -908,6 +914,7 @@ class PosController extends Controller
             'first_name' => $customer->first_name,
             'last_name' => $customer->last_name,
             'senior_id_number' => $customer->senior_id_number,
+            'pwd_id_number' => $customer->pwd_id_number,
             'customer_type' => $customer->customer_type,
             'branch_name' => $customer->branch?->branch_name,
         ];

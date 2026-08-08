@@ -102,9 +102,13 @@ export default function RegistrationForm({ branches, branchId, branchName }) {
                             value={data.customer_type}
                             className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                             onChange={(e) => {
-                                setData("customer_type", e.target.value);
-                                if (e.target.value !== "Senior Citizen") {
+                                const type = e.target.value;
+                                setData("customer_type", type);
+                                if (type !== "Senior Citizen") {
                                     setData("senior_id_number", "");
+                                }
+                                if (type !== "PWD") {
+                                    setData("pwd_id_number", "");
                                 }
                             }}
                             required
@@ -141,6 +145,31 @@ export default function RegistrationForm({ branches, branchId, branchName }) {
                             />
                             <InputError
                                 message={errors.senior_id_number}
+                                className="mt-2"
+                            />
+                        </div>
+                    )}
+
+                    {data.customer_type === "PWD" && (
+                        <div className="mt-4">
+                            <InputLabel
+                                htmlFor="pwd_id_number"
+                                value="PWD ID Number"
+                            />
+                            <TextInput
+                                id="pwd_id_number"
+                                name="pwd_id_number"
+                                value={data.pwd_id_number}
+                                className="mt-1 block w-full"
+                                maxLength={50}
+                                placeholder="Enter PWD ID Number"
+                                onChange={(e) =>
+                                    setData("pwd_id_number", e.target.value)
+                                }
+                                required
+                            />
+                            <InputError
+                                message={errors.pwd_id_number}
                                 className="mt-2"
                             />
                         </div>

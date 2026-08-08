@@ -4,6 +4,7 @@ import { Button } from "@/Components/ui/button";
 import { cn } from "@/lib/utils";
 import { searchCustomers } from "../lib/posCustomerApi";
 import { formatCustomerName } from "../lib/customerDiscount";
+import { getCustomerIdNumber } from "@/Pages/CustomerManagement/lib/customerType";
 
 function CustomerTypeBadge({ type }) {
     const styles = {
@@ -211,10 +212,7 @@ export default function CustomerSearchSelect({
                                 </div>
                                 <div className="text-xs text-muted-foreground">
                                     {[
-                                        customer.customer_type ===
-                                            "Senior Citizen"
-                                            ? customer.senior_id_number
-                                            : null,
+                                        getCustomerIdNumber(customer),
                                         showBranch ? customer.branch_name : null,
                                     ]
                                         .filter(Boolean)

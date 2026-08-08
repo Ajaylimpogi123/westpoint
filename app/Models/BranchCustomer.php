@@ -20,6 +20,7 @@ class BranchCustomer extends Model
         'first_name',
         'last_name',
         'senior_id_number',
+        'pwd_id_number',
         'email',
         'address',
         'customer_type',

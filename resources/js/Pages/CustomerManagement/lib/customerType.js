@@ -10,3 +10,15 @@ export const STATUS_STYLES = {
     active: "bg-emerald-50 text-emerald-700 ring-emerald-600/20",
     inactive: "bg-red-50 text-red-700 ring-red-600/20",
 };
+
+export function getCustomerIdNumber(customer) {
+    if (customer.customer_type === "Senior Citizen") {
+        return customer.senior_id_number;
+    }
+
+    if (customer.customer_type === "PWD") {
+        return customer.pwd_id_number;
+    }
+
+    return null;
+}

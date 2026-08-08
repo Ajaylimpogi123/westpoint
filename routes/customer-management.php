@@ -8,4 +8,6 @@ Route::middleware(['auth', 'role:1,2'])->group(function () {
         ->name('customer-management.index');
     Route::post('/customer-management', [CustomerController::class, 'store'])
         ->name('customer-management.store');
+    Route::patch('/customer-management/{id}', [CustomerController::class, 'update'])
+        ->name('customer-management.update');
 });

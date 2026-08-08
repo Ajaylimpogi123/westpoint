@@ -38,18 +38,21 @@ export default function NewCustomerModal({
         first_name: "",
         last_name: "",
         senior_id_number: "",
+        pwd_id_number: "",
         customer_type: "Regular",
         branch_id: roleId === 2 ? "" : String(branchId ?? ""),
     });
 
     const isAdmin = roleId === 2;
     const isSenior = form.customer_type === "Senior Citizen";
+    const isPwd = form.customer_type === "PWD";
 
     const resetForm = () => {
         setForm({
             first_name: "",
             last_name: "",
             senior_id_number: "",
+            pwd_id_number: "",
             customer_type: "Regular",
             branch_id: isAdmin ? "" : String(branchId ?? ""),
         });
@@ -60,8 +63,15 @@ export default function NewCustomerModal({
         setForm((current) => ({
             ...current,
             [field]: value,
-            ...(field === "customer_type" && value !== "Senior Citizen"
-                ? { senior_id_number: "" }
+            ...(field === "customer_type"
+                ? {
+                      senior_id_number:
+                          value === "Senior Citizen"
+                              ? current.senior_id_number
+                              : "",
+                      pwd_id_number:
+                          value === "PWD" ? current.pwd_id_number : "",
+                  }
                 : {}),
         }));
         setErrors((current) => ({ ...current, [field]: undefined }));
@@ -77,6 +87,7 @@ export default function NewCustomerModal({
                 first_name: form.first_name.trim(),
                 last_name: form.last_name.trim(),
                 senior_id_number: isSenior ? form.senior_id_number : "",
+                pwd_id_number: isPwd ? form.pwd_id_number : "",
                 customer_type: form.customer_type,
             };
 
@@ -218,6 +229,32 @@ export default function NewCustomerModal({
                             {errors.senior_id_number && (
                                 <p className="text-sm text-destructive">
                                     {errors.senior_id_number[0]}
+                                </p>
+                            )}
+                        </div>
+                    )}
+
+                    {isPwd && (
+                        <div className="space-y-2">
+                            <Label htmlFor="pos_pwd_id_number">
+                                PWD ID Number
+                            </Label>
+                            <Input
+                                id="pos_pwd_id_number"
+                                value={form.pwd_id_number}
+                                onChange={(event) =>
+                                    updateField(
+                                        "pwd_id_number",
+                                        event.target.value,
+                                    )
+                                }
+                                maxLength={50}
+                                placeholder="Enter PWD ID Number"
+                                required
+                            />
+                            {errors.pwd_id_number && (
+                                <p className="text-sm text-destructive">
+                                    {errors.pwd_id_number[0]}
                                 </p>
                             )}
                         </div>
