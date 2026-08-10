@@ -1,9 +1,7 @@
 import { useState } from "react";
 import axios from "axios";
-import { router } from "@inertiajs/react";
 import { toast } from "sonner";
-import { CheckCircle2, Printer } from "lucide-react";
-import Swal from "sweetalert2";
+import { Printer } from "lucide-react";
 import { Button } from "@/Components/ui/button";
 import {
     Dialog,
@@ -19,19 +17,16 @@ import {
     TableHeader,
     TableRow,
 } from "@/Components/ui/table";
+import { formatDate, formatDateTime } from "@/lib/dates";
 
-import { formatDateTime } from "@/lib/dates";
-import { isBoxUnit } from "@/lib/units";
-
-export default function StockOutViewModal({ stockOutId, children }) {
+export default function CustomerReturnViewModal({ returnId, children }) {
     const [open, setOpen] = useState(false);
     const [loading, setLoading] = useState(false);
     const [details, setDetails] = useState(null);
-    const [confirming, setConfirming] = useState(false);
 
     const openModal = async () => {
-        if (!stockOutId) {
-            toast.error("Stock-out ID not found");
+        if (!returnId) {
+            toast.error("Return ID not found");
             return;
         }
 
@@ -40,56 +35,15 @@ export default function StockOutViewModal({ stockOutId, children }) {
 
         try {
             const response = await axios.get(
-                route("stock-out.show", stockOutId),
+                route("customer-return.show", returnId),
             );
             setDetails(response.data);
         } catch {
-            toast.error("Failed to load stock-out details");
+            toast.error("Failed to load return details");
             setOpen(false);
         } finally {
             setLoading(false);
         }
-    };
-
-    const addToSales = async () => {
-        const result = await Swal.fire({
-            icon: "question",
-            title: "Confirm Delivery",
-            text: "Confirm that the patient has received this delivery? This will record it as a completed sale.",
-            showCancelButton: true,
-            confirmButtonText: "Yes, confirm",
-            confirmButtonColor: "#16a34a",
-            cancelButtonText: "Cancel",
-        });
-
-        if (!result.isConfirmed) {
-            return;
-        }
-
-        setConfirming(true);
-
-        router.post(
-            route("stock-out.confirm-delivery", stockOutId),
-            {},
-            {
-                preserveScroll: true,
-                only: ["stockOuts"],
-                onSuccess: () => {
-                    setDetails((current) =>
-                        current
-                            ? {
-                                  ...current,
-                                  stock_out: {
-                                      ...current.stock_out,
-                                      delivery_confirmed: true,
-                                  },
-                              }
-                            : current,
-                    );
-                },
-                onFinish: () => setConfirming(false),
-            },
-        );
     };
 
     return (
@@ -100,49 +54,43 @@ export default function StockOutViewModal({ stockOutId, children }) {
                 <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>
-                            Stock Out #
-                            {details?.stock_out?.stock_out_id ?? stockOutId}
+                            Return #
+                            {details?.customer_return?.return_id ?? returnId}
                         </DialogTitle>
                     </DialogHeader>
 
                     {loading ? (
                         <div className="py-8 text-center text-sm text-muted-foreground">
-                            Loading stock-out details...
+                            Loading return details...
                         </div>
                     ) : details ? (
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                                 <div>
                                     <span className="text-muted-foreground">
-                                        Subtype:
+                                        Customer:
                                     </span>{" "}
                                     <span className="font-medium">
-                                        {details.stock_out.transaction_subtype}
+                                        {details.customer_return.customer
+                                            ?.name || "—"}
                                     </span>
                                 </div>
                                 <div>
                                     <span className="text-muted-foreground">
-                                        Issued By:
+                                        Return Date:
                                     </span>{" "}
                                     <span className="font-medium">
-                                        {details.stock_out.issued_by}
+                                        {formatDate(
+                                            details.customer_return.return_date,
+                                        )}
                                     </span>
                                 </div>
                                 <div>
                                     <span className="text-muted-foreground">
-                                        Patient / Reference:
+                                        Received By:
                                     </span>{" "}
                                     <span className="font-medium">
-                                        {details.stock_out.patient_reference ||
-                                            "—"}
-                                    </span>
-                                </div>
-                                <div>
-                                    <span className="text-muted-foreground">
-                                        Delivered To:
-                                    </span>{" "}
-                                    <span className="font-medium">
-                                        {details.stock_out.delivered_to || "—"}
+                                        {details.customer_return.received_by}
                                     </span>
                                 </div>
                                 <div>
@@ -151,17 +99,17 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                     </span>{" "}
                                     <span className="font-medium">
                                         {formatDateTime(
-                                            details.stock_out.created_at,
+                                            details.customer_return.created_at,
                                         )}
                                     </span>
                                 </div>
-                                {details.stock_out.remarks && (
+                                {details.customer_return.remarks && (
                                     <div className="sm:col-span-2">
                                         <span className="text-muted-foreground">
                                             Remarks:
                                         </span>{" "}
                                         <span className="font-medium">
-                                            {details.stock_out.remarks}
+                                            {details.customer_return.remarks}
                                         </span>
                                     </div>
                                 )}
@@ -173,10 +121,10 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                         <TableRow>
                                             <TableHead>Medicine Name</TableHead>
                                             <TableHead>Brand</TableHead>
-                                            <TableHead>Dose/Form</TableHead>
                                             <TableHead>Lot</TableHead>
+                                            <TableHead>Expiry</TableHead>
                                             <TableHead>Unit Type</TableHead>
-                                            <TableHead>Qty Deducted</TableHead>
+                                            <TableHead>Qty</TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
@@ -192,30 +140,29 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                                             ?.brand_name || "-"}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {item.product?.dose +
-                                                            "/" +
-                                                            item.product
-                                                                ?.form || "-"}
+                                                        {item.batch_number ||
+                                                            "-"}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {item.lot_number || "-"}
+                                                        {formatDate(
+                                                            item.expiry_date,
+                                                        )}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {isBoxUnit(
-                                                            item.unit_type,
-                                                        )
+                                                        {item.unit_type ===
+                                                        "box"
                                                             ? "Box"
                                                             : "Piece"}
                                                     </TableCell>
                                                     <TableCell>
-                                                        {item.quantity_deducted}
+                                                        {item.quantity_received}
                                                     </TableCell>
                                                 </TableRow>
                                             ))
                                         ) : (
                                             <TableRow>
                                                 <TableCell
-                                                    colSpan={5}
+                                                    colSpan={6}
                                                     className="text-center"
                                                 >
                                                     No items found.
@@ -226,33 +173,16 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                 </Table>
                             </div>
 
-                            <div className="flex flex-wrap items-center justify-end gap-2">
-                                {details.stock_out.transaction_subtype ===
-                                    "Dispensed to patient" &&
-                                    (details.stock_out.delivery_confirmed ? (
-                                        <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
-                                            <CheckCircle2 className="h-3.5 w-3.5" />
-                                            Added to Sales
-                                        </span>
-                                    ) : (
-                                        <Button
-                                            variant="default"
-                                            className="flex items-center gap-1"
-                                            onClick={addToSales}
-                                            disabled={confirming}
-                                        >
-                                            <CheckCircle2 className="h-3.5 w-3.5" />
-                                            Add to Sales
-                                        </Button>
-                                    ))}
+                            <div className="flex justify-end gap-2">
                                 <Button
                                     variant="outline"
                                     className="flex items-center gap-1"
                                     onClick={() =>
                                         window.open(
                                             route(
-                                                "stock-out.receipt",
-                                                details.stock_out.stock_out_id,
+                                                "customer-return.receipt",
+                                                details.customer_return
+                                                    .return_id,
                                             ),
                                             "_blank",
                                             "noopener,noreferrer",

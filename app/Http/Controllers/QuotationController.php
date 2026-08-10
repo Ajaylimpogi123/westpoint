@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\BranchCustomer;
+use App\Models\Branch;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\Quotation;
@@ -54,6 +55,8 @@ class QuotationController extends Controller
     {
         return Inertia::render('Quotation/Create', [
             'nextQtNo' => Quotation::generateQtNo(),
+            'branches' => $this->canAssignBranch() ? Branch::orderBy('branch_name')->get(['id', 'branch_name']) : [],
+            'branchId' => $this->branchId(),
         ]);
     }
 
@@ -139,6 +142,8 @@ class QuotationController extends Controller
 
         return Inertia::render('Quotation/Edit', [
             'quotation' => $quotation,
+            'branches' => $this->canAssignBranch() ? Branch::orderBy('branch_name')->get(['id', 'branch_name']) : [],
+            'branchId' => $this->branchId(),
         ]);
     }
 
@@ -271,27 +276,23 @@ class QuotationController extends Controller
         return response()->json(['products' => $products]);
     }
 
-    public function showMedicine(MedicineProduct $product): JsonResponse
-    {
-        $branchId = $this->branchIdOrFail();
+ public function showMedicine(MedicineProduct $product): JsonResponse
+{
+    $branchId = $this->branchIdOrFail();
 
-        if ((int) $product->branch_id !== $branchId || $product->status !== 'Active') {
-            abort(404);
-        }
-
-        if (! $product->batches()->available()->exists()) {
-            abort(404);
-        }
-
-        $product->load(['batches' => function ($query) {
-            $query->available()
-                ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
-                ->orderBy('expiry')
-                ->select(['id', 'product_id', 'lot_number', 'expiry', 'quantity']);
-        }]);
-
-        return response()->json($this->serializeMedicineForQuotation($product));
+    if ((int) $product->branch_id !== $branchId || $product->status !== 'Active') {
+        abort(404);
     }
+
+    $product->load(['batches' => function ($query) {
+        $query->available()
+            ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('expiry')
+            ->select(['id', 'product_id', 'lot_number', 'expiry', 'quantity']);
+    }]);
+
+    return response()->json($this->serializeMedicineForQuotation($product));
+}
 
     // ──────────────────────────────────────────────────────
     // UPDATE STATUS — send / approve / cancel
@@ -313,6 +314,11 @@ class QuotationController extends Controller
     private function roleId(): int
     {
         return (int) session('role_id');
+    }
+
+    private function canAssignBranch(): bool
+    {
+        return $this->roleId() === 2;
     }
 
     private function branchId(): ?int
@@ -345,15 +351,12 @@ class QuotationController extends Controller
         return $rule;
     }
 
-    private function branchMedicinesQuery(int $branchId)
-    {
-        return MedicineProduct::query()
-            ->active()
-            ->forBranch($branchId)
-            ->whereHas('batches', function ($batchQuery) {
-                $batchQuery->available();
-            });
-    }
+private function branchMedicinesQuery(int $branchId)
+{
+    return MedicineProduct::query()
+        ->active()
+        ->forBranch($branchId);
+}
 
     private function serializeMedicineSummary(MedicineProduct $product): array
     {

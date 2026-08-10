@@ -12,7 +12,15 @@ import {
     SelectValue,
 } from "@/Components/ui/select";
 import { Toggle } from "@/Components/ui/toggle";
-import { Loader2, Search, SlidersHorizontal, X, TrendingUp, Package, Pill } from "lucide-react";
+import {
+    Loader2,
+    Search,
+    SlidersHorizontal,
+    X,
+    TrendingUp,
+    Package,
+    Pill,
+} from "lucide-react";
 import ProductCard from "./ProductCard";
 
 const MEDICINE_FORMS = [
@@ -273,7 +281,7 @@ export default function ProductCatalog({
                 <>
                     <div
                         id="pos-product-grid"
-                        className="grid max-h-[calc(100vh-18rem)] gap-4 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3"
+                        className="grid max-h-[calc(100vh-18rem)] gap-3 overflow-y-auto pr-1 sm:grid-cols-2 xl:grid-cols-3"
                     >
                         {products.map((product) => (
                             <ProductCard
@@ -298,13 +306,10 @@ export default function ProductCatalog({
                                     variant="outline"
                                     size="sm"
                                     onClick={() =>
-                                        onPageChange(
-                                            pagination.currentPage - 1,
-                                        )
+                                        onPageChange(pagination.currentPage - 1)
                                     }
                                     disabled={
-                                        loading ||
-                                        pagination.currentPage <= 1
+                                        loading || pagination.currentPage <= 1
                                     }
                                 >
                                     Previous
@@ -318,9 +323,7 @@ export default function ProductCatalog({
                                     variant="outline"
                                     size="sm"
                                     onClick={() =>
-                                        onPageChange(
-                                            pagination.currentPage + 1,
-                                        )
+                                        onPageChange(pagination.currentPage + 1)
                                     }
                                     disabled={
                                         loading ||

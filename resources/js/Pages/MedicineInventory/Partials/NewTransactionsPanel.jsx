@@ -7,6 +7,9 @@ import StockInHistoryTable from "./StockInHistoryTable";
 import StockOutModal from "./StockOutModal";
 import StockOutHistoryTable from "./StockOutHistoryTable";
 
+import CustomerReturnModal from "./CustomerReturnModal";
+import CustomerReturnHistoryTable from "./CustomerReturnHistoryTable";
+
 export default function NewTransactionsPanel({
     branchId,
     branchName,
@@ -16,6 +19,7 @@ export default function NewTransactionsPanel({
     products,
     stockIns,
     stockOuts,
+    customerReturns,
     filters,
 }) {
     return (
@@ -25,6 +29,9 @@ export default function NewTransactionsPanel({
                     <TabsList>
                         <TabsTrigger value="stock-in">Stock In</TabsTrigger>
                         <TabsTrigger value="stock-out">Stock Out</TabsTrigger>
+                        <TabsTrigger value="customer-return">
+                            Return from Customer
+                        </TabsTrigger>
                     </TabsList>
 
                     <TabsContent value="stock-in" className="space-y-4">
@@ -77,8 +84,8 @@ export default function NewTransactionsPanel({
                                     Stock Out Transactions
                                 </h2>
                                 <p className="text-sm text-muted-foreground">
-                                    Record stock deductions from branch inventory
-                                    by lot.
+                                    Record stock deductions from branch
+                                    inventory by lot.
                                 </p>
                             </div>
 
@@ -106,6 +113,48 @@ export default function NewTransactionsPanel({
                         {(branchId || canAssignBranch) && (
                             <StockOutHistoryTable
                                 stockOuts={stockOuts}
+                                filters={filters}
+                                canViewAllBranches={canViewAllBranches}
+                                branches={branches}
+                            />
+                        )}
+                    </TabsContent>
+                    <TabsContent value="customer-return" className="space-y-4">
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div>
+                                <h2 className="text-lg font-semibold">
+                                    Returns from Customer
+                                </h2>
+                                <p className="text-sm text-muted-foreground">
+                                    Record medicine returned by a customer and
+                                    add it back to branch inventory.
+                                </p>
+                            </div>
+
+                            <CustomerReturnModal
+                                branchId={branchId}
+                                branchName={branchName}
+                                branches={branches}
+                                canAssignBranch={canAssignBranch}
+                                products={products}
+                            >
+                                <Button className="flex items-center gap-2">
+                                    <Plus className="h-4 w-4" />
+                                    Add New Return
+                                </Button>
+                            </CustomerReturnModal>
+                        </div>
+
+                        {!branchId && !canAssignBranch && (
+                            <div className="rounded-md border border-yellow-300 bg-yellow-50 px-4 py-3 text-sm text-yellow-800">
+                                Assign a branch to your account before recording
+                                returns.
+                            </div>
+                        )}
+
+                        {(branchId || canAssignBranch) && (
+                            <CustomerReturnHistoryTable
+                                customerReturns={customerReturns}
                                 filters={filters}
                                 canViewAllBranches={canViewAllBranches}
                                 branches={branches}

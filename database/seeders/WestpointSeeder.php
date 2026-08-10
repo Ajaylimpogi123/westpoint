@@ -55,6 +55,6 @@ class WestpointSeeder extends Seeder
             ]
         );
 
-        $this->call(MedicineSampleSeeder::class);
+        // $this->call(MedicineSampleSeeder::class);
     }
 }

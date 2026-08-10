@@ -10,6 +10,7 @@ use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\StockIn;
 use App\Models\StockOut;
+use App\Models\CustomerReturn;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
 use Illuminate\Http\JsonResponse;
@@ -108,6 +109,24 @@ class MedicineInventoryController extends Controller
             ? $stockOutPerPage
             : 10;
 
+
+            $returnPerPage = (int) $request->input('return_per_page', 10);
+$returnPerPage = in_array($returnPerPage, [10, 15, 25, 50], true)
+    ? $returnPerPage
+    : 10;
+
+$returnBranchId = $this->resolveTransactionBranchFilter(
+    $request,
+    'return_branch_id',
+    $canViewAllBranches,
+    $sessionBranchId,
+);
+$returnBranchFilter = $this->transactionBranchFilterValue(
+    $request,
+    'return_branch_id',
+    $canViewAllBranches,
+);
+
         $stockInBranchId = $this->resolveTransactionBranchFilter(
             $request,
             'stock_in_branch_id',
@@ -165,6 +184,24 @@ class MedicineInventoryController extends Controller
                 ->withQueryString()
             : null;
 
+$customerReturns = ($canViewAllBranches || $sessionBranchId)
+    ? CustomerReturn::query()
+        ->when($returnBranchId, fn ($query) => $query->where('branch_id', $returnBranchId))
+        ->when(
+            $canViewAllBranches && ! $returnBranchId,
+            fn ($query) => $query->with('branch:id,branch_name'),
+        )
+        ->with('customer:customer_id,first_name,last_name,customer_type')
+        ->orderByDesc('return_date')
+        ->orderByDesc('return_id')
+        ->paginate(
+            $returnPerPage,
+            ['return_id', 'customer_id', 'return_date', 'received_by', 'remarks', 'branch_id'],
+            'return_page'
+        )
+        ->withQueryString()
+    : null;
+
         $movementLogPerPage = (int) $request->input('movement_log_per_page', 15);
         $movementLogPerPage = in_array($movementLogPerPage, [10, 15, 25, 50], true)
             ? $movementLogPerPage
@@ -192,11 +229,13 @@ class MedicineInventoryController extends Controller
                     'movement_log_per_page',
                     'stock_in_per_page',
                     'stock_out_per_page',
+                     'return_per_page',
                 ]),
                 $canViewAllBranches ? [
                     'branch_id' => $inventoryBranchFilter,
                     'stock_in_branch_id' => $stockInBranchFilter,
                     'stock_out_branch_id' => $stockOutBranchFilter,
+                    'return_branch_id' => $returnBranchFilter,
                 ] : [],
             ),
             'branchId' => $sessionBranchId,
@@ -209,6 +248,7 @@ class MedicineInventoryController extends Controller
             'products' => $products,
             'stockIns' => $stockIns,
             'stockOuts' => $stockOuts,
+            'customerReturns' => $customerReturns,
             'movementLogs' => $movementLogs,
             'canEditMedicine' => in_array($roleId, [2, 3], true),
         ]);

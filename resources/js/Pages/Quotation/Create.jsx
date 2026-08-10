@@ -4,12 +4,14 @@ import CustomerSearchSelect from "./Partials/CustomerSearchSelect";
 import ItemsTable from "./Partials/ItemsTable";
 import useAddQuotation from "./Hooks/useAddQuotation";
 import { Button } from "@/Components/ui/button";
-import { ArrowLeft } from "lucide-react";
+
+import NewCustomerModal from "./Partials/NewCustomerModal";
+import { ArrowLeft, UserPlus } from "lucide-react";
 const inputCls =
     "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
 const labelCls = "mb-1 block text-sm font-medium text-slate-700";
 
-export default function Create({ nextQtNo }) {
+export default function Create({ nextQtNo, branches = [], branchId = null }) {
     const {
         form,
         selectedCustomer,
@@ -56,7 +58,24 @@ export default function Create({ nextQtNo }) {
                         <div className="rounded-xl border border-slate-200 bg-white p-5">
                             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                 <div>
-                                    <label className={labelCls}>Customer</label>
+                                    <div className="mb-1 flex items-center justify-between">
+                                        <label className={labelCls}>
+                                            Customer
+                                        </label>
+                                        <NewCustomerModal
+                                            branchId={branchId}
+                                            branches={branches}
+                                            onCreated={selectCustomer}
+                                        >
+                                            <button
+                                                type="button"
+                                                className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                                            >
+                                                <UserPlus className="h-3.5 w-3.5" />
+                                                New Customer
+                                            </button>
+                                        </NewCustomerModal>
+                                    </div>
                                     <CustomerSearchSelect
                                         value={selectedCustomer}
                                         onChange={selectCustomer}

@@ -87,6 +87,13 @@ export default function Index({ quotations, filters }) {
                 </td> */}
                 <td className="px-4 py-3 text-center text-slate-600 space-x-2">
                     <Link
+                        href={route("quotations.edit", q.id)}
+                        className="rounded-lg border bg-amber-400 border-slate-500 text-white px-3 py-2 text-sm text-slate-600 hover:bg-amber-300"
+                    >
+                        Edit
+                    </Link>
+
+                    <Link
                         href={route("quotations.show", q.id)}
                         className="rounded-lg bg-green-800 px-4 py-2 text-sm font-medium text-white hover:bg-green-700"
                     >

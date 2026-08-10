@@ -75,14 +75,17 @@ export default function StockOutModal({
         <>
             <div onClick={openModal}>{children}</div>
 
-            <Dialog open={open} onOpenChange={(isOpen) => !isOpen && closeModal()}>
+            <Dialog
+                open={open}
+                onOpenChange={(isOpen) => !isOpen && closeModal()}
+            >
                 <DialogContent className="max-h-[90vh] max-w-6xl overflow-y-auto">
                     <form onSubmit={handleSubmit}>
                         <DialogHeader className="pb-4">
                             <DialogTitle>New Stock Out</DialogTitle>
                             <DialogDescription>
-                                Record stock deductions from branch inventory
-                                by lot.
+                                Record stock deductions from branch inventory by
+                                lot.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -109,7 +112,10 @@ export default function StockOutModal({
                                     >
                                         <option value="">Select subtype</option>
                                         {TRANSACTION_SUBTYPES.map((subtype) => (
-                                            <option key={subtype} value={subtype}>
+                                            <option
+                                                key={subtype}
+                                                value={subtype}
+                                            >
                                                 {subtype}
                                             </option>
                                         ))}
@@ -135,7 +141,9 @@ export default function StockOutModal({
                                                 {branchOptions.map((branch) => (
                                                     <SelectItem
                                                         key={branch.id}
-                                                        value={String(branch.id)}
+                                                        value={String(
+                                                            branch.id,
+                                                        )}
                                                     >
                                                         {branch.branch_name}
                                                     </SelectItem>
@@ -163,7 +171,7 @@ export default function StockOutModal({
 
                                 <div className="grid gap-3">
                                     <Label htmlFor="patient_reference">
-                                        Patient / Reference
+                                        Customer / Reference
                                     </Label>
                                     <Input
                                         id="patient_reference"
@@ -174,7 +182,7 @@ export default function StockOutModal({
                                                 event.target.value,
                                             )
                                         }
-                                        placeholder="Patient name or reference"
+                                        placeholder="Customer name or reference"
                                     />
                                     <InputError
                                         message={errors.patient_reference}
@@ -196,9 +204,7 @@ export default function StockOutModal({
                                         }
                                         placeholder="Recipient name / branch / customer"
                                     />
-                                    <InputError
-                                        message={errors.delivered_to}
-                                    />
+                                    <InputError message={errors.delivered_to} />
                                 </div>
 
                                 <div className="grid gap-3">
@@ -426,9 +432,7 @@ export default function StockOutModal({
                                 </div>
 
                                 <div className="grid gap-2">
-                                    <Label htmlFor="unit_type">
-                                        Unit Type
-                                    </Label>
+                                    <Label htmlFor="unit_type">Unit Type</Label>
                                     <select
                                         id="unit_type"
                                         value={draft.unit_type}
@@ -487,8 +491,8 @@ export default function StockOutModal({
                                     {data.items.length === 0 ? (
                                         <p className="rounded-md border border-dashed px-4 py-6 text-center text-sm text-muted-foreground">
                                             No items added yet. Select a
-                                            medicine and lot, then add it to
-                                            the basket.
+                                            medicine and lot, then add it to the
+                                            basket.
                                         </p>
                                     ) : (
                                         data.items.map((item, index) => {
@@ -508,7 +512,9 @@ export default function StockOutModal({
                                                             </p>
                                                             <p className="text-muted-foreground">
                                                                 Lot{" "}
-                                                                {item.lot_number}{" "}
+                                                                {
+                                                                    item.lot_number
+                                                                }{" "}
                                                                 · Qty{" "}
                                                                 {
                                                                     item.quantity_deducted

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useForm } from "@inertiajs/react";
+import axios from "axios";
 import {
     UNIT_PIECE,
     UNIT_TYPES,
@@ -10,10 +11,7 @@ import {
     maxQuantityForUnit,
     toPieces,
 } from "@/lib/units";
-import { newIdempotencyKey } from "@/lib/idempotency";
 import { fetchBranchProducts } from "../lib/inventoryMedicinesApi";
-
-const TRANSACTION_SUBTYPES = ["Delivery to Customer", "Returned to supplier"];
 
 const emptyDraft = () => ({
     pd_id: "",
@@ -22,10 +20,7 @@ const emptyDraft = () => ({
     unit_type: UNIT_PIECE,
 });
 
-const emptyForm = (branchId) => ({
-    idempotency_key: newIdempotencyKey(),
-    transaction_subtype: "",
-    branch_id: branchId ? String(branchId) : "",
+const emptyForm = () => ({
     patient_reference: "",
     issued_by: "",
     remarks: "",
@@ -34,59 +29,106 @@ const emptyForm = (branchId) => ({
     items: [],
 });
 
-export default function useStockOut({
-    branchId,
-    products: initialProducts = [],
-    canAssignBranch = false,
-    branches = [],
-}) {
-    const defaultBranchId = branchId ?? branches[0]?.id ?? null;
-
-    const [open, setOpen] = useState(false);
+export default function useStockOutEdit({ stockOutId, open }) {
     const [draft, setDraft] = useState(emptyDraft);
-    const [products, setProducts] = useState(initialProducts ?? []);
+    const [products, setProducts] = useState([]);
     const [productsLoading, setProductsLoading] = useState(false);
     const [productsError, setProductsError] = useState(null);
+    const [loading, setLoading] = useState(false);
+    const [loadError, setLoadError] = useState(null);
+    const [transactionSubtype, setTransactionSubtype] = useState(null);
 
-    const { data, setData, post, errors, processing, reset, clearErrors } =
-        useForm(emptyForm(defaultBranchId));
+    const { data, setData, put, errors, processing, reset, clearErrors } =
+        useForm(emptyForm());
 
-    const loadProductsForBranch = useCallback(async (targetBranchId) => {
-        if (!targetBranchId) {
-            setProducts([]);
-            return;
-        }
-
-        setProductsLoading(true);
-        setProductsError(null);
-
-        try {
-            const response = await fetchBranchProducts(targetBranchId);
-            setProducts(response.products ?? []);
-        } catch {
-            setProducts([]);
-            setProductsError(
-                "Could not load medicines for the selected branch.",
-            );
-        } finally {
-            setProductsLoading(false);
-        }
-    }, []);
-
+    // Load the stock-out plus its branch's current products/lots whenever
+    // the modal opens. Live lot quantities come from fetchBranchProducts,
+    // the same source the create modal uses — nothing has been deducted
+    // yet for an editable stock-out, so those quantities are already
+    // accurate without any "reserved" adjustment.
     useEffect(() => {
-        if (!open || !canAssignBranch) {
+        if (!open || !stockOutId) {
             return;
         }
 
-        const selectedBranchId = Number(data.branch_id);
+        let cancelled = false;
 
-        if (!selectedBranchId) {
-            setProducts([]);
-            return;
-        }
+        const load = async () => {
+            setLoading(true);
+            setLoadError(null);
+            clearErrors();
 
-        loadProductsForBranch(selectedBranchId);
-    }, [open, canAssignBranch, data.branch_id, loadProductsForBranch]);
+            try {
+                const response = await axios.get(
+                    route("stock-out.edit", stockOutId),
+                );
+                const { stock_out, items } = response.data;
+
+                if (cancelled) return;
+
+                setTransactionSubtype(stock_out.transaction_subtype);
+                setData({
+                    patient_reference: stock_out.patient_reference ?? "",
+                    issued_by: stock_out.issued_by ?? "",
+                    remarks: stock_out.remarks ?? "",
+                    delivered_to: stock_out.delivered_to ?? "",
+                    delivered_to_address: stock_out.delivered_to_address ?? "",
+                    items: items.map((item) => ({
+                        pd_id: String(item.pd_id),
+                        products_qty_id: String(item.products_qty_id),
+                        lot_number: item.lot_number,
+                        quantity_deducted: item.quantity_deducted,
+                        unit_type: item.unit_type,
+                        pieces_preview: item.pieces_deducted,
+                    })),
+                });
+
+                setProductsLoading(true);
+                try {
+                    const branchProducts = await fetchBranchProducts(
+                        stock_out.branch_id,
+                    );
+                    if (!cancelled) {
+                        setProducts(branchProducts.products ?? []);
+                    }
+                } catch {
+                    if (!cancelled) {
+                        setProductsError(
+                            "Could not load medicines for this branch.",
+                        );
+                    }
+                } finally {
+                    if (!cancelled) setProductsLoading(false);
+                }
+            } catch (error) {
+                if (!cancelled) {
+                    setLoadError(
+                        error?.response?.status === 403
+                            ? "This stock-out can no longer be edited."
+                            : "Failed to load this stock-out.",
+                    );
+                }
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        };
+
+        load();
+
+        return () => {
+            cancelled = true;
+        };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [open, stockOutId]);
+
+    const resetLocal = () => {
+        setDraft(emptyDraft());
+        setProducts([]);
+        setProductsError(null);
+        setLoadError(null);
+        reset();
+        clearErrors();
+    };
 
     const productMap = useMemo(() => {
         return Object.fromEntries(
@@ -120,10 +162,6 @@ export default function useStockOut({
           )
         : 0;
 
-    const piecesPreview = selectedProduct
-        ? toPieces(selectedProduct, draft.quantity_deducted, draft.unit_type)
-        : 0;
-
     const piecesLabel = selectedProduct
         ? describePieces(
               selectedProduct,
@@ -134,46 +172,17 @@ export default function useStockOut({
 
     const lotFor = (productId, batchId) => {
         const lots = productMap[productId]?.batches ?? [];
-
         return lots.find((lot) => String(lot.id) === String(batchId)) ?? null;
     };
 
     const ceilingFor = (productId, batchId, unitType) => {
         const lot = lotFor(productId, batchId);
-
-        if (!lot) {
-            return 0;
-        }
-
+        if (!lot) return 0;
         return maxQuantityForUnit(
             lot.quantity,
             productMap[productId],
             unitType,
         );
-    };
-
-    const openModal = () => {
-        clearErrors();
-        setDraft(emptyDraft());
-        setProductsError(null);
-        setProducts(initialProducts ?? []);
-        setData(emptyForm(defaultBranchId));
-        setOpen(true);
-    };
-
-    const closeModal = () => {
-        setOpen(false);
-        setDraft(emptyDraft());
-        setProducts(initialProducts ?? []);
-        setProductsError(null);
-        reset();
-        clearErrors();
-    };
-
-    const handleBranchChange = (value) => {
-        setData("branch_id", value);
-        setDraft(emptyDraft());
-        setProductsError(null);
     };
 
     const updateDraft = (field, value) => {
@@ -184,7 +193,6 @@ export default function useStockOut({
                 next.products_qty_id = "";
                 next.quantity_deducted = 1;
                 next.unit_type = UNIT_PIECE;
-
                 return next;
             }
 
@@ -199,7 +207,6 @@ export default function useStockOut({
                         ),
                     },
                 );
-
                 return next;
             }
 
@@ -214,23 +221,19 @@ export default function useStockOut({
                         ),
                     },
                 );
-
                 return next;
             }
 
             if (field === "quantity_deducted") {
                 if (value === "") {
                     next.quantity_deducted = "";
-
                     return next;
                 }
-
                 const max = ceilingFor(
                     current.pd_id,
                     current.products_qty_id,
                     current.unit_type,
                 );
-
                 next.quantity_deducted = clampQuantity(value, {
                     min: 0,
                     max,
@@ -258,7 +261,6 @@ export default function useStockOut({
     const updateQuantity = (delta) => {
         setDraft((current) => {
             const base = Number(current.quantity_deducted) || 0;
-
             return {
                 ...current,
                 quantity_deducted: clampQuantity(base + delta, {
@@ -281,9 +283,7 @@ export default function useStockOut({
         !(isBoxUnit(draft.unit_type) && boxesUnavailable);
 
     const addItemToBasket = () => {
-        if (!canAddToBasket) {
-            return;
-        }
+        if (!canAddToBasket) return;
 
         setData("items", [
             ...data.items,
@@ -293,7 +293,11 @@ export default function useStockOut({
                 lot_number: selectedLot?.lot_number ?? "",
                 quantity_deducted: Number(draft.quantity_deducted),
                 unit_type: draft.unit_type,
-                pieces_preview: piecesPreview,
+                pieces_preview: toPieces(
+                    selectedProduct,
+                    draft.quantity_deducted,
+                    draft.unit_type,
+                ),
             },
         ]);
         setDraft(emptyDraft());
@@ -306,26 +310,28 @@ export default function useStockOut({
         );
     };
 
-    const handleSubmit = (event) => {
+    const handleSubmit = (event, { onSuccess } = {}) => {
         event.preventDefault();
 
         if (processing || data.items.length === 0) {
             return;
         }
 
-        post(route("stock-out.store"), {
-            onSuccess: () => closeModal(),
+        put(route("stock-out.update", stockOutId), {
             preserveScroll: true,
             only: ["stockOuts", "medicines", "products", "movementLogs"],
+            onSuccess: () => {
+                resetLocal();
+                onSuccess?.();
+            },
         });
     };
 
     return {
-        TRANSACTION_SUBTYPES,
         UNIT_TYPES,
-        open,
-        openModal,
-        closeModal,
+        loading,
+        loadError,
+        transactionSubtype,
         data,
         setData,
         draft,
@@ -336,7 +342,6 @@ export default function useStockOut({
         availableLots,
         selectedLot,
         maxQuantity,
-        piecesPreview,
         piecesLabel,
         boxesUnavailable,
         canAddToBasket,
@@ -344,14 +349,11 @@ export default function useStockOut({
         products,
         productsLoading,
         productsError,
-        canAssignBranch,
-        branches,
-        handleBranchChange,
         addItemToBasket,
         removeItemFromBasket,
         errors,
         processing,
         handleSubmit,
-        clearErrors,
+        resetLocal,
     };
 }

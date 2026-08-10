@@ -23,6 +23,7 @@ class InventoryMovementLog extends Model
     public const TYPE_MEDICINE_REACTIVATED = 'medicine_reactivated';
     public const TYPE_TRANSFER_OUT = 'transfer_out';
     public const TYPE_TRANSFER_IN = 'transfer_in';
+    public const TYPE_CUSTOMER_RETURN = 'customer_return';
 
     protected $table = 'tbl_inventory_movement_logs';
     protected $primaryKey = 'log_id';

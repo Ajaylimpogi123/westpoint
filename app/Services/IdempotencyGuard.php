@@ -17,7 +17,8 @@ class IdempotencyGuard
     public const SCOPE_STOCK_IN = 'stock_in';
     public const SCOPE_STOCK_OUT = 'stock_out';
     public const SCOPE_POS_CHECKOUT = 'pos_checkout';
-
+    public const SCOPE_CUSTOMER_RETURN = 'customer_return';
+  
     private const TABLE = 'tbl_idempotency_keys';
 
     /**

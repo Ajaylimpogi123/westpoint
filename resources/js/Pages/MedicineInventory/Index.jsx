@@ -20,6 +20,7 @@ export default function Index({
     products,
     stockIns,
     stockOuts,
+    customerReturns,
     movementLogs,
     canEditMedicine,
 }) {
@@ -72,6 +73,7 @@ export default function Index({
                                 products={products}
                                 stockIns={stockIns}
                                 stockOuts={stockOuts}
+                                customerReturns={customerReturns}
                                 filters={filters}
                             />
                         </TabsContent>

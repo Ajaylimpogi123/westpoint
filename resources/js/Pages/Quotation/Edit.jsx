@@ -1,15 +1,16 @@
 import { Head, Link } from "@inertiajs/react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import CustomerSearchSelect from "./Partials/CustomerSearchSelect";
+import NewCustomerModal from "./Partials/NewCustomerModal";
 import ItemsTable from "./Partials/ItemsTable";
 import useEditQuotation from "./Hooks/useEditQuotation";
 import { Button } from "@/Components/ui/button";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, UserPlus } from "lucide-react";
 const inputCls =
     "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
 const labelCls = "mb-1 block text-sm font-medium text-slate-700";
 
-export default function Edit({ quotation }) {
+export default function Edit({ quotation, branches = [], branchId = null }) {
     const isDraft = quotation.status === "draft";
     const {
         form,
@@ -73,9 +74,26 @@ export default function Edit({ quotation }) {
                             <div className="rounded-xl border border-slate-200 bg-white p-5">
                                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                                     <div>
-                                        <label className={labelCls}>
-                                            Customer
-                                        </label>
+                                        <div className="mb-1 flex items-center justify-between">
+                                            <label className={labelCls}>
+                                                Customer
+                                            </label>
+                                            {isDraft && (
+                                                <NewCustomerModal
+                                                    branchId={branchId}
+                                                    branches={branches}
+                                                    onCreated={selectCustomer}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="flex items-center gap-1 text-xs font-medium text-indigo-600 hover:text-indigo-700"
+                                                    >
+                                                        <UserPlus className="h-3.5 w-3.5" />
+                                                        New Customer
+                                                    </button>
+                                                </NewCustomerModal>
+                                            )}
+                                        </div>
                                         <CustomerSearchSelect
                                             value={selectedCustomer}
                                             onChange={selectCustomer}

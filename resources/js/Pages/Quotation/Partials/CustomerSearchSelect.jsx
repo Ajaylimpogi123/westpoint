@@ -160,7 +160,8 @@ export default function CustomerSearchSelect({
                         </li>
                     ) : results.length === 0 ? (
                         <li className="px-3 py-2 text-slate-400">
-                            No customers found
+                            No customers found — use "New Customer" above to add
+                            one.
                         </li>
                     ) : (
                         results.map((c, i) => (
@@ -180,8 +181,7 @@ export default function CustomerSearchSelect({
                                 {(c.senior_id_number || c.address) && (
                                     <div className="text-xs text-slate-400">
                                         {[
-                                            c.customer_type ===
-                                                "Senior Citizen"
+                                            c.customer_type === "Senior Citizen"
                                                 ? c.senior_id_number
                                                 : null,
                                             c.address,

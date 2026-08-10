@@ -22,6 +22,7 @@ export default function StockIn({ filters, items, branches }) {
                         routeName="reports.stock-in"
                         filters={filters}
                         branchOptions={branches}
+                        showSupplierName={true}
                     />
                     <DataTable
                         columns={[

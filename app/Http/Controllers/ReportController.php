@@ -111,7 +111,7 @@ public function salesDetail(Request $request)
 
     public function stockIn(Request $request)
     {
-        $filters = $request->only(['date_from', 'date_to', 'branch_id']);
+        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'supplier_name',]);
 
         return Inertia::render('Reports/StockIn', [
             'filters' => $filters,

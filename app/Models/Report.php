@@ -327,7 +327,9 @@ public static function salesDetailByPaymentMethod(array $filters)
         ->orderByDesc('si.delivery_date');
 
     static::applyBranch($query, $filters, 'si.branch_id');
-
+  if (!empty($filters['supplier_name'])) {
+        $query->where('si.supplier_name', 'like', '%' . $filters['supplier_name'] . '%');
+    }
     return $query->get();
 }
 

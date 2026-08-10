@@ -17,7 +17,7 @@ import {
 } from "../lib/pricing";
 
 const CART_ROW_GRID =
-    "grid grid-cols-[2fr_1.2fr_1.5fr_1fr_1fr] items-center gap-1";
+    "grid grid-cols-[2fr_1.2fr_1.5fr_1fr_1fr_1fr] items-center gap-1";
 
 function CartQuantityInput({
     itemKey,
@@ -96,6 +96,7 @@ export default function CartTable({
                     <div className="text-center">Qty</div>
                     <div className="text-right">Price</div>
                     <div className="text-right">Total</div>
+                    <div className="text-right">Actions</div>
                 </div>
 
                 {cartItems.map((item) => {
@@ -118,25 +119,19 @@ export default function CartTable({
                                             <div className="truncate font-medium">
                                                 {item.product.med_name}
                                             </div>
-                                            {item.product.is_generic && (
-                                                <GenericBadge className="shrink-0 px-1.5 py-0.5 text-[10px]" />
-                                            )}
                                         </div>
                                         {item.product.brand_name && (
                                             <div className="truncate text-muted-foreground">
                                                 {item.product.brand_name}
                                             </div>
                                         )}
+                                        {item.product.dose && (
+                                            <div className="truncate text-muted-foreground">
+                                                {item.product.dose} {"/"}
+                                                {item.product.form}
+                                            </div>
+                                        )}
                                     </div>
-                                    <Button
-                                        variant="ghost"
-                                        size="icon"
-                                        className="h-6 w-6 shrink-0 text-muted-foreground hover:text-red-600"
-                                        onClick={() => onRemove(item.key)}
-                                        disabled={syncing}
-                                    >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
                                 </div>
                             </div>
 
@@ -201,6 +196,17 @@ export default function CartTable({
                             </div>
                             <div className="truncate text-right font-medium tabular-nums">
                                 {formatCurrency(item.totalPrice)}
+                            </div>
+                            <div className="truncate text-right tabular-nums">
+                                <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 shrink-0 text-muted-foreground hover:text-red-600"
+                                    onClick={() => onRemove(item.key)}
+                                    disabled={syncing}
+                                >
+                                    <Trash2 className="h-3.5 w-3.5" />
+                                </Button>
                             </div>
                         </div>
                     );

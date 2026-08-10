@@ -7,7 +7,12 @@ import { usePosCart } from "./Hooks/usePosCart";
 import { usePosProducts } from "./Hooks/usePosProducts";
 import { usePosAlerts } from "./Hooks/usePosAlerts";
 
-export default function Index({ branchId, branchName, branches = [], activeCart }) {
+export default function Index({
+    branchId,
+    branchName,
+    branches = [],
+    activeCart,
+}) {
     const { auth } = usePage().props;
     const roleId = auth?.user?.role_id;
     const {
@@ -64,18 +69,19 @@ export default function Index({ branchId, branchName, branches = [], activeCart 
                             Point of Sale
                         </h1>
                         <p className="mt-2 text-sm text-white">
-                            Branch-scoped medicine sales with retail and wholesale
-                            pricing. Stock is deducted using FEFO batch logic.
+                            Branch-scoped medicine sales with retail and
+                            wholesale pricing. Stock is deducted using FEFO
+                            batch logic.
                         </p>
                         {!branchId && (
                             <p className="mt-2 text-sm text-red-300">
-                                No branch is assigned to your session. Contact an
-                                administrator.
+                                No branch is assigned to your session. Contact
+                                an administrator.
                             </p>
                         )}
                     </div>
 
-                    <div className="grid w-full grid-cols-1 items-start gap-6 xl:grid-cols-[1fr_380px]">
+                    <div className="grid w-full grid-cols-1 items-start gap-6 xl:grid-cols-[1fr_700px]">
                         <div className="min-w-0">
                             <ProductCatalog
                                 products={products}

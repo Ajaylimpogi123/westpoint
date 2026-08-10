@@ -13,8 +13,10 @@ export default function ReportFilterBar({
     branchOptions = null,
     paymentMethodOptions = null,
     showDateRange = true,
+    showSupplierName = false,
 }) {
     const [form, setForm] = useState({
+        supplier_name: filters.supplier_name || "",
         date_from: filters.date_from || "",
         date_to: filters.date_to || "",
         status: filters.status || "",
@@ -38,6 +40,23 @@ export default function ReportFilterBar({
             onSubmit={submit}
             className="flex flex-wrap items-end gap-3 mb-4 bg-white p-4 rounded-lg shadow-sm"
         >
+            {showSupplierName && (
+                <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Supplier Name
+                    </label>
+                    <input
+                        type="text"
+                        value={form.supplier_name}
+                        onChange={(e) =>
+                            setForm({ ...form, supplier_name: e.target.value })
+                        }
+                        placeholder="e.g. ABC Supplier"
+                        className="border-gray-300 rounded-md text-sm"
+                    />
+                </div>
+            )}
+
             {showDateRange && (
                 <>
                     <div>

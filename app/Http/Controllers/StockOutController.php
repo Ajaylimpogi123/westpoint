@@ -35,7 +35,7 @@ class StockOutController extends Controller
 
         $validated = $request->validate([
             'transaction_subtype' => ['required', 'string', Rule::in([
-                'Dispensed to patient',
+                'Delivery to Customer',
                 'Returned to supplier',
             ])],
             'branch_id' => ['required', 'integer', 'exists:branches,id'],
@@ -80,56 +80,69 @@ class StockOutController extends Controller
                     'delivered_to_address' => $validated['delivered_to_address'] ?? null,
                 ]);
 
-                foreach ($validated['items'] as $item) {
-                    $medicine = MedicineProduct::query()
-                        ->active()
-                        ->forBranch($branchId)
-                        ->findOrFail($item['pd_id']);
+               foreach ($validated['items'] as $item) {
+    $medicine = MedicineProduct::query()
+        ->active()
+        ->forBranch($branchId)
+        ->findOrFail($item['pd_id']);
 
-                    $unitType = UnitType::fromInput($item['unit_type']);
+    $unitType = UnitType::fromInput($item['unit_type']);
 
-                    // Resolve the batch the operator actually selected rather
-                    // than the first row sharing its lot number.
-                    $batch = $this->resolveBatchOrFail(
-                        (int) $item['products_qty_id'],
-                        $medicine,
-                    );
+    $batch = $this->resolveBatchOrFail(
+        (int) $item['products_qty_id'],
+        $medicine,
+    );
 
-                    $quantity = (int) $item['quantity_deducted'];
-                    $piecesToDeduct = $medicine->toPieces($quantity, $unitType);
+    $quantity = (int) $item['quantity_deducted'];
+    $piecesToDeduct = $medicine->toPieces($quantity, $unitType);
 
-                    InventoryStockService::deductFromBatch(
-                        batchId: $batch->id,
-                        quantityInPieces: $piecesToDeduct,
-                        medicineName: $medicine->med_name,
-                    );
+    if ($validated['transaction_subtype'] === 'Delivery to Customer') {
+        // Stock isn't deducted yet — that happens once the delivery is
+        // confirmed. Just make sure the lot can currently cover it.
+        if ($piecesToDeduct > $batch->quantity) {
+            throw new InsufficientStockException(
+                "Not enough stock in lot {$batch->lot_number} for {$medicine->med_name}."
+            );
+        }
+    } else {
+        // "Returned to supplier" has no confirmation step, so it still
+        // leaves the branch immediately.
+        InventoryStockService::deductFromBatch(
+            batchId: $batch->id,
+            quantityInPieces: $piecesToDeduct,
+            medicineName: $medicine->med_name,
+        );
 
-                    StockOutItem::create([
-                        'stock_out_id' => $stockOut->stock_out_id,
-                        'pd_id' => $medicine->id,
-                        'products_qty_id' => $batch->id,
-                        'lot_number' => $batch->lot_number,
-                        'quantity_deducted' => $quantity,
-                        'pieces_deducted' => $piecesToDeduct,
-                        'expiry' => $batch->expiry,
-                        'unit_type' => $unitType->value,
-                        'unit_price' => $unitType->isBox()
-                            ? $medicine->wholesale_price
-                            : $medicine->retail_price,
-                    ]);
+        InventoryMovementLogger::log(
+            branchId: $branchId,
+            movementType: InventoryMovementLog::TYPE_STOCK_OUT,
+            referenceLabel: "Stock Out #{$stockOut->stock_out_id}",
+            referenceId: $stockOut->stock_out_id,
+            pdId: $medicine->id,
+            medicineName: $medicine->med_name,
+            lotNumber: $batch->lot_number,
+            quantity: -$piecesToDeduct,
+            remarks: $validated['remarks'] ?? $validated['transaction_subtype'],
+        );
+    }
 
-                    InventoryMovementLogger::log(
-                        branchId: $branchId,
-                        movementType: InventoryMovementLog::TYPE_STOCK_OUT,
-                        referenceLabel: "Stock Out #{$stockOut->stock_out_id}",
-                        referenceId: $stockOut->stock_out_id,
-                        pdId: $medicine->id,
-                        medicineName: $medicine->med_name,
-                        lotNumber: $batch->lot_number,
-                        quantity: -$piecesToDeduct,
-                        remarks: $validated['remarks'] ?? $validated['transaction_subtype'],
-                    );
-                }
+    StockOutItem::create([
+        'stock_out_id' => $stockOut->stock_out_id,
+        'pd_id' => $medicine->id,
+        'products_qty_id' => $batch->id,
+        'lot_number' => $batch->lot_number,
+        'quantity_deducted' => $quantity,
+        'pieces_deducted' => $piecesToDeduct,
+        'expiry' => $batch->expiry,
+        'unit_type' => $unitType->value,
+        'unit_price' => $unitType->isBox()
+            ? $medicine->wholesale_price
+            : $medicine->retail_price,
+    ]);
+}
+
+
+                
             });
         } catch (InvalidPackSizeException | InsufficientStockException | \RuntimeException $exception) {
             IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey);
@@ -233,89 +246,237 @@ class StockOutController extends Controller
     }
 
     /**
-     * Confirms the patient/recipient has received a "Dispensed to patient"
+     * Confirms the patient/recipient has received a "Delivery to Customer"
      * delivery and, only at that point, records it as a completed sale.
      * Kept as a separate step (instead of doing it at stock-out creation
      * time) so the delivery receipt can be printed and handed over first.
      */
     public function confirmDelivery(StockOut $stockOut): RedirectResponse
-    {
-        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
+{
+    $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
 
-        if ($stockOut->transaction_subtype !== 'Dispensed to patient') {
-            return redirect()->back()
-                ->with('error', 'Only "Dispensed to patient" stock-outs can be added to sales.');
-        }
+    if ($stockOut->transaction_subtype !== 'Delivery to Customer') {
+        return redirect()->back()
+            ->with('error', 'Only "Delivery to Customer" stock-outs can be added to sales.');
+    }
 
-        if ($stockOut->delivery_confirmed) {
-            return redirect()->back()
-                ->with('error', 'This stock-out has already been added to sales.');
-        }
+    if ($stockOut->delivery_confirmed) {
+        return redirect()->back()
+            ->with('error', 'This stock-out has already been added to sales.');
+    }
 
-        try {
-            $branchId = (int) $stockOut->branch_id;
+    try {
+        $branchId = (int) $stockOut->branch_id;
 
-            DB::transaction(function () use ($stockOut, $branchId) {
-                $items = StockOutItem::query()
-                    ->where('stock_out_id', $stockOut->stock_out_id)
-                    ->with('product:id,med_name,retail_price,wholesale_price')
-                    ->get();
+        DB::transaction(function () use ($stockOut, $branchId) {
+            $items = StockOutItem::query()
+                ->where('stock_out_id', $stockOut->stock_out_id)
+                ->with('product:id,med_name,retail_price,wholesale_price')
+                ->get();
 
-                if ($items->isEmpty()) {
-                    throw new \RuntimeException('This stock-out has no items to add to sales.');
+            if ($items->isEmpty()) {
+                throw new \RuntimeException('This stock-out has no items to add to sales.');
+            }
+
+            $saleLineItems = [];
+
+            foreach ($items as $item) {
+                $medicine = $item->product;
+
+                if (! $medicine) {
+                    continue;
                 }
 
-                $saleLineItems = [];
+                // Deduct now, from the exact lot the operator selected when
+                // the stock-out was recorded (or last edited).
+                InventoryStockService::deductFromBatch(
+                    batchId: $item->products_qty_id,
+                    quantityInPieces: $item->pieces_deducted,
+                    medicineName: $medicine->med_name,
+                );
 
-                foreach ($items as $item) {
-                    $medicine = $item->product;
+                InventoryMovementLogger::log(
+                    branchId: $branchId,
+                    movementType: InventoryMovementLog::TYPE_STOCK_OUT,
+                    referenceLabel: "Stock Out #{$stockOut->stock_out_id}",
+                    referenceId: $stockOut->stock_out_id,
+                    pdId: $medicine->id,
+                    medicineName: $medicine->med_name,
+                    lotNumber: $item->lot_number,
+                    quantity: -$item->pieces_deducted,
+                    remarks: $stockOut->remarks ?? $stockOut->transaction_subtype,
+                );
 
-                    if (! $medicine) {
-                        continue;
-                    }
+                $unitType = UnitType::tryFromInput($item->unit_type) ?? UnitType::Piece;
 
-                    $unitType = UnitType::tryFromInput($item->unit_type) ?? UnitType::Piece;
+                $priceUsed = $item->unit_price !== null
+                    ? (float) $item->unit_price
+                    : (float) ($unitType->isBox()
+                        ? $medicine->wholesale_price
+                        : $medicine->retail_price);
 
-                    // Prefer the price captured at dispense time. Falling back
-                    // to the product's current price is only for rows written
-                    // before unit_price existed.
-                    $priceUsed = $item->unit_price !== null
-                        ? (float) $item->unit_price
-                        : (float) ($unitType->isBox()
-                            ? $medicine->wholesale_price
-                            : $medicine->retail_price);
+                $saleLineItems[] = [
+                    'product_id' => $item->pd_id,
+                    'products_qty_id' => $item->products_qty_id,
+                    'unit_type' => $unitType->value,
+                    'quantity_sold' => $item->quantity_deducted,
+                    'price_used' => $priceUsed,
+                    'total_price' => round($priceUsed * $item->quantity_deducted, 2),
+                ];
+            }
 
-                    $saleLineItems[] = [
-                        'product_id' => $item->pd_id,
-                        'products_qty_id' => $item->products_qty_id,
-                        'unit_type' => $unitType->value,
-                        'quantity_sold' => $item->quantity_deducted,
-                        'price_used' => $priceUsed,
-                        'total_price' => round($priceUsed * $item->quantity_deducted, 2),
-                    ];
-                }
+            if ($saleLineItems === []) {
+                throw new \RuntimeException('This stock-out has no items to add to sales.');
+            }
 
-                if ($saleLineItems === []) {
-                    throw new \RuntimeException('This stock-out has no items to add to sales.');
-                }
+            $this->recordDispenseAsSale($stockOut, $branchId, $saleLineItems);
 
-                $this->recordDispenseAsSale($stockOut, $branchId, $saleLineItems);
-
-                $stockOut->update(['delivery_confirmed' => true]);
-            });
-        } catch (\RuntimeException $exception) {
-            return redirect()->back()
-                ->with('error', $exception->getMessage());
-        } catch (Throwable $exception) {
-            report($exception);
-
-            return redirect()->back()
-                ->with('error', 'Could not add this stock-out to sales. Please try again.');
-        }
+            $stockOut->update(['delivery_confirmed' => true]);
+        });
+    } catch (InsufficientStockException | \RuntimeException $exception) {
+        return redirect()->back()
+            ->with('error', $exception->getMessage());
+    } catch (Throwable $exception) {
+        report($exception);
 
         return redirect()->back()
-            ->with('success', 'Delivery confirmed and added to sales.');
+            ->with('error', 'Could not add this stock-out to sales. Please try again.');
     }
+
+    return redirect()->back()
+        ->with('success', 'Delivery confirmed and added to sales.');
+}
+
+
+public function edit(StockOut $stockOut): JsonResponse
+{
+    $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
+
+    if (! $this->isEditable($stockOut)) {
+        abort(403, 'This stock-out can no longer be edited.');
+    }
+
+    $stockOut->load([
+        'items' => function ($query) {
+            $query->select([
+                'item_id', 'stock_out_id', 'pd_id', 'products_qty_id',
+                'lot_number', 'quantity_deducted', 'pieces_deducted',
+                'unit_type',
+            ]);
+        },
+    ]);
+
+    return response()->json([
+        'stock_out' => [
+            'stock_out_id' => $stockOut->stock_out_id,
+            'transaction_subtype' => $stockOut->transaction_subtype,
+            'branch_id' => $stockOut->branch_id,
+            'patient_reference' => $stockOut->patient_reference,
+            'issued_by' => $stockOut->issued_by,
+            'remarks' => $stockOut->remarks,
+            'delivered_to' => $stockOut->delivered_to,
+            'delivered_to_address' => $stockOut->delivered_to_address,
+        ],
+        'items' => $stockOut->items->map(fn (StockOutItem $item) => [
+            'pd_id' => $item->pd_id,
+            'products_qty_id' => $item->products_qty_id,
+            'lot_number' => $item->lot_number,
+            'quantity_deducted' => $item->quantity_deducted,
+            'pieces_deducted' => $item->pieces_deducted,
+            'unit_type' => $item->unit_type,
+        ]),
+    ]);
+}
+
+public function update(Request $request, StockOut $stockOut): RedirectResponse
+{
+    $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
+
+    if (! $this->isEditable($stockOut)) {
+        return redirect()->back()
+            ->with('error', 'This stock-out can no longer be edited.');
+    }
+
+    $validated = $request->validate([
+        'patient_reference' => ['nullable', 'string', 'max:255'],
+        'issued_by' => ['required', 'string', 'max:255'],
+        'remarks' => ['nullable', 'string', 'max:2000'],
+        'delivered_to' => ['nullable', 'string', 'max:255'],
+        'delivered_to_address' => ['nullable', 'string', 'max:500'],
+        'items' => ['required', 'array', 'min:1'],
+        'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
+        'items.*.products_qty_id' => ['required', 'integer', 'exists:products_qty,id'],
+        'items.*.quantity_deducted' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+        'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
+    ]);
+
+    $branchId = (int) $stockOut->branch_id;
+
+    try {
+        DB::transaction(function () use ($validated, $stockOut, $branchId) {
+            $stockOut->update([
+                'patient_reference' => $validated['patient_reference'] ?? null,
+                'issued_by' => $validated['issued_by'],
+                'remarks' => $validated['remarks'] ?? null,
+                'delivered_to' => $validated['delivered_to'] ?? null,
+                'delivered_to_address' => $validated['delivered_to_address'] ?? null,
+            ]);
+
+            // Nothing has been deducted yet for an editable stock-out, so
+            // there's no inventory to reverse — just replace the pending
+            // line items with what was submitted.
+            StockOutItem::where('stock_out_id', $stockOut->stock_out_id)->delete();
+
+            foreach ($validated['items'] as $item) {
+                $medicine = MedicineProduct::query()
+                    ->active()
+                    ->forBranch($branchId)
+                    ->findOrFail($item['pd_id']);
+
+                $unitType = UnitType::fromInput($item['unit_type']);
+                $batch = $this->resolveBatchOrFail((int) $item['products_qty_id'], $medicine);
+
+                $quantity = (int) $item['quantity_deducted'];
+                $piecesToDeduct = $medicine->toPieces($quantity, $unitType);
+
+                if ($piecesToDeduct > $batch->quantity) {
+                    throw new InsufficientStockException(
+                        "Not enough stock in lot {$batch->lot_number} for {$medicine->med_name}."
+                    );
+                }
+
+                StockOutItem::create([
+                    'stock_out_id' => $stockOut->stock_out_id,
+                    'pd_id' => $medicine->id,
+                    'products_qty_id' => $batch->id,
+                    'lot_number' => $batch->lot_number,
+                    'quantity_deducted' => $quantity,
+                    'pieces_deducted' => $piecesToDeduct,
+                    'expiry' => $batch->expiry,
+                    'unit_type' => $unitType->value,
+                    'unit_price' => $unitType->isBox()
+                        ? $medicine->wholesale_price
+                        : $medicine->retail_price,
+                ]);
+            }
+        });
+    } catch (InvalidPackSizeException | InsufficientStockException | \RuntimeException $exception) {
+        return redirect()->back()->withInput()->with('error', $exception->getMessage());
+    } catch (Throwable $exception) {
+        report($exception);
+
+        return redirect()->back()->withInput()
+            ->with('error', 'Stock-out could not be updated. Please verify your entries and try again.');
+    }
+
+    return redirect()->back()->with('success', 'Stock-out transaction updated successfully.');
+}
+
+private function isEditable(StockOut $stockOut): bool
+{
+    return $stockOut->transaction_subtype === 'Delivery to Customer'
+        && ! $stockOut->delivery_confirmed;
+}
 
     /**
      * @param  array<int, array{
@@ -346,7 +507,7 @@ class StockOutController extends Controller
             'gross_amount' => $grossAmount,
             'discount_amount' => 0,
             'net_amount' => $grossAmount,
-            'payment_method' => 'Dispensed to patient',
+            'payment_method' => 'Delivery to Customer',
             'reference_number' => "Stock Out #{$stockOut->stock_out_id}",
         ]);
 

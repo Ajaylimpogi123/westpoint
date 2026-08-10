@@ -8,4 +8,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/stock-out/{stockOut}/receipt', [StockOutController::class, 'receipt'])->name('stock-out.receipt');
     Route::post('/stock-out', [StockOutController::class, 'store'])->name('stock-out.store');
     Route::post('/stock-out/{stockOut}/confirm-delivery', [StockOutController::class, 'confirmDelivery'])->name('stock-out.confirm-delivery');
+    Route::get('/stock-out/{stockOut}/edit', [StockOutController::class, 'edit'])->name('stock-out.edit');
+    Route::put('/stock-out/{stockOut}', [StockOutController::class, 'update'])->name('stock-out.update');
+
 });

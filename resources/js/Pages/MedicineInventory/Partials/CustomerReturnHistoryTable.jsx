@@ -16,94 +16,51 @@ import {
     TableRow,
 } from "@/Components/ui/table";
 import { router } from "@inertiajs/react";
-import { CheckCircle2, Eye, Printer } from "lucide-react";
-import Swal from "sweetalert2";
-import StockOutViewModal from "./StockOutViewModal";
+import { Eye, Printer } from "lucide-react";
+import CustomerReturnViewModal from "./CustomerReturnViewModal";
 import { formatDate } from "@/lib/dates";
-import StockOutEditModal from "./StockOutEditModal";
+
 const PER_PAGE_OPTIONS = [10, 15, 25, 50];
 
-export default function StockOutHistoryTable({
-    stockOuts,
+export default function CustomerReturnHistoryTable({
+    customerReturns,
     filters,
     canViewAllBranches = false,
     branches = [],
 }) {
-    const perPage = Number(filters?.stock_out_per_page) || 10;
-    const branchFilter = filters?.stock_out_branch_id ?? "all";
+    const perPage = Number(filters?.return_per_page) || 10;
+    const branchFilter = filters?.return_branch_id ?? "all";
     const showBranchColumn =
         canViewAllBranches && (branchFilter === "all" || branchFilter === "");
 
     const reload = (params) => {
         router.get(
             route("medicine-inventory.index"),
-            {
-                ...filters,
-                stock_out_per_page: perPage,
-                ...params,
-            },
+            { ...filters, return_per_page: perPage, ...params },
             {
                 preserveState: true,
                 preserveScroll: true,
                 replace: true,
-                only: ["stockOuts", "filters"],
+                only: ["customerReturns", "filters"],
             },
         );
     };
 
-    const goToPage = (page) => {
-        reload({ stock_out_page: page });
-    };
-
-    const changePerPage = (value) => {
-        reload({
-            stock_out_per_page: value,
-            stock_out_page: 1,
-        });
-    };
-
-    const changeBranchFilter = (value) => {
-        reload({
-            stock_out_branch_id: value,
-            stock_out_page: 1,
-        });
-    };
-
-    const addToSales = async (stockOutId) => {
-        const result = await Swal.fire({
-            icon: "question",
-            title: "Confirm Delivery",
-            text: "Confirm that the patient has received this delivery? This will record it as a completed sale.",
-            showCancelButton: true,
-            confirmButtonText: "Yes, confirm",
-            confirmButtonColor: "#16a34a",
-            cancelButtonText: "Cancel",
-        });
-
-        if (!result.isConfirmed) {
-            return;
-        }
-
-        router.post(
-            route("stock-out.confirm-delivery", stockOutId),
-            {},
-            {
-                preserveScroll: true,
-                only: ["stockOuts"],
-            },
-        );
-    };
+    const goToPage = (page) => reload({ return_page: page });
+    const changePerPage = (value) =>
+        reload({ return_per_page: value, return_page: 1 });
+    const changeBranchFilter = (value) =>
+        reload({ return_branch_id: value, return_page: 1 });
 
     return (
         <div className="space-y-4">
             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h3 className="text-sm font-semibold">Transaction History</h3>
-
+                <h3 className="text-sm font-semibold">Return History</h3>
                 <div className="flex flex-wrap items-center gap-3">
                     {canViewAllBranches && (
                         <div className="flex items-center gap-2">
                             <Label
-                                htmlFor="stock_out_branch_id"
+                                htmlFor="return_branch_id"
                                 className="text-sm text-muted-foreground"
                             >
                                 Branch
@@ -113,7 +70,7 @@ export default function StockOutHistoryTable({
                                 onValueChange={changeBranchFilter}
                             >
                                 <SelectTrigger
-                                    id="stock_out_branch_id"
+                                    id="return_branch_id"
                                     className="h-9 w-[180px]"
                                 >
                                     <SelectValue placeholder="All branches" />
@@ -137,16 +94,16 @@ export default function StockOutHistoryTable({
 
                     <div className="flex items-center gap-2">
                         <Label
-                            htmlFor="stock_out_per_page"
+                            htmlFor="return_per_page"
                             className="text-sm text-muted-foreground"
                         >
                             Per page
                         </Label>
                         <select
-                            id="stock_out_per_page"
+                            id="return_per_page"
                             value={perPage}
-                            onChange={(event) =>
-                                changePerPage(Number(event.target.value))
+                            onChange={(e) =>
+                                changePerPage(Number(e.target.value))
                             }
                             className="flex h-9 rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                         >
@@ -165,60 +122,40 @@ export default function StockOutHistoryTable({
                     <TableHeader>
                         <TableRow>
                             <TableHead>ID</TableHead>
-                            <TableHead>Subtype</TableHead>
+                            <TableHead>Customer</TableHead>
                             <TableHead>Date</TableHead>
                             {showBranchColumn && <TableHead>Branch</TableHead>}
-                            <TableHead>Issued By</TableHead>
+                            <TableHead>Received By</TableHead>
                             <TableHead className="text-right">
                                 Actions
                             </TableHead>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {stockOuts?.data?.length ? (
-                            stockOuts.data.map((stockOut) => (
-                                <TableRow key={stockOut.stock_out_id}>
+                        {customerReturns?.data?.length ? (
+                            customerReturns.data.map((item) => (
+                                <TableRow key={item.return_id}>
                                     <TableCell className="font-medium">
-                                        #{stockOut.stock_out_id}
+                                        #{item.return_id}
                                     </TableCell>
                                     <TableCell>
-                                        {stockOut.transaction_subtype}
+                                        {item.customer
+                                            ? `${item.customer.first_name} ${item.customer.last_name}`
+                                            : "—"}
                                     </TableCell>
                                     <TableCell>
-                                        {formatDate(stockOut.created_at)}
+                                        {formatDate(item.return_date)}
                                     </TableCell>
                                     {showBranchColumn && (
                                         <TableCell>
-                                            {stockOut.branch?.branch_name ??
-                                                "—"}
+                                            {item.branch?.branch_name ?? "—"}
                                         </TableCell>
                                     )}
-                                    <TableCell>{stockOut.issued_by}</TableCell>
+                                    <TableCell>{item.received_by}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
-                                            {stockOut.transaction_subtype ===
-                                                "Dispensed to patient" &&
-                                                !stockOut.delivery_confirmed && (
-                                                    <StockOutEditModal
-                                                        stockOutId={
-                                                            stockOut.stock_out_id
-                                                        }
-                                                    >
-                                                        <Button
-                                                            type="button"
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="flex items-center gap-1"
-                                                        >
-                                                            Edit
-                                                        </Button>
-                                                    </StockOutEditModal>
-                                                )}
-
-                                            <StockOutViewModal
-                                                stockOutId={
-                                                    stockOut.stock_out_id
-                                                }
+                                            <CustomerReturnViewModal
+                                                returnId={item.return_id}
                                             >
                                                 <Button
                                                     type="button"
@@ -229,7 +166,7 @@ export default function StockOutHistoryTable({
                                                     <Eye className="h-3.5 w-3.5" />
                                                     View
                                                 </Button>
-                                            </StockOutViewModal>
+                                            </CustomerReturnViewModal>
                                             <Button
                                                 type="button"
                                                 variant="outline"
@@ -238,8 +175,8 @@ export default function StockOutHistoryTable({
                                                 onClick={() =>
                                                     window.open(
                                                         route(
-                                                            "stock-out.receipt",
-                                                            stockOut.stock_out_id,
+                                                            "customer-return.receipt",
+                                                            item.return_id,
                                                         ),
                                                         "_blank",
                                                         "noopener,noreferrer",
@@ -249,29 +186,6 @@ export default function StockOutHistoryTable({
                                                 <Printer className="h-3.5 w-3.5" />
                                                 Receipt
                                             </Button>
-                                            {stockOut.transaction_subtype ===
-                                                "Dispensed to patient" &&
-                                                (stockOut.delivery_confirmed ? (
-                                                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
-                                                        <CheckCircle2 className="h-3.5 w-3.5" />
-                                                        Added to Sales
-                                                    </span>
-                                                ) : (
-                                                    <Button
-                                                        type="button"
-                                                        variant="default"
-                                                        size="sm"
-                                                        className="flex items-center gap-1"
-                                                        onClick={() =>
-                                                            addToSales(
-                                                                stockOut.stock_out_id,
-                                                            )
-                                                        }
-                                                    >
-                                                        <CheckCircle2 className="h-3.5 w-3.5" />
-                                                        Add to Sales
-                                                    </Button>
-                                                ))}
                                         </div>
                                     </TableCell>
                                 </TableRow>
@@ -282,7 +196,7 @@ export default function StockOutHistoryTable({
                                     colSpan={showBranchColumn ? 6 : 5}
                                     className="h-24 text-center text-sm text-muted-foreground"
                                 >
-                                    No stock-out transactions recorded yet.
+                                    No returns recorded yet.
                                 </TableCell>
                             </TableRow>
                         )}
@@ -290,39 +204,40 @@ export default function StockOutHistoryTable({
                 </Table>
             </div>
 
-            {stockOuts?.data?.length > 0 && (
+            {customerReturns?.data?.length > 0 && (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <p className="text-sm text-muted-foreground">
-                        Showing {stockOuts.from ?? 0} to {stockOuts.to ?? 0} of{" "}
-                        {stockOuts.total ?? 0} transactions
+                        Showing {customerReturns.from ?? 0} to{" "}
+                        {customerReturns.to ?? 0} of{" "}
+                        {customerReturns.total ?? 0} returns
                     </p>
-                    {stockOuts.last_page > 1 && (
+                    {customerReturns.last_page > 1 && (
                         <div className="flex items-center gap-2">
                             <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
                                 onClick={() =>
-                                    goToPage(stockOuts.current_page - 1)
+                                    goToPage(customerReturns.current_page - 1)
                                 }
-                                disabled={stockOuts.current_page <= 1}
+                                disabled={customerReturns.current_page <= 1}
                             >
                                 Previous
                             </Button>
                             <span className="text-sm text-muted-foreground">
-                                Page {stockOuts.current_page} of{" "}
-                                {stockOuts.last_page}
+                                Page {customerReturns.current_page} of{" "}
+                                {customerReturns.last_page}
                             </span>
                             <Button
                                 type="button"
                                 variant="outline"
                                 size="sm"
                                 onClick={() =>
-                                    goToPage(stockOuts.current_page + 1)
+                                    goToPage(customerReturns.current_page + 1)
                                 }
                                 disabled={
-                                    stockOuts.current_page >=
-                                    stockOuts.last_page
+                                    customerReturns.current_page >=
+                                    customerReturns.last_page
                                 }
                             >
                                 Next

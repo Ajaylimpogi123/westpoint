@@ -56,19 +56,33 @@ const ItemRow = memo(function ItemRow({
 
     return (
         <TableRow>
+            <TableCell className="min-w-[220px] align-top">
+                <MedicineSearchSelect
+                    value={item.qt_description}
+                    onSelect={(product) => onSelectMedicine(index, product)}
+                    onClear={
+                        hasLinkedProduct
+                            ? () => onClearMedicine(index)
+                            : undefined
+                    }
+                    error={rowErrors.qt_description}
+                />
+            </TableCell>
             <TableCell className="align-top">
                 <Input
-                    type="number"
-                    min="1"
-                    value={item.qt_qty}
-                    onChange={handleChange("qt_qty")}
-                    className="w-16"
+                    type="text"
+                    value={item.lot_number ?? ""}
+                    onChange={handleChange("lot_number")}
+                    className="w-32"
                 />
-                {rowErrors.qt_qty && (
-                    <p className="mt-1 text-xs text-red-500">
-                        {rowErrors.qt_qty}
-                    </p>
-                )}
+            </TableCell>
+            <TableCell className="align-top">
+                <Input
+                    type="date"
+                    value={item.expiry_date ?? ""}
+                    onChange={handleChange("expiry_date")}
+                    className="w-36"
+                />
             </TableCell>
             <TableCell className="align-top">
                 {hasLinkedProduct ? (
@@ -90,62 +104,18 @@ const ItemRow = memo(function ItemRow({
                     />
                 )}
             </TableCell>
-            <TableCell className="min-w-[220px] align-top">
-                <MedicineSearchSelect
-                    value={item.qt_description}
-                    onSelect={(product) => onSelectMedicine(index, product)}
-                    onClear={
-                        hasLinkedProduct
-                            ? () => onClearMedicine(index)
-                            : undefined
-                    }
-                    error={rowErrors.qt_description}
+            <TableCell className="align-top">
+                <Input
+                    type="number"
+                    min="1"
+                    value={item.qt_qty}
+                    onChange={handleChange("qt_qty")}
+                    className="w-16"
                 />
-            </TableCell>
-            <TableCell className="align-top">
-                {hasMultipleLots ? (
-                    <select
-                        value={selectedLotId ?? ""}
-                        onChange={(e) => {
-                            const lot = lots.find(
-                                (entry) =>
-                                    String(entry.id) === e.target.value,
-                            );
-                            if (lot) onLotChange(index, lot);
-                        }}
-                        className={`${inputCls} w-32`}
-                    >
-                        {lots.map((lot) => (
-                            <option key={lot.id} value={lot.id}>
-                                {lot.lot_number || "—"}
-                            </option>
-                        ))}
-                    </select>
-                ) : (
-                    <Input
-                        type="text"
-                        value={item.lot_number ?? ""}
-                        onChange={handleChange("lot_number")}
-                        readOnly={hasLinkedProduct}
-                        className="w-32"
-                    />
-                )}
-            </TableCell>
-            <TableCell className="align-top">
-                {hasLinkedProduct ? (
-                    <Input
-                        type="date"
-                        value={item.expiry_date ?? ""}
-                        readOnly
-                        className="w-36"
-                    />
-                ) : (
-                    <Input
-                        type="date"
-                        value={item.expiry_date ?? ""}
-                        onChange={handleChange("expiry_date")}
-                        className="w-36"
-                    />
+                {rowErrors.qt_qty && (
+                    <p className="mt-1 text-xs text-red-500">
+                        {rowErrors.qt_qty}
+                    </p>
                 )}
             </TableCell>
             <TableCell className="align-top">
@@ -228,14 +198,15 @@ export default function ItemsTable({
                     <Table className="min-w-[900px]">
                         <TableHeader>
                             <TableRow className="bg-slate-50 hover:bg-slate-50">
-                                <TableHead className="w-16">Qty</TableHead>
-                                <TableHead className="w-24">Unit</TableHead>
                                 <TableHead>Description</TableHead>
                                 <TableHead className="w-32">Lot No.</TableHead>
                                 <TableHead className="w-36">Expiry</TableHead>
+                                <TableHead className="w-24">Unit</TableHead>
+                                <TableHead className="w-16">Qty</TableHead>
                                 <TableHead className="w-28">
                                     Unit Price
                                 </TableHead>
+
                                 <TableHead className="w-32 text-right">
                                     Amount
                                 </TableHead>
