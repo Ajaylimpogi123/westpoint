@@ -1,6 +1,6 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router } from "@inertiajs/react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
     Table,
     TableBody,
@@ -8,8 +8,8 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/Components/ui/table";
-import InputLabel from "@/Components/InputLabel";
+} from "@/components/ui/table";
+import InputLabel from "@/components/InputLabel";
 import { DollarSign, Receipt } from "lucide-react";
 import RevenueTrendChart from "./Dashboard/Partials/RevenueTrendChart";
 import ProductBreakdownChart from "./Dashboard/Partials/ProductBreakdownChart";

@@ -1,7 +1,7 @@
-import InputError from "@/Components/InputError";
-import InputLabel from "@/Components/InputLabel";
-import TextInput from "@/Components/TextInput";
-import { Button } from "@/Components/ui/button";
+import InputError from "@/components/InputError";
+import InputLabel from "@/components/InputLabel";
+import TextInput from "@/components/TextInput";
+import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
@@ -10,7 +10,7 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-} from "@/Components/ui/dialog";
+} from "@/components/ui/dialog";
 import { useMemo } from "react";
 import { usePage } from "@inertiajs/react";
 import useEditUser from "../Hooks/useEditUser";

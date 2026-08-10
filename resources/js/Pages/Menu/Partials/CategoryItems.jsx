@@ -1,13 +1,13 @@
 import { useState } from "react";
-import { Badge } from "@/Components/ui/badge";
-import { Button } from "@/Components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { router, useForm } from "@inertiajs/react";
-import { Card, CardContent } from "@/Components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { toast } from "sonner";
 import { CircleCheck, Utensils, Minus, Plus } from "lucide-react";
-import { ButtonGroup } from "@/Components/ui/button-group";
-import { Field, FieldLabel } from "@/Components/ui/field";
-import { Input } from "@/Components/ui/input";
+import { ButtonGroup } from "@/components/ui/button-group";
+import { Field, FieldLabel } from "@/components/ui/field";
+import { Input } from "@/components/ui/input";
 
 export default function CategoryItems({
     children,

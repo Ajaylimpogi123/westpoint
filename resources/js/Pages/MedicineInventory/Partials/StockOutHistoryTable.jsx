@@ -1,12 +1,12 @@
-import { Button } from "@/Components/ui/button";
-import { Label } from "@/Components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/Components/ui/select";
+} from "@/components/ui/select";
 import {
     Table,
     TableBody,
@@ -14,7 +14,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/Components/ui/table";
+} from "@/components/ui/table";
 import { router } from "@inertiajs/react";
 import { CheckCircle2, Eye, Printer } from "lucide-react";
 import Swal from "sweetalert2";

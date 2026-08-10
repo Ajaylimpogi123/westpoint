@@ -1,4 +1,4 @@
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
@@ -7,10 +7,10 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-} from "@/Components/ui/dialog";
-import { Input } from "@/Components/ui/input";
-import { Label } from "@/Components/ui/label";
-import InputError from "@/Components/InputError";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import InputError from "@/components/InputError";
 import useEditProduct from "../Hooks/useEditProduct";
 
 export default function EditProductModal({ product, children, categories }) {

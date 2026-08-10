@@ -1,4 +1,4 @@
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Pencil, Trash2, Eye, MoreVertical } from "lucide-react";
 import EditModal from "./EditModal";
 
@@ -8,7 +8,7 @@ import {
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuTrigger,
-} from "@/Components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 export default function Card({ children, products, categories }) {
     const handleDelete = (pd_id) => {
         if (confirm("Are you sure you want to delete this contact?")) {

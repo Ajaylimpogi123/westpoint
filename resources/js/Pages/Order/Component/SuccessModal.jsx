@@ -1,6 +1,6 @@
 import React from 'react';
 import { motion, AnimatePresence } from "framer-motion";
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Printer, X } from "lucide-react";
 import { formatDateTime } from "@/lib/dates";
 

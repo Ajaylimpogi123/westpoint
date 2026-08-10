@@ -1,4 +1,4 @@
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import { Eye, Printer } from "lucide-react";
 import { toast } from "sonner";
 import ViewModal from "./ViewModal";

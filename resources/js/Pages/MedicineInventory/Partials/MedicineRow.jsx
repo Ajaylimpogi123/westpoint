@@ -1,6 +1,6 @@
 import { Fragment } from "react";
-import { Button } from "@/Components/ui/button";
-import { TableCell, TableRow } from "@/Components/ui/table";
+import { Button } from "@/components/ui/button";
+import { TableCell, TableRow } from "@/components/ui/table";
 import { useForm } from "@inertiajs/react";
 import {
     ChevronDown,

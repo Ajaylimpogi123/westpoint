@@ -1,13 +1,13 @@
 import { useEffect, useState } from "react";
-import { Button } from "@/Components/ui/button";
-import { Input } from "@/Components/ui/input";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/Components/ui/select";
+} from "@/components/ui/select";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import GenericBadge from "./GenericBadge";
 import {

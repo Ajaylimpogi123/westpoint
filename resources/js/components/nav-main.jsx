@@ -1,13 +1,13 @@
 import { MailIcon, PlusCircleIcon } from "lucide-react";
 import { Link } from "@inertiajs/react";
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
     SidebarGroup,
     SidebarGroupContent,
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
-} from "@/Components/ui/sidebar";
+} from "@/components/ui/sidebar";
 
 export function NavMain({ items }) {
     return (

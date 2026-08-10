@@ -1,6 +1,6 @@
-import { Button } from "@/Components/ui/button";
-import { Card, CardContent } from "@/Components/ui/card";
-import { Badge } from "@/Components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Link } from "@inertiajs/react";
 import { useEffect } from "react";
 export default function CardTable({ children, tables = [], table_ids = [], table_item_counts = {} }) {

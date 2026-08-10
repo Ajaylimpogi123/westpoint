@@ -1,5 +1,5 @@
 import { cloneElement, isValidElement } from "react";
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
@@ -8,11 +8,11 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-} from "@/Components/ui/dialog";
-import { Checkbox } from "@/Components/ui/checkbox";
-import { Input } from "@/Components/ui/input";
-import { Label } from "@/Components/ui/label";
-import InputError from "@/Components/InputError";
+} from "@/components/ui/dialog";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import InputError from "@/components/InputError";
 import useEditMedicine from "../Hooks/useEditMedicine";
 
 export default function EditModal({ medicine, children }) {

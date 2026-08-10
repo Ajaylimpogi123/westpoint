@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Head, usePage } from "@inertiajs/react";
 import { toast } from "sonner";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/Components/ui/tabs";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 // Hooks
 import { useStockTransferForm } from "./Hooks/useStockTransferForm";

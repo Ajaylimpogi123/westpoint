@@ -27,10 +27,10 @@ import {
     ShoppingCart,
 } from "lucide-react";
 
-import { NavDocuments } from "@/Components/nav-documents";
-import { NavMain } from "@/Components/nav-main";
-import { NavSecondary } from "@/Components/nav-secondary";
-import { NavUser } from "@/Components/nav-user";
+import { NavDocuments } from "@/components/nav-documents";
+import { NavMain } from "@/components/nav-main";
+import { NavSecondary } from "@/components/nav-secondary";
+import { NavUser } from "@/components/nav-user";
 import {
     Sidebar,
     SidebarContent,
@@ -39,7 +39,7 @@ import {
     SidebarMenu,
     SidebarMenuButton,
     SidebarMenuItem,
-} from "@/Components/ui/sidebar";
+} from "@/components/ui/sidebar";
 import { usePage } from "@inertiajs/react";
 
 export function AppSidebar({ ...props }) {

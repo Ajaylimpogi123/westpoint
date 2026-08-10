@@ -6,10 +6,10 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/Components/ui/table";
-import { Card } from "@/Components/ui/card";
-import { Input } from "@/Components/ui/input";
-import { Button } from "@/Components/ui/button";
+} from "@/components/ui/table";
+import { Card } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
 import { Plus, X, ChevronLeft, ChevronRight } from "lucide-react";
 import { calculateAmount } from "../lib/quotationItems";
 import { formatCurrency } from "../lib/quotationStatus";

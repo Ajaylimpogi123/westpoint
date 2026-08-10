@@ -1,12 +1,12 @@
-import Checkbox from "@/Components/Checkbox";
-import { Button } from "@/Components/ui/button";
+import Checkbox from "@/components/Checkbox";
+import { Button } from "@/components/ui/button";
 import {
     DropdownMenu,
     DropdownMenuContent,
     DropdownMenuItem,
     DropdownMenuLabel,
     DropdownMenuTrigger,
-} from "@/Components/ui/dropdown-menu";
+} from "@/components/ui/dropdown-menu";
 import { MoreHorizontal } from "lucide-react";
 import EditModal from "./EditModal";
 export const columns = [

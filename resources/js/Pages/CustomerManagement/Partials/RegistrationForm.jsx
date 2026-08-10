@@ -1,8 +1,8 @@
-import InputError from "@/Components/InputError";
-import InputLabel from "@/Components/InputLabel";
-import PrimaryButton from "@/Components/PrimaryButton";
-import TextInput from "@/Components/TextInput";
-import { Card, CardContent, CardHeader, CardTitle } from "@/Components/ui/card";
+import InputError from "@/components/InputError";
+import InputLabel from "@/components/InputLabel";
+import PrimaryButton from "@/components/PrimaryButton";
+import TextInput from "@/components/TextInput";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { usePage } from "@inertiajs/react";
 import useAddCustomer from "../Hooks/useAddCustomer";
 import { CUSTOMER_TYPES } from "../lib/customerType";

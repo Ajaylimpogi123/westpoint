@@ -1,4 +1,4 @@
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogClose,
@@ -7,10 +7,10 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-} from "@/Components/ui/dialog";
-import { Input } from "@/Components/ui/input";
-import { Label } from "@/Components/ui/label";
-import InputError from "@/Components/InputError";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import InputError from "@/components/InputError";
 import { Plus, Trash2 } from "lucide-react";
 import useStockIn from "../Hooks/useStockIn";
 import MedicineSearchSelect from "./MedicineSearchSelect";
@@ -21,7 +21,7 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/Components/ui/select";
+} from "@/components/ui/select";
 
 function BatchIntentNotice({
     batchIntent,

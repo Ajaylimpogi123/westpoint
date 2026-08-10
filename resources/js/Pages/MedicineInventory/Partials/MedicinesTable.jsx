@@ -1,16 +1,16 @@
 import { memo, useCallback, useMemo, useState } from "react";
-import { Button } from "@/Components/ui/button";
-import { Input } from "@/Components/ui/input";
-import { Label } from "@/Components/ui/label";
-import { Badge } from "@/Components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/Components/ui/select";
-import { Toggle } from "@/Components/ui/toggle";
+} from "@/components/ui/select";
+import { Toggle } from "@/components/ui/toggle";
 import {
     Table,
     TableBody,
@@ -18,8 +18,8 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/Components/ui/table";
-import { Card, CardContent } from "@/Components/ui/card";
+} from "@/components/ui/table";
+import { Card, CardContent } from "@/components/ui/card";
 import { router } from "@inertiajs/react";
 import { Loader2, Pill, Search, SlidersHorizontal, X } from "lucide-react";
 import MedicineRow from "./MedicineRow";
