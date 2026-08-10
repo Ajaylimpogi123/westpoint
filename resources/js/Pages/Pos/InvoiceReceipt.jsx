@@ -262,7 +262,7 @@ export default function InvoiceReceipt({ sale }) {
 
             <div className="footer">
                 <p style={{ fontSize: "9px" }}>
-                    This Document is not valid for claim if input taxes.
+                    This Document is not valid for claim of input taxes.
                     Please ask for the official Sales Invoice
                 </p>
             </div>
