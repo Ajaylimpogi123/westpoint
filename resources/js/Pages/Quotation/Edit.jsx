@@ -4,13 +4,8 @@ import CustomerSearchSelect from "./Partials/CustomerSearchSelect";
 import NewCustomerModal from "./Partials/NewCustomerModal";
 import ItemsTable from "./Partials/ItemsTable";
 import useEditQuotation from "./Hooks/useEditQuotation";
-<<<<<<< Updated upstream
-import { Button } from "@/Components/ui/button";
-import { ArrowLeft, UserPlus } from "lucide-react";
-=======
 import { Button } from "@/components/ui/button";
-import { ArrowLeft } from "lucide-react";
->>>>>>> Stashed changes
+import { ArrowLeft, UserPlus } from "lucide-react";
 const inputCls =
     "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
 const labelCls = "mb-1 block text-sm font-medium text-slate-700";

@@ -10,9 +10,8 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-<<<<<<< Updated upstream
-} from "@/Components/ui/select";
-import { Toggle } from "@/Components/ui/toggle";
+} from "@/components/ui/select";
+import { Toggle } from "@/components/ui/toggle";
 import {
     Loader2,
     Search,
@@ -22,11 +21,6 @@ import {
     Package,
     Pill,
 } from "lucide-react";
-=======
-} from "@/components/ui/select";
-import { Toggle } from "@/components/ui/toggle";
-import { Loader2, Search, SlidersHorizontal, X, TrendingUp, Package, Pill } from "lucide-react";
->>>>>>> Stashed changes
 import ProductCard from "./ProductCard";
 
 const MEDICINE_FORMS = [
