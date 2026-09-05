@@ -4,7 +4,6 @@ import CustomerSearchSelect from "./Partials/CustomerSearchSelect";
 import ItemsTable from "./Partials/ItemsTable";
 import useAddQuotation from "./Hooks/useAddQuotation";
 import { Button } from "@/components/ui/button";
-
 import NewCustomerModal from "./Partials/NewCustomerModal";
 import { ArrowLeft, UserPlus } from "lucide-react";
 const inputCls =

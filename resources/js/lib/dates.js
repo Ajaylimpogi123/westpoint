@@ -24,22 +24,22 @@ export function toDate(value) {
     return Number.isNaN(parsed.getTime()) ? null : parsed;
 }
 
-/** Display format: dd/MM/yyyy */
+/** Display format: MM-dd-yyyy */
 export function formatDate(value, empty = "—") {
     const date = toDate(value);
     if (!date) {
         return empty;
     }
 
-    return format(date, "dd/MM/yyyy");
+    return format(date, "MM-dd-yyyy");
 }
 
-/** Display format: dd/MM/yyyy, h:mm a */
+/** Display format: MM-dd-yyyy, h:mm a */
 export function formatDateTime(value, empty = "—") {
     const date = toDate(value);
     if (!date) {
         return empty;
     }
 
-    return format(date, "dd/MM/yyyy, h:mm a");
+    return format(date, "MM-dd-yyyy, h:mm a");
 }
