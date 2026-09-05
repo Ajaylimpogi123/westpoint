@@ -210,7 +210,9 @@ export default function InvoiceReceipt({ sale }) {
                                 <td>{productLabel(item.product)}</td>
                                 <td className="num">{item.unit_type}</td>
                                 <td className="num">{item.quantity_sold}</td>
-                                <td className="num">{formatCurrency(item.total_price)}</td>
+                                <td className="num">
+                                    {formatCurrency(item.total_price)}
+                                </td>
                             </tr>
                         ))
                     ) : (
@@ -262,8 +264,8 @@ export default function InvoiceReceipt({ sale }) {
 
             <div className="footer">
                 <p style={{ fontSize: "9px" }}>
-                    This Document is not valid for claim if input taxes.
-                    Please ask for the official Sales Invoice
+                    This Document is not valid for claim of input taxes. Please
+                    ask for the official Sales Invoice
                 </p>
             </div>
         </>
