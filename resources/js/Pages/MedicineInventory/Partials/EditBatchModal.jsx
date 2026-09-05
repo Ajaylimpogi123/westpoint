@@ -12,7 +12,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import InputError from "@/components/InputError";
 import useEditBatch from "../Hooks/useEditBatch";
-
+import { useState, useEffect } from "react";
+import { toDisplayDate, toIsoDate } from "@/utils/dateFormat";
 export default function EditBatchModal({ batch, medicine, children }) {
     const {
         open,
@@ -28,6 +29,24 @@ export default function EditBatchModal({ batch, medicine, children }) {
         packSize,
     } = useEditBatch(batch, medicine);
 
+    // ...inside the component, after useEditBatch():
+    const [expiryDisplay, setExpiryDisplay] = useState(
+        toDisplayDate(data.expiry),
+    );
+
+    useEffect(() => {
+        setExpiryDisplay(toDisplayDate(data.expiry));
+    }, [data.expiry]);
+
+    function handleExpiryChange(e) {
+        let val = e.target.value.replace(/[^\d]/g, ""); // digits only
+        if (val.length > 2) val = val.slice(0, 2) + "-" + val.slice(2);
+        if (val.length > 5) val = val.slice(0, 5) + "-" + val.slice(5, 9);
+        setExpiryDisplay(val);
+
+        const iso = toIsoDate(val);
+        if (iso) setData("expiry", iso); // only updates when a full valid date is typed
+    }
     return (
         <>
             <div onClick={openModal}>{children}</div>
@@ -109,11 +128,12 @@ export default function EditBatchModal({ batch, medicine, children }) {
                                     </Label>
                                     <Input
                                         id="edit_expiry"
-                                        type="date"
-                                        value={data.expiry}
-                                        onChange={(e) =>
-                                            setData("expiry", e.target.value)
-                                        }
+                                        type="text"
+                                        inputMode="numeric"
+                                        placeholder="mm-dd-yyyy"
+                                        maxLength={10}
+                                        value={expiryDisplay}
+                                        onChange={handleExpiryChange}
                                     />
                                     <InputError message={errors.expiry} />
                                 </div>
@@ -127,10 +147,7 @@ export default function EditBatchModal({ batch, medicine, children }) {
                                     id="edit_shelf_number"
                                     value={data.shelf_number}
                                     onChange={(e) =>
-                                        setData(
-                                            "shelf_number",
-                                            e.target.value,
-                                        )
+                                        setData("shelf_number", e.target.value)
                                     }
                                     placeholder="e.g. A-12"
                                 />

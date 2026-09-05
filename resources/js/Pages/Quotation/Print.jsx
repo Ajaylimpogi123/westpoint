@@ -264,9 +264,12 @@ export default function Print({ quotation }) {
 
                     {/* Footer note */}
                     <p className="mt-6 text-center text-[10px] italic text-slate-500">
-                        NOTE: Our Collection Receipt will be issued upon
-                        approval of this Quotation Form and signed by the
-                        customers.
+                        NOTE: Invoice or Delivery Receipt will be issued once
+                        fully paid.
+                    </p>
+                    <p className="mt-2 text-center text-[10px] italic text-slate-500">
+                        Remarks: DELIVERY RECEIPT - for the products & prices
+                        mentioned above. SALES INVOICE - additional 12% for VAT.
                     </p>
                 </div>
             </div>
