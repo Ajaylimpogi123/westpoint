@@ -10,8 +10,8 @@ import {
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/Components/ui/select";
-import { Toggle } from "@/Components/ui/toggle";
+} from "@/components/ui/select";
+import { Toggle } from "@/components/ui/toggle";
 import {
     Loader2,
     Search,

@@ -3,18 +3,9 @@ import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import CustomerSearchSelect from "./Partials/CustomerSearchSelect";
 import ItemsTable from "./Partials/ItemsTable";
 import useAddQuotation from "./Hooks/useAddQuotation";
-<<<<<<< HEAD
-
-=======
->>>>>>> 1aeaadeedb2f86db648b272ea17f943da394e8bf
-import { Button } from "@/Components/ui/button";
-
+import { Button } from "@/components/ui/button";
 import NewCustomerModal from "./Partials/NewCustomerModal";
 import { ArrowLeft, UserPlus } from "lucide-react";
-<<<<<<< HEAD
-
-=======
->>>>>>> 1aeaadeedb2f86db648b272ea17f943da394e8bf
 const inputCls =
     "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
 const labelCls = "mb-1 block text-sm font-medium text-slate-700";
