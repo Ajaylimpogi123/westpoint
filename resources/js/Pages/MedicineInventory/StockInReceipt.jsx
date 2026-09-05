@@ -212,6 +212,9 @@ export default function StockInReceipt({ stockIn }) {
                                 VAT Reg. TIN: 439-169-208-00000
                             </p>
                             <p className="text-[9px] leading-snug">
+                                sales@westpointpharma.com
+                            </p>
+                            <p className="text-[9px] leading-snug">
                                 Bulk/Wholesale: (034) 479 2739 / (0992) 989 5971
                                 &nbsp;•&nbsp; Retail: (034) 454 1118 / (0917)
                                 162 8332

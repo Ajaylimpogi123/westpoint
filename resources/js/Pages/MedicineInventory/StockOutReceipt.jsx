@@ -214,6 +214,9 @@ export default function StockOutReceipt({ stockOut }) {
                                 VAT Reg. TIN: 439-169-208-00000
                             </p>
                             <p className="text-[9px] leading-snug">
+                                sales@westpointpharma.com
+                            </p>
+                            <p className="text-[9px] leading-snug">
                                 Bulk/Wholesale: (034) 479 2739 / (0992) 989 5971
                                 &nbsp;•&nbsp; Retail: (034) 454 1118 / (0917)
                                 162 8332
@@ -445,12 +448,6 @@ export default function StockOutReceipt({ stockOut }) {
 
                     <p className="text-center text-[10px] font-bold uppercase mt-6 tracking-wide">
                         This document is not valid for claiming of input taxes
-                    </p>
-
-                    <p className="text-[8px] text-gray-400 text-center mt-2">
-                        System-generated · Delivery Receipt #
-                        {receiptNumber(stockOut.stock_out_id)} · Westpoint
-                        Pharmacy Management System
                     </p>
                 </div>
             </div>

@@ -39,7 +39,7 @@ export default function Print({ quotation }) {
                             </h1>
                             <p className="mt-0.5 text-[10px] text-slate-600">
                                 5th Street, Bacolod City, Philippines, 6100
-                                &nbsp;•&nbsp; westpointpharmamed@gmail.com
+                                &nbsp;•&nbsp; sales@westpointpharma.com
                             </p>
                             <p className="text-[10px] text-slate-600">
                                 Cellphone No.: 0917 162 8332 &nbsp;•&nbsp;
