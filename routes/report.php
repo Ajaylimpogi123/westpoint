@@ -24,4 +24,5 @@ Route::middleware(['auth', 'role:2,3']) // swap for whatever guard you use on ot
         Route::get('/stock-out', [ReportController::class, 'stockOut'])->name('stock-out');
         Route::get('/stock-transfers', [ReportController::class, 'stockTransfers'])->name('stock-transfers');
         Route::get('/movement-ledger', [ReportController::class, 'movementLedger'])->name('movement-ledger');
+        Route::get('/void-returns', [ReportController::class, 'voidReturns'])->name('void-returns');
     });

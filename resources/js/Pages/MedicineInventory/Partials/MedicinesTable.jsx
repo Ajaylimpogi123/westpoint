@@ -171,7 +171,13 @@ function MedicinesTable({
                 showBranchColumn={showBranchColumn}
             />
         ));
-    }, [medicines.data, expandedRows, toggleRow, canEditMedicine, showBranchColumn]);
+    }, [
+        medicines.data,
+        expandedRows,
+        toggleRow,
+        canEditMedicine,
+        showBranchColumn,
+    ]);
 
     return (
         <Card>
@@ -424,7 +430,8 @@ function MedicinesTable({
                                     <TableHead>Branch</TableHead>
                                 )}
                                 <TableHead>Pack Size</TableHead>
-                                <TableHead>Price (pc)</TableHead>
+                                <TableHead>Price (pc, VAT incl.)</TableHead>
+                                <TableHead>VAT Status</TableHead>
                                 <TableHead>Branch Stock (pcs)</TableHead>
                                 <TableHead className="text-center">
                                     Actions
@@ -437,7 +444,7 @@ function MedicinesTable({
                             ) : (
                                 <TableRow>
                                     <TableCell
-                                        colSpan={showBranchColumn ? 10 : 9}
+                                        colSpan={showBranchColumn ? 11 : 10}
                                         className="h-24 text-center"
                                     >
                                         No medicines found.

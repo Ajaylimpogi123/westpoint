@@ -29,9 +29,9 @@ export default function NewTransactionsPanel({
                     <TabsList>
                         <TabsTrigger value="stock-in">Stock In</TabsTrigger>
                         <TabsTrigger value="stock-out">Stock Out</TabsTrigger>
-                        <TabsTrigger value="customer-return">
+                        {/* <TabsTrigger value="customer-return">
                             Return from Customer
-                        </TabsTrigger>
+                        </TabsTrigger> */}
                     </TabsList>
 
                     <TabsContent value="stock-in" className="space-y-4">

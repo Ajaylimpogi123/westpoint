@@ -44,8 +44,8 @@ export default function AddModal({ children }) {
                         <DialogHeader className="pb-4">
                             <DialogTitle>Add Medicine</DialogTitle>
                             <DialogDescription>
-                                Register a new medicine product. Retail price
-                                is per piece; wholesale price is per box.
+                                Register a new medicine product. Retail price is
+                                per piece; wholesale price is per box.
                             </DialogDescription>
                         </DialogHeader>
 
@@ -123,7 +123,10 @@ export default function AddModal({ children }) {
                                         id="brand_name"
                                         value={data.brand_name}
                                         onChange={(e) =>
-                                            setData("brand_name", e.target.value)
+                                            setData(
+                                                "brand_name",
+                                                e.target.value,
+                                            )
                                         }
                                         placeholder="Brand name"
                                     />
@@ -143,7 +146,10 @@ export default function AddModal({ children }) {
                                         min="0"
                                         value={data.retail_price}
                                         onChange={(e) =>
-                                            setData("retail_price", e.target.value)
+                                            setData(
+                                                "retail_price",
+                                                e.target.value,
+                                            )
                                         }
                                         placeholder="0.00"
                                     />
@@ -160,11 +166,41 @@ export default function AddModal({ children }) {
                                         min="0"
                                         value={data.wholesale_price}
                                         onChange={(e) =>
-                                            setData("wholesale_price", e.target.value)
+                                            setData(
+                                                "wholesale_price",
+                                                e.target.value,
+                                            )
                                         }
                                         placeholder="0.00"
                                     />
-                                    <InputError message={errors.wholesale_price} />
+                                    <InputError
+                                        message={errors.wholesale_price}
+                                    />
+                                </div>
+
+                                <div className="grid gap-3">
+                                    <Label htmlFor="vat_status">
+                                        VAT Status
+                                    </Label>
+                                    <Select
+                                        value={data.vat_status}
+                                        onValueChange={(value) =>
+                                            setData("vat_status", value)
+                                        }
+                                    >
+                                        <SelectTrigger id="vat_status">
+                                            <SelectValue placeholder="Select VAT status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Non-VAT">
+                                                Non-VAT
+                                            </SelectItem>
+                                            <SelectItem value="VAT">
+                                                VAT (+12%)
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError message={errors.vat_status} />
                                 </div>
                             </div>
 

@@ -14,6 +14,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import InputError from "@/components/InputError";
 import useEditMedicine from "../Hooks/useEditMedicine";
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 export default function EditModal({ medicine, children }) {
     const {
@@ -109,10 +116,7 @@ export default function EditModal({ medicine, children }) {
                                         min="1"
                                         value={data.pack_size}
                                         onChange={(e) =>
-                                            setData(
-                                                "pack_size",
-                                                e.target.value,
-                                            )
+                                            setData("pack_size", e.target.value)
                                         }
                                     />
                                     <InputError message={errors.pack_size} />
@@ -175,6 +179,31 @@ export default function EditModal({ medicine, children }) {
                                     <InputError
                                         message={errors.wholesale_price}
                                     />
+                                </div>
+
+                                <div className="grid gap-3">
+                                    <Label htmlFor="edit_vat_status">
+                                        VAT Status
+                                    </Label>
+                                    <Select
+                                        value={data.vat_status}
+                                        onValueChange={(value) =>
+                                            setData("vat_status", value)
+                                        }
+                                    >
+                                        <SelectTrigger id="edit_vat_status">
+                                            <SelectValue placeholder="Select VAT status" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="Non-VAT">
+                                                Non-VAT
+                                            </SelectItem>
+                                            <SelectItem value="VAT">
+                                                VAT (+12%)
+                                            </SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                    <InputError message={errors.vat_status} />
                                 </div>
                             </div>
 

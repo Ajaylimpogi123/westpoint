@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\UnitType;
 use App\Exceptions\InvalidPackSizeException;
+use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -25,9 +26,21 @@ class MedicineProduct extends Model
         'pack_size',
         'brand_name',
         'retail_price',
-        'stock_threshold',
         'wholesale_price',
+        'vat_status',
+        'stock_threshold',
         'status',
+    ];
+
+    /**
+     * VAT-inclusive prices are computed on read, never stored — retail_price
+     * and wholesale_price stay the VAT-exclusive base price the pharmacy
+     * actually set, so editing vat_status alone (without retyping prices)
+     * correctly changes what customers pay.
+     */
+    protected $appends = [
+        'effective_retail_price',
+        'effective_wholesale_price',
     ];
 
     protected function casts(): array
@@ -41,19 +54,37 @@ class MedicineProduct extends Model
         ];
     }
 
+    protected function effectiveRetailPrice(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->applyVat((float) $this->retail_price),
+        );
+    }
+
+    protected function effectiveWholesalePrice(): Attribute
+    {
+        return Attribute::make(
+            get: fn () => $this->applyVat((float) $this->wholesale_price),
+        );
+    }
+
+    public function isVatable(): bool
+    {
+        return $this->vat_status === 'VAT';
+    }
+
+    private function applyVat(float $basePrice): float
+    {
+        return $this->isVatable()
+            ? round($basePrice * 1.12, 2)
+            : $basePrice;
+    }
+
     public function branch(): BelongsTo
     {
         return $this->belongsTo(Branch::class, 'branch_id');
     }
 
-    /**
-     * The single conversion point between a transacted unit and stored pieces.
-     *
-     * Every write path that touches products_qty.quantity must route its
-     * quantity through here rather than multiplying inline — the Box branch
-     * was previously duplicated across four controllers and omitted from a
-     * fifth, which let box-denominated stock-outs deduct pieces.
-     */
     public function toPieces(int $quantity, UnitType|string $unitType): int
     {
         $unit = $unitType instanceof UnitType
@@ -71,10 +102,6 @@ class MedicineProduct extends Model
         return $quantity * (int) $this->pack_size;
     }
 
-    /**
-     * How many whole boxes the given piece count represents. Used for display
-     * and for capping box-denominated inputs; never for computing stock.
-     */
     public function toWholeBoxes(int $pieces): int
     {
         if (! $this->hasValidPackSize()) {
@@ -99,11 +126,6 @@ class MedicineProduct extends Model
         return $this->hasMany(ProductQty::class, 'product_id');
     }
 
-        /**
-     * productsQty — used by StockTransfer wizard eager load.
-     * Same as quantities(); kept as a named alias so the controller
-     * relationship string 'productsQty' resolves correctly.
-     */
     public function productsQty(): HasMany
     {
         return $this->hasMany(ProductQty::class, 'product_id');

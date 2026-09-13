@@ -1,13 +1,23 @@
-export function getUnitPrice(product, unitType) {
+export function getUnitPrice(product, unitType, options = {}) {
+    const vatExempt = Boolean(options.vatExempt);
+
     if (unitType === "Box") {
-        return Number(product.wholesale_price) || 0;
+        // vatExempt forces the raw (pre-VAT) price regardless of vat_status;
+        // otherwise use the VAT-inclusive effective price when applicable.
+        const price = vatExempt
+            ? product.wholesale_price
+            : (product.effective_wholesale_price ?? product.wholesale_price);
+        return Number(price) || 0;
     }
 
-    return Number(product.retail_price) || 0;
+    const price = vatExempt
+        ? product.retail_price
+        : (product.effective_retail_price ?? product.retail_price);
+    return Number(price) || 0;
 }
 
-export function getLineTotal(product, unitType, quantity) {
-    return getUnitPrice(product, unitType) * (Number(quantity) || 0);
+export function getLineTotal(product, unitType, quantity, options = {}) {
+    return getUnitPrice(product, unitType, options) * (Number(quantity) || 0);
 }
 
 export function getPiecesRequired(product, unitType, quantity) {
@@ -27,17 +37,22 @@ export function getProductTotalStock(product) {
 export function getPiecesInCart(cartItems, productId, excludeKey = null) {
     return cartItems
         .filter(
-            (item) =>
-                item.product.id === productId && item.key !== excludeKey,
+            (item) => item.product.id === productId && item.key !== excludeKey,
         )
         .reduce(
             (sum, item) =>
-                sum + getPiecesRequired(item.product, item.unitType, item.quantity),
+                sum +
+                getPiecesRequired(item.product, item.unitType, item.quantity),
             0,
         );
 }
 
-export function getMaxQuantity(product, unitType, cartItems, excludeKey = null) {
+export function getMaxQuantity(
+    product,
+    unitType,
+    cartItems,
+    excludeKey = null,
+) {
     const totalStock = getProductTotalStock(product);
     const usedPieces = getPiecesInCart(cartItems, product.id, excludeKey);
     const remainingPieces = Math.max(totalStock - usedPieces, 0);

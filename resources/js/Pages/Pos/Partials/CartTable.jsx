@@ -16,8 +16,11 @@ import {
     normalizeCartQuantityInput,
 } from "../lib/pricing";
 
-const CART_ROW_GRID =
-    "grid grid-cols-[2fr_1.2fr_1.5fr_1fr_1fr_1fr] items-center gap-1";
+function getRowGrid(showDiscountColumn) {
+    return showDiscountColumn
+        ? "grid grid-cols-[auto_2fr_1.2fr_1.5fr_1fr_1fr_1fr] items-center gap-1"
+        : "grid grid-cols-[2fr_1.2fr_1.5fr_1fr_1fr_1fr] items-center gap-1";
+}
 
 function CartQuantityInput({
     itemKey,
@@ -72,6 +75,9 @@ function CartQuantityInput({
 export default function CartTable({
     cartItems,
     syncing,
+    discountPercent,
+    onToggleDiscount,
+    onToggleVatExempt,
     onRemove,
     onUpdateQuantity,
     onSetQuantity,
@@ -85,12 +91,18 @@ export default function CartTable({
         );
     }
 
+    const showDiscountColumn = discountPercent > 0;
+    const rowGrid = getRowGrid(showDiscountColumn);
+
     return (
         <div className="max-h-[360px] overflow-x-hidden overflow-y-auto rounded-md border">
             <div className="min-w-0">
                 <div
-                    className={`${CART_ROW_GRID} border-b bg-muted/50 px-2 py-2 text-xs font-medium text-muted-foreground`}
+                    className={`${rowGrid} border-b bg-muted/50 px-2 py-2 text-xs font-medium text-muted-foreground`}
                 >
+                    {showDiscountColumn && (
+                        <div className="text-center">Disc</div>
+                    )}
                     <div className="min-w-0 truncate">Product</div>
                     <div>Unit</div>
                     <div className="text-center">Qty</div>
@@ -106,19 +118,44 @@ export default function CartTable({
                         cartItems,
                         item.key,
                     );
+                    const isVat = item.product.vat_status === "VAT";
 
                     return (
                         <div
                             key={item.key}
-                            className={`${CART_ROW_GRID} border-b px-2 py-2 text-xs last:border-b-0`}
+                            className={`${rowGrid} border-b px-2 py-2 text-xs last:border-b-0`}
                         >
+                            {showDiscountColumn && (
+                                <div className="flex items-center justify-center">
+                                    <input
+                                        type="checkbox"
+                                        checked={Boolean(item.applyDiscount)}
+                                        onChange={() =>
+                                            onToggleDiscount(item.key)
+                                        }
+                                        disabled={syncing}
+                                        className="h-3.5 w-3.5"
+                                    />
+                                </div>
+                            )}
+
                             <div className="min-w-0">
                                 <div className="flex items-start justify-between gap-0.5">
                                     <div className="min-w-0">
-                                        <div className="flex items-center gap-1.5">
+                                        <div className="flex flex-wrap items-center gap-1.5">
                                             <div className="truncate font-medium">
                                                 {item.product.med_name}
                                             </div>
+                                            {isVat && !item.vatExempt && (
+                                                <span className="shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                                    VAT
+                                                </span>
+                                            )}
+                                            {item.vatExempt && (
+                                                <span className="shrink-0 rounded-full bg-green-100 px-1.5 py-0.5 text-[10px] font-medium text-green-700">
+                                                    VAT-Exempt
+                                                </span>
+                                            )}
                                         </div>
                                         {item.product.brand_name && (
                                             <div className="truncate text-muted-foreground">
@@ -130,6 +167,20 @@ export default function CartTable({
                                                 {item.product.dose} {"/"}
                                                 {item.product.form}
                                             </div>
+                                        )}
+                                        {item.vatEligibleForExemption && (
+                                            <button
+                                                type="button"
+                                                onClick={() =>
+                                                    onToggleVatExempt(item.key)
+                                                }
+                                                disabled={syncing}
+                                                className="mt-0.5 text-left text-[10px] font-medium text-blue-600 underline decoration-dotted hover:text-blue-800 disabled:opacity-50"
+                                            >
+                                                {item.vatExempt
+                                                    ? "Add VAT back"
+                                                    : "Remove VAT"}
+                                            </button>
                                         )}
                                     </div>
                                 </div>

@@ -1,9 +1,15 @@
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardFooter,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
 import GenericBadge from "./GenericBadge";
 import StockStatusBadge from "./StockStatusBadge";
-import { canAddToCart, formatCurrency } from "../lib/pricing";
+import { canAddToCart, formatCurrency, getUnitPrice } from "../lib/pricing";
 
 function isGenericProduct(product) {
     return Boolean(product?.is_generic);
@@ -14,6 +20,7 @@ export default function ProductCard({ product, cartItems, onAddToCart }) {
     const canAddPiece = canAddToCart(product, "Piece", cartItems);
     const canAddBox = canAddToCart(product, "Box", cartItems);
     const isGeneric = isGenericProduct(product);
+    const isVat = product.vat_status === "VAT";
 
     return (
         <Card className="flex flex-col transition-shadow hover:shadow-md">
@@ -41,8 +48,9 @@ export default function ProductCard({ product, cartItems, onAddToCart }) {
                 <div className="flex justify-between">
                     <span className="text-muted-foreground">Dose / Form</span>
                     <span>
-                        {[product.dose, product.form].filter(Boolean).join(" · ") ||
-                            "—"}
+                        {[product.dose, product.form]
+                            .filter(Boolean)
+                            .join(" · ") || "—"}
                     </span>
                 </div>
                 <div className="flex justify-between">
@@ -54,15 +62,29 @@ export default function ProductCard({ product, cartItems, onAddToCart }) {
                     <span className="font-medium">{totalStock} pcs</span>
                 </div>
                 <div className="flex justify-between">
-                    <span className="text-muted-foreground">Retail (Piece)</span>
+                    <span className="text-muted-foreground">
+                        Retail (Piece){" "}
+                        {isVat && (
+                            <span className="ml-1 shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                VAT
+                            </span>
+                        )}
+                    </span>
                     <span className="font-medium text-green-700">
-                        {formatCurrency(product.retail_price)}
+                        {formatCurrency(getUnitPrice(product, "Piece"))}
                     </span>
                 </div>
                 <div className="flex justify-between">
-                    <span className="text-muted-foreground">Wholesale (Box)</span>
+                    <span className="text-muted-foreground">
+                        Wholesale (Box)
+                        {isVat && (
+                            <span className="ml-1 shrink-0 rounded-full bg-blue-100 px-1.5 py-0.5 text-[10px] font-medium text-blue-700">
+                                VAT
+                            </span>
+                        )}
+                    </span>
                     <span className="font-medium text-blue-700">
-                        {formatCurrency(product.wholesale_price)}
+                        {formatCurrency(getUnitPrice(product, "Box"))}
                     </span>
                 </div>
             </CardContent>

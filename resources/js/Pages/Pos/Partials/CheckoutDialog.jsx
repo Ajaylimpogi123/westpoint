@@ -46,8 +46,6 @@ export default function CheckoutDialog({
     const [reviewItems, setReviewItems] = useState([]);
     const [reviewLoading, setReviewLoading] = useState(false);
     const [reviewError, setReviewError] = useState("");
-    // Regenerated each time the dialog opens, so a retry of the same checkout
-    // reuses one key while a genuinely new sale gets a fresh one.
     const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
 
     useEffect(() => {
@@ -112,6 +110,20 @@ export default function CheckoutDialog({
 
         setProcessing(true);
 
+        // Derived, not separately tracked: a 20% discount only maps to a
+        // specific label when it lines up with the selected customer's
+        // record; otherwise it stays generic rather than guessing.
+        const discountType =
+            discountPercent === 20 &&
+            (selectedCustomer?.customer_type === "Senior Citizen" ||
+                selectedCustomer?.customer_type === "PWD")
+                ? selectedCustomer.customer_type
+                : discountPercent === 10
+                  ? "Single Mother"
+                  : discountPercent > 0
+                    ? "PWD / Senior"
+                    : null;
+
         // Must open synchronously within the click handler so the browser
         // does not treat it as a blocked popup once the request resolves.
         const invoiceWindow = window.open("", "_blank");
@@ -129,12 +141,16 @@ export default function CheckoutDialog({
                     product_id: item.product.id,
                     unit_type: item.unitType,
                     quantity_sold: item.quantity,
+                    apply_discount: Boolean(item.applyDiscount),
+                    vat_exempt: Boolean(item.vatExempt),
                 })),
                 payment_method: paymentMethod,
                 reference_number: requiresReferenceNumber
                     ? referenceNumber.trim()
                     : null,
                 discount_amount: discountAmount,
+                discount_percent: discountPercent,
+                discount_type: discountType,
                 amount_received: requiresReferenceNumber ? netTotal : received,
             },
             {
@@ -174,10 +190,7 @@ export default function CheckoutDialog({
     };
 
     return (
-        <Dialog
-            open={open}
-            onOpenChange={setOpen}
-        >
+        <Dialog open={open} onOpenChange={setOpen}>
             <DialogTrigger asChild>{children}</DialogTrigger>
             <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
                 <DialogHeader>

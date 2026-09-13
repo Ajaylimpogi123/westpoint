@@ -32,6 +32,7 @@ class MedicineInventoryController extends Controller
         'brand_name',
         'is_generic',
         'retail_price',
+        'vat_status',
         'stock_threshold',
         'wholesale_price',
     ];
@@ -287,6 +288,7 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
             'brand_name' => ['nullable', 'string', 'max:244'],
             'is_generic' => ['sometimes', 'boolean'],
             'retail_price' => ['required', 'numeric', 'min:0'],
+            'vat_status' => ['required', 'string', 'in:VAT,Non-VAT'],
             'stock_threshold' => ['nullable', 'integer', 'min:0'],
             'wholesale_price' => ['required', 'numeric', 'min:0'],
         ]);
@@ -332,6 +334,7 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
             'brand_name' => ['nullable', 'string', 'max:244'],
             'is_generic' => ['sometimes', 'boolean'],
             'retail_price' => ['required', 'numeric', 'min:0'],
+            'vat_status' => ['required', 'string', 'in:VAT,Non-VAT'],
             'stock_threshold' => ['nullable', 'integer', 'min:0'],
             'wholesale_price' => ['required', 'numeric', 'min:0'],
         ]);

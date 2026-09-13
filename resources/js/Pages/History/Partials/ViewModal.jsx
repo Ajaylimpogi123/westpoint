@@ -27,11 +27,35 @@ const formatCurrency = (amount) =>
 
 const productLabel = (product) => {
     if (!product) return "Product";
-    const parts = [product.med_name, product.dose, product.form, product.brand_name]
+    const parts = [
+        product.med_name,
+        product.dose,
+        product.form,
+        product.brand_name,
+    ]
         .filter(Boolean)
         .join(" ");
     return parts || "Product";
 };
+
+function StatusBadge({ status }) {
+    const normalized = status || "Completed";
+    const styles = {
+        Completed: "bg-green-100 text-green-700",
+        "Partially Voided": "bg-amber-100 text-amber-700",
+        Voided: "bg-red-100 text-red-700",
+    };
+
+    return (
+        <span
+            className={`rounded-full px-2 py-0.5 text-xs font-medium ${
+                styles[normalized] || "bg-muted text-muted-foreground"
+            }`}
+        >
+            {normalized}
+        </span>
+    );
+}
 
 export default function ViewModal({ saleId, children }) {
     const [open, setOpen] = useState(false);
@@ -64,6 +88,10 @@ export default function ViewModal({ saleId, children }) {
             ? details.sale.customer_name
             : "Walk-in";
 
+    const refundedAmount = Number(details?.sale?.refunded_amount) || 0;
+    const originalNetAmount = Number(details?.sale?.net_amount) || 0;
+    const amountDue = Math.max(originalNetAmount - refundedAmount, 0);
+
     return (
         <>
             <div onClick={openModal}>{children}</div>
@@ -94,7 +122,10 @@ export default function ViewModal({ saleId, children }) {
                                         Date:
                                     </span>{" "}
                                     <span className="font-medium">
-                                        {formatDateTime(details.sale.created_at, "")}
+                                        {formatDateTime(
+                                            details.sale.created_at,
+                                            "",
+                                        )}
                                     </span>
                                 </div>
                                 <div>
@@ -114,6 +145,12 @@ export default function ViewModal({ saleId, children }) {
                                             details.sale.payment_method,
                                         )}
                                     </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">
+                                        Status:
+                                    </span>{" "}
+                                    <StatusBadge status={details.sale.status} />
                                 </div>
                                 {details.sale.reference_number &&
                                     String(
@@ -137,6 +174,7 @@ export default function ViewModal({ saleId, children }) {
                                             <TableHead>Product</TableHead>
                                             <TableHead>Unit</TableHead>
                                             <TableHead>Qty</TableHead>
+                                            <TableHead>Returned</TableHead>
                                             <TableHead>Price</TableHead>
                                             <TableHead>Total</TableHead>
                                         </TableRow>
@@ -157,6 +195,18 @@ export default function ViewModal({ saleId, children }) {
                                                         {item.quantity_sold}
                                                     </TableCell>
                                                     <TableCell>
+                                                        {item.returned_quantity >
+                                                        0 ? (
+                                                            <span className="text-amber-700">
+                                                                {
+                                                                    item.returned_quantity
+                                                                }
+                                                            </span>
+                                                        ) : (
+                                                            "—"
+                                                        )}
+                                                    </TableCell>
+                                                    <TableCell>
                                                         {formatCurrency(
                                                             item.price_used,
                                                         )}
@@ -171,7 +221,7 @@ export default function ViewModal({ saleId, children }) {
                                         ) : (
                                             <TableRow>
                                                 <TableCell
-                                                    colSpan={5}
+                                                    colSpan={6}
                                                     className="text-center"
                                                 >
                                                     No items found.
@@ -202,13 +252,32 @@ export default function ViewModal({ saleId, children }) {
                                         </span>
                                     </div>
                                 )}
+                                {refundedAmount > 0 && (
+                                    <>
+                                        <div className="flex justify-between text-muted-foreground line-through">
+                                            <span>Original Net Amount</span>
+                                            <span>
+                                                {formatCurrency(
+                                                    originalNetAmount,
+                                                )}
+                                            </span>
+                                        </div>
+                                        <div className="flex justify-between text-amber-700">
+                                            <span>Refunded / Voided</span>
+                                            <span>
+                                                -
+                                                {formatCurrency(refundedAmount)}
+                                            </span>
+                                        </div>
+                                    </>
+                                )}
                                 <div className="flex justify-between font-semibold text-green-600">
-                                    <span>Net Amount</span>
                                     <span>
-                                        {formatCurrency(
-                                            details.sale.net_amount,
-                                        )}
+                                        {refundedAmount > 0
+                                            ? "Amount Due"
+                                            : "Net Amount"}
                                     </span>
+                                    <span>{formatCurrency(amountDue)}</span>
                                 </div>
                             </div>
 

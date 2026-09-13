@@ -5,17 +5,32 @@ import { DataTable } from "./Partials/DataTable";
 import { columns } from "./Partials/Columns";
 
 export default function Index({ sales = [] }) {
-    const saleData = sales.map((sale) => ({
-        id: sale.id,
-        invoice_number: sale.invoice_number,
-        created_at: sale.created_at,
-        customer_name: sale.customer_name,
-        gross_amount: sale.gross_amount,
-        discount_amount: sale.discount_amount,
-        net_amount: sale.net_amount,
-        payment_method: sale.payment_method,
-        reference_number: sale.reference_number,
-    }));
+    const saleData = sales.map((sale) => {
+        const refundedAmount = Number(sale.refunded_amount) || 0;
+        // net_amount here is the amount actually still owed/collected after
+        // any void/return — the original charged amount minus what's been
+        // refunded. The original recorded sale (gross/net as charged at
+        // checkout) is never mutated in the database; this is a display-time
+        // deduction so the table, its totals, and exports all agree.
+        const netAfterRefund = Math.max(
+            (Number(sale.net_amount) || 0) - refundedAmount,
+            0,
+        );
+
+        return {
+            id: sale.id,
+            invoice_number: sale.invoice_number,
+            created_at: sale.created_at,
+            customer_name: sale.customer_name,
+            gross_amount: sale.gross_amount,
+            discount_amount: sale.discount_amount,
+            net_amount: netAfterRefund,
+            status: sale.status,
+            refunded_amount: refundedAmount,
+            payment_method: sale.payment_method,
+            reference_number: sale.reference_number,
+        };
+    });
 
     return (
         <AuthenticatedLayout>

@@ -15,7 +15,7 @@ import BatchTable from "./BatchTable";
 import StockStatusBadge from "./StockStatusBadge";
 import { getMedicineStockStatus } from "../lib/stockStatus";
 
-const COLUMN_COUNT = 9;
+const COLUMN_COUNT = 10;
 
 export default function MedicineRow({
     medicine,
@@ -35,6 +35,8 @@ export default function MedicineRow({
         const num = Number(value);
         return Number.isFinite(num) ? num.toFixed(2) : "0.00";
     };
+
+    const isVat = medicine.vat_status === "VAT";
 
     const handleRestore = () => {
         Swal.fire({
@@ -95,10 +97,7 @@ export default function MedicineRow({
                         )}
                     </Button>
                 </TableCell>
-                <TableCell
-                    className="font-medium"
-                    onClick={onToggle}
-                >
+                <TableCell className="font-medium" onClick={onToggle}>
                     <div className="flex flex-col gap-1">
                         <span>{medicine.med_name}</span>
                         {medicine.status === "Deleted" && (
@@ -111,12 +110,8 @@ export default function MedicineRow({
                 <TableCell onClick={onToggle}>
                     {medicine.brand_name || "-"}
                 </TableCell>
-                <TableCell onClick={onToggle}>
-                    {medicine.dose || "-"}
-                </TableCell>
-                <TableCell onClick={onToggle}>
-                    {medicine.form || "-"}
-                </TableCell>
+                <TableCell onClick={onToggle}>{medicine.dose || "-"}</TableCell>
+                <TableCell onClick={onToggle}>{medicine.form || "-"}</TableCell>
                 {showBranchColumn && (
                     <TableCell onClick={onToggle}>
                         {medicine.branch?.branch_name ?? "-"}
@@ -126,7 +121,21 @@ export default function MedicineRow({
                     {medicine.pack_size ?? "-"}
                 </TableCell>
                 <TableCell onClick={onToggle}>
-                    {formatPrice(medicine.retail_price)}
+                    {formatPrice(
+                        medicine.effective_retail_price ??
+                            medicine.retail_price,
+                    )}
+                </TableCell>
+                <TableCell onClick={onToggle}>
+                    <span
+                        className={
+                            isVat
+                                ? "rounded-full bg-blue-100 px-2 py-0.5 text-xs font-medium text-blue-700"
+                                : "rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground"
+                        }
+                    >
+                        {isVat ? "VAT" : "Non-VAT"}
+                    </span>
                 </TableCell>
                 <TableCell onClick={onToggle}>
                     <div className="flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-2">
@@ -190,7 +199,9 @@ export default function MedicineRow({
             {isExpanded && (
                 <TableRow>
                     <TableCell
-                        colSpan={showBranchColumn ? COLUMN_COUNT + 1 : COLUMN_COUNT}
+                        colSpan={
+                            showBranchColumn ? COLUMN_COUNT + 1 : COLUMN_COUNT
+                        }
                         className="p-0"
                     >
                         <BatchTable

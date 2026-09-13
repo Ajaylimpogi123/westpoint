@@ -10,13 +10,22 @@ import {
     isDiscountEligible,
     percentDiscountAmount,
 } from "../lib/customerDiscount";
-import { canAddToCart, getMaxQuantity, normalizeCartQuantityInput } from "../lib/pricing";
+import {
+    canAddToCart,
+    getMaxQuantity,
+    getUnitPrice,
+    normalizeCartQuantityInput,
+} from "../lib/pricing";
 
 function resolveCartError(error) {
     return (
         error?.response?.data?.message ||
         "Failed to sync cart. Please try again."
     );
+}
+
+function round2(value) {
+    return Math.round((Number(value) || 0) * 100) / 100;
 }
 
 export function usePosCart(initialActiveCart, branchId) {
@@ -30,20 +39,43 @@ export function usePosCart(initialActiveCart, branchId) {
     const [discountPercent, setDiscountPercentState] = useState(initialPercent);
     const [selectedCustomer, setSelectedCustomer] = useState(initialCustomer);
     const [syncing, setSyncing] = useState(false);
-
-    const grossTotal = useMemo(
-        () =>
-            cartItems.reduce(
-                (sum, item) => sum + Number(item.totalPrice || 0),
-                0,
-            ),
-        [cartItems],
-    );
+    // Keys of cart items the discount should be applied to. A Set of
+    // item.key (not id) since key is stable across the cart's lifetime.
+    const [discountedKeys, setDiscountedKeys] = useState(() => new Set());
+    // Keys of discounted items whose VAT has additionally been removed
+    // (PWD/Senior/Solo Parent purchases are VAT-exempt by law, but the
+    // cashier opts in per item rather than it being automatic).
+    const [vatExemptKeys, setVatExemptKeys] = useState(() => new Set());
 
     const applyCartResponse = useCallback((data) => {
         setCartId(data.id);
-        setCartItems(data.items ?? []);
+        const items = data.items ?? [];
+        setCartItems(items);
         setSelectedCustomer(data.customer ?? null);
+        // Drop any checked keys for items that no longer exist in the cart
+        // (removed, or replaced by a merge on unit-type change), so a stale
+        // key can't silently keep "counting" toward a future discount/VAT
+        // exemption.
+        setDiscountedKeys((current) => {
+            const validKeys = new Set(items.map((item) => item.key));
+            const next = new Set();
+            current.forEach((key) => {
+                if (validKeys.has(key)) {
+                    next.add(key);
+                }
+            });
+            return next;
+        });
+        setVatExemptKeys((current) => {
+            const validKeys = new Set(items.map((item) => item.key));
+            const next = new Set();
+            current.forEach((key) => {
+                if (validKeys.has(key)) {
+                    next.add(key);
+                }
+            });
+            return next;
+        });
     }, []);
 
     const persistCartCustomer = useCallback(
@@ -94,17 +126,63 @@ export function usePosCart(initialActiveCart, branchId) {
         }
 
         setDiscountPercentState(0);
+        setDiscountedKeys(new Set());
+        setVatExemptKeys(new Set());
     }, [persistCartCustomer]);
 
     const togglePercentDiscount = useCallback((percent) => {
-        setDiscountPercentState((current) =>
-            current === percent ? 0 : percent,
-        );
+        setDiscountPercentState((current) => {
+            const next = current === percent ? 0 : percent;
+
+            // Turning the discount off entirely should clear any per-item
+            // checks and VAT exemptions, so re-enabling it later starts
+            // from a clean slate instead of resurrecting an old selection.
+            if (next === 0) {
+                setDiscountedKeys(new Set());
+                setVatExemptKeys(new Set());
+            }
+
+            return next;
+        });
     }, []);
 
     const setDiscountPercent = useCallback((value) => {
         const clamped = Math.min(Math.max(Number(value) || 0, 0), 100);
         setDiscountPercentState(clamped);
+    }, []);
+
+    const toggleItemDiscount = useCallback((key) => {
+        setDiscountedKeys((current) => {
+            const next = new Set(current);
+            if (next.has(key)) {
+                next.delete(key);
+                // VAT exemption only makes sense alongside an applied
+                // discount — unchecking the discount clears it too.
+                setVatExemptKeys((currentVat) => {
+                    if (!currentVat.has(key)) {
+                        return currentVat;
+                    }
+                    const nextVat = new Set(currentVat);
+                    nextVat.delete(key);
+                    return nextVat;
+                });
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
+    }, []);
+
+    const toggleVatExempt = useCallback((key) => {
+        setVatExemptKeys((current) => {
+            const next = new Set(current);
+            if (next.has(key)) {
+                next.delete(key);
+            } else {
+                next.add(key);
+            }
+            return next;
+        });
     }, []);
 
     const syncCart = useCallback(
@@ -172,7 +250,10 @@ export function usePosCart(initialActiveCart, branchId) {
                 cartItems,
                 key,
             );
-            const quantity = Math.max(1, Math.min(item.quantity + change, maxQty));
+            const quantity = Math.max(
+                1,
+                Math.min(item.quantity + change, maxQty),
+            );
 
             if (quantity <= 0) {
                 await syncCart(() => removeCartItem(item.id));
@@ -216,9 +297,7 @@ export function usePosCart(initialActiveCart, branchId) {
             const quantity = normalizeCartQuantityInput(rawQuantity, maxQty);
 
             if (Number.isFinite(parsed) && parsed > maxQty) {
-                toast.error(
-                    `Insufficient stock for ${item.product.med_name}.`,
-                );
+                toast.error(`Insufficient stock for ${item.product.med_name}.`);
             }
 
             if (quantity === item.quantity) {
@@ -240,7 +319,9 @@ export function usePosCart(initialActiveCart, branchId) {
                 return;
             }
 
-            await syncCart(() => updateCartItem(item.id, { unit_type: unitType }));
+            await syncCart(() =>
+                updateCartItem(item.id, { unit_type: unitType }),
+            );
         },
         [cartItems, syncCart],
     );
@@ -250,11 +331,70 @@ export function usePosCart(initialActiveCart, branchId) {
         setCartItems([]);
         setDiscountPercentState(0);
         setSelectedCustomer(null);
+        setDiscountedKeys(new Set());
+        setVatExemptKeys(new Set());
     }, []);
 
+    // Cart items annotated with discount + VAT-exemption state. VAT
+    // exemption is only ever honored when the item's discount is also
+    // checked and the product is actually a VAT item — otherwise the
+    // toggle wouldn't be shown in the UI in the first place, but this
+    // guards the math even if state somehow got out of sync.
+    const cartItemsWithDiscount = useMemo(
+        () =>
+            cartItems.map((item) => {
+                const applyDiscount = discountedKeys.has(item.key);
+                const isVatProduct = item.product?.vat_status === "VAT";
+                const vatEligibleForExemption = isVatProduct && applyDiscount;
+                const vatExempt =
+                    vatEligibleForExemption && vatExemptKeys.has(item.key);
+
+                const priceUsed = vatExempt
+                    ? getUnitPrice(item.product, item.unitType, {
+                          vatExempt: true,
+                      })
+                    : item.priceUsed;
+                const totalPrice = vatExempt
+                    ? round2(priceUsed * item.quantity)
+                    : item.totalPrice;
+
+                return {
+                    ...item,
+                    applyDiscount,
+                    vatEligibleForExemption,
+                    vatExempt,
+                    priceUsed,
+                    totalPrice,
+                };
+            }),
+        [cartItems, discountedKeys, vatExemptKeys],
+    );
+
+    const grossTotal = useMemo(
+        () =>
+            cartItemsWithDiscount.reduce(
+                (sum, item) => sum + Number(item.totalPrice || 0),
+                0,
+            ),
+        [cartItemsWithDiscount],
+    );
+
     const discountAmount = useMemo(
-        () => percentDiscountAmount(grossTotal, discountPercent),
-        [grossTotal, discountPercent],
+        () =>
+            discountPercent > 0
+                ? cartItemsWithDiscount.reduce(
+                      (sum, item) =>
+                          item.applyDiscount
+                              ? sum +
+                                percentDiscountAmount(
+                                    item.totalPrice,
+                                    discountPercent,
+                                )
+                              : sum,
+                      0,
+                  )
+                : 0,
+        [cartItemsWithDiscount, discountPercent],
     );
 
     const netTotal = useMemo(
@@ -264,10 +404,12 @@ export function usePosCart(initialActiveCart, branchId) {
 
     return {
         cartId,
-        cartItems,
+        cartItems: cartItemsWithDiscount,
         discountPercent,
         setDiscountPercent,
         togglePercentDiscount,
+        toggleItemDiscount,
+        toggleVatExempt,
         discountAmount,
         selectedCustomer,
         selectCustomer,

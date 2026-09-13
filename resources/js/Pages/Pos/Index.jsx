@@ -32,8 +32,10 @@ export default function Index({
         cartId,
         cartItems,
         discountPercent,
+        toggleItemDiscount,
         setDiscountPercent,
         togglePercentDiscount,
+        toggleVatExempt,
         discountAmount,
         selectedCustomer,
         selectCustomer,
@@ -107,6 +109,8 @@ export default function Index({
                                 discountPercent={discountPercent}
                                 setDiscountPercent={setDiscountPercent}
                                 togglePercentDiscount={togglePercentDiscount}
+                                onToggleItemDiscount={toggleItemDiscount}
+                                onToggleVatExempt={toggleVatExempt}
                                 discountAmount={discountAmount}
                                 selectedCustomer={selectedCustomer}
                                 onSelectCustomer={selectCustomer}

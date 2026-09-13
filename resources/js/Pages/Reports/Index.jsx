@@ -15,6 +15,7 @@ import {
     PackageMinus,
     ScrollText,
     ChevronRight,
+    Undo2,
 } from "lucide-react";
 
 const GROUPS = {
@@ -66,6 +67,13 @@ const REPORTS = [
         group: "Sales",
         icon: UserCheck,
         description: "Performance breakdown per cashier.",
+    },
+    {
+        name: "Void / Return Items",
+        route: "reports.void-returns",
+        group: "Sales",
+        icon: Undo2,
+        description: "Voided and returned line items with refund amounts.",
     },
     {
         name: "Stock on Hand",

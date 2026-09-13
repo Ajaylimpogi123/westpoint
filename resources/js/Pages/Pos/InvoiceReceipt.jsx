@@ -121,17 +121,24 @@ export default function InvoiceReceipt({ sale }) {
                     text-align: right;
                     white-space: nowrap;
                 }
+                .line-discount {
+                    font-size: 9px;
+                    color: #333;
+                }
                 col.col-item {
-                    width: 46%;
+                    width: 40%;
                 }
                 col.col-unit {
-                    width: 18%;
+                    width: 16%;
+                }
+                col.col-price {
+                    width: 16%;
                 }
                 col.col-qty {
-                    width: 12%;
+                    width: 10%;
                 }
                 col.col-total {
-                    width: 24%;
+                    width: 18%;
                 }
                 .totals {
                     border-top: 1px solid #000;
@@ -193,6 +200,7 @@ export default function InvoiceReceipt({ sale }) {
                 <colgroup>
                     <col className="col-item" />
                     <col className="col-unit" />
+                    <col className="col-price" />
                     <col className="col-qty" />
                     <col className="col-total" />
                 </colgroup>
@@ -200,6 +208,7 @@ export default function InvoiceReceipt({ sale }) {
                     <tr>
                         <th>Item</th>
                         <th className="num">Unit</th>
+                        <th className="num">Price</th>
                         <th className="num">Qty</th>
                         <th className="num">Total</th>
                     </tr>
@@ -210,15 +219,26 @@ export default function InvoiceReceipt({ sale }) {
                             <tr key={item.id}>
                                 <td>{productLabel(item.product)}</td>
                                 <td className="num">{item.unit_type}</td>
+                                <td className="num">
+                                    {formatCurrency(item.price_used)}
+                                </td>
                                 <td className="num">{item.quantity_sold}</td>
                                 <td className="num">
                                     {formatCurrency(item.total_price)}
+                                    {Number(item.discount_amount) > 0 && (
+                                        <div className="line-discount">
+                                            -
+                                            {formatCurrency(
+                                                item.discount_amount,
+                                            )}
+                                        </div>
+                                    )}
                                 </td>
                             </tr>
                         ))
                     ) : (
                         <tr>
-                            <td colSpan="4" style={{ textAlign: "center" }}>
+                            <td colSpan="5" style={{ textAlign: "center" }}>
                                 No items found
                             </td>
                         </tr>
@@ -233,7 +253,13 @@ export default function InvoiceReceipt({ sale }) {
                 </div>
                 {Number(sale.discount_amount) > 0 && (
                     <div>
-                        <span>Discount:</span>
+                        <span>
+                            Discount
+                            {sale.discount_type
+                                ? ` (${sale.discount_type})`
+                                : ""}
+                            :
+                        </span>
                         <span>-{formatCurrency(sale.discount_amount)}</span>
                     </div>
                 )}
@@ -247,6 +273,18 @@ export default function InvoiceReceipt({ sale }) {
                         {String(sale.payment_method).replace(/_/g, " ")}
                     </span>
                 </div>
+                {sale.payment_method === "cash" && (
+                    <>
+                        <div>
+                            <span>Amount Received:</span>
+                            <span>{formatCurrency(sale.amount_received)}</span>
+                        </div>
+                        <div>
+                            <span>Change:</span>
+                            <span>{formatCurrency(sale.change_due)}</span>
+                        </div>
+                    </>
+                )}
                 {sale.reference_number &&
                     String(sale.reference_number).trim() !== "" && (
                         <div>

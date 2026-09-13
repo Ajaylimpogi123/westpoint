@@ -78,7 +78,7 @@ class PosController extends Controller
             ->when($genericOnly, function ($query) {
                 $query->where('tbl_products.is_generic', true);
             })
-            ->paginate(50);
+            ->paginate(20);
 
         return response()->json($products);
     }
@@ -317,9 +317,11 @@ class PosController extends Controller
             $quantity = (int) $item->quantity_sold;
             $piecesNeeded = $this->piecesForCartLine($product, $unitType, $quantity);
 
+            // VAT-inclusive when the product's vat_status is "VAT" — see
+            // MedicineProduct::effective_retail_price/effective_wholesale_price.
             $priceUsed = $unitType === 'Box'
-                ? (float) $product->wholesale_price
-                : (float) $product->retail_price;
+                ? $product->effective_wholesale_price
+                : $product->effective_retail_price;
 
             $items[] = [
                 'cart_item_id' => $item->id,
@@ -363,9 +365,13 @@ class PosController extends Controller
                 'min:1',
                 'max:' . InventoryStockService::MAX_TRANSACTION_QUANTITY,
             ],
+            'items.*.apply_discount' => ['sometimes', 'boolean'],
+            'items.*.vat_exempt' => ['sometimes', 'boolean'],
             'payment_method' => ['required', 'string', 'in:cash,gcash,debit_card,credit_card'],
             'reference_number' => ['nullable', 'string', 'max:255'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
+            'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
+            'discount_type' => ['nullable', 'string', 'in:Senior Citizen,PWD,Single Mother,PWD / Senior'],
             'amount_received' => ['required', 'numeric', 'min:0'],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_id' => ['nullable', 'integer', 'exists:tbl_customers,customer_id'],
@@ -382,7 +388,7 @@ class PosController extends Controller
                 ->with('error', 'Active cart not found for your branch session.');
         }
 
-        $discountAmount = (float) ($validated['discount_amount'] ?? 0);
+        $discountPercent = (float) ($validated['discount_percent'] ?? 0);
         $customerName = isset($validated['customer_name'])
             ? trim($validated['customer_name'])
             : null;
@@ -419,54 +425,83 @@ class PosController extends Controller
             DB::beginTransaction();
 
             $grossAmount = 0.0;
+            $totalDiscount = 0.0;
             $lineItems = [];
 
-            foreach ($validated['items'] as $item) {
-                $product = MedicineProduct::active()
-                    ->forBranch($branchId)
-                    ->findOrFail($item['product_id']);
-                $unitType = UnitType::fromInput($item['unit_type']);
-                $quantitySold = (int) $item['quantity_sold'];
+      foreach ($validated['items'] as $item) {
+    $product = MedicineProduct::active()
+        ->forBranch($branchId)
+        ->findOrFail($item['product_id']);
+    $unitType = UnitType::fromInput($item['unit_type']);
+    $quantitySold = (int) $item['quantity_sold'];
 
-                $priceUsed = $unitType->isBox()
-                    ? (float) $product->wholesale_price
-                    : (float) $product->retail_price;
+    $applyDiscount = $discountPercent > 0 && ! empty($item['apply_discount']);
 
-                $lineTotal = round($priceUsed * $quantitySold, 2);
-                $grossAmount += $lineTotal;
+    // VAT exemption is only honored when the discount is genuinely applied
+    // to this line and the product is actually a VAT item — matches the
+    // UI's own gating, recomputed here rather than trusted from the client.
+    $vatExempt = $applyDiscount
+        && ! empty($item['vat_exempt'])
+        && $product->isVatable();
 
-                $piecesNeeded = $product->toPieces($quantitySold, $unitType);
+    $basePrice = $unitType->isBox()
+        ? (float) $product->wholesale_price
+        : (float) $product->retail_price;
 
-                $this->assertSufficientBranchStock(
-                    $product->id,
-                    $branchId,
-                    $piecesNeeded,
-                    $product->med_name
-                );
+    $priceUsed = $vatExempt
+        ? $basePrice
+        : ($unitType->isBox() ? $product->effective_wholesale_price : $product->effective_retail_price);
 
-                $deductions = $this->deductStockFefo(
-                    $product->id,
-                    $branchId,
-                    $piecesNeeded,
-                    $product->med_name
-                );
+    $lineTotal = round($priceUsed * $quantitySold, 2);
+    $grossAmount += $lineTotal;
 
-                $lineItems[] = [
-                    'product_id' => $product->id,
-                    'unit_type' => $unitType->value,
-                    'quantity_sold' => $quantitySold,
-                    'pieces_sold' => $piecesNeeded,
-                    'price_used' => $priceUsed,
-                    'total_price' => $lineTotal,
-                    'deductions' => $deductions,
-                ];
-            }
+    $lineDiscount = $applyDiscount
+        ? round($lineTotal * $discountPercent / 100, 2)
+        : 0.0;
+    $totalDiscount += $lineDiscount;
 
-            $netAmount = max(round($grossAmount - $discountAmount, 2), 0);
+    $piecesNeeded = $product->toPieces($quantitySold, $unitType);
 
-            if ($validated['payment_method'] === 'cash' && (float) $validated['amount_received'] < $netAmount) {
+    $this->assertSufficientBranchStock(
+        $product->id,
+        $branchId,
+        $piecesNeeded,
+        $product->med_name
+    );
+
+    $deductions = $this->deductStockFefo(
+        $product->id,
+        $branchId,
+        $piecesNeeded,
+        $product->med_name
+    );
+
+    $lineItems[] = [
+        'product_id' => $product->id,
+        'unit_type' => $unitType->value,
+        'quantity_sold' => $quantitySold,
+        'pieces_sold' => $piecesNeeded,
+        'price_used' => $priceUsed,
+        'total_price' => $lineTotal,
+        'discount_amount' => $lineDiscount,
+        'vat_exempt' => $vatExempt,
+        'deductions' => $deductions,
+    ];
+}
+
+            $netAmount = max(round($grossAmount - $totalDiscount, 2), 0);
+            $amountReceived = (float) $validated['amount_received'];
+
+            if ($validated['payment_method'] === 'cash' && $amountReceived < $netAmount) {
                 throw new \RuntimeException('Amount received is less than the net total.');
             }
+
+            // Change only means something for cash; for GCash/card the
+            // "amount received" is just the net total passed through, so
+            // change is always zero and not worth displaying.
+            $changeDue = $validated['payment_method'] === 'cash'
+                ? round($amountReceived - $netAmount, 2)
+                : 0.0;
 
             $sale = Sale::create([
                 'invoice_number' => $this->generateInvoiceNumber($branchId),
@@ -475,11 +510,14 @@ class PosController extends Controller
                 'customer_name' => $customerName,
                 'customer_id' => $customerId,
                 'gross_amount' => $grossAmount,
-                'discount_amount' => $discountAmount,
+                'discount_amount' => $totalDiscount,
+                'discount_type' => $validated['discount_type'] ?? null,
                 'net_amount' => $netAmount,
+                'amount_received' => $amountReceived,
+                'change_due' => $changeDue,
                 'payment_method' => $validated['payment_method'],
                 'reference_number' => isset($validated['reference_number'])
-                    ? trim($validated['reference_number']) ?: null
+                    ? (trim($validated['reference_number']) ?: null)
                     : null,
             ]);
 
@@ -557,9 +595,11 @@ class PosController extends Controller
                     'quantity_sold',
                     'price_used',
                     'total_price',
+                    'discount_amount',
+                    'vat_exempt',
                 ]);
             },
-            'items.product:id,med_name,dose,form,brand_name',
+            'items.product:id,med_name,dose,form,brand_name', 'vat_status',
             'user:id,name',
         ]);
 
@@ -681,9 +721,10 @@ class PosController extends Controller
                 $quantity = (int) $item->quantity_sold;
                 $totalStock = $this->getProductStock($product->id);
 
+                // VAT-inclusive when the product's vat_status is "VAT".
                 $priceUsed = $unitType === 'Box'
-                    ? (float) $product->wholesale_price
-                    : (float) $product->retail_price;
+                    ? $product->effective_wholesale_price
+                    : $product->effective_retail_price;
 
                 return [
                     'id' => $item->id,
@@ -858,6 +899,8 @@ class PosController extends Controller
             'quantity_sold' => $lineItem['quantity_sold'],
             'price_used' => $lineItem['price_used'],
             'total_price' => $lineItem['total_price'],
+            'discount_amount' => $lineItem['discount_amount'],
+            'vat_exempt' => $lineItem['vat_exempt'],
         ]);
 
         if (count($deductions) <= 1) {

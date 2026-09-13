@@ -13,6 +13,10 @@ class Sale extends Model
 
     protected $table = 'tbl_sales';
 
+    public const STATUS_COMPLETED = 'Completed';
+    public const STATUS_PARTIALLY_VOIDED = 'Partially Voided';
+    public const STATUS_VOIDED = 'Voided';
+
     protected $fillable = [
         'invoice_number',
         'branch_id',
@@ -21,7 +25,12 @@ class Sale extends Model
         'customer_id',
         'gross_amount',
         'discount_amount',
+        'discount_type',
         'net_amount',
+        'amount_received',
+        'change_due',
+        'status',
+        'refunded_amount',
         'payment_method',
         'reference_number',
     ];
@@ -32,6 +41,9 @@ class Sale extends Model
             'gross_amount' => 'decimal:2',
             'discount_amount' => 'decimal:2',
             'net_amount' => 'decimal:2',
+            'amount_received' => 'decimal:2',
+            'change_due' => 'decimal:2',
+            'refunded_amount' => 'decimal:2',
         ];
     }
 
@@ -53,5 +65,10 @@ class Sale extends Model
     public function items(): HasMany
     {
         return $this->hasMany(SaleItem::class, 'sale_id');
+    }
+
+    public function returns(): HasMany
+    {
+        return $this->hasMany(SaleReturn::class, 'sale_id');
     }
 }

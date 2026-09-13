@@ -14,6 +14,7 @@ export default function useAddMedicine() {
         retail_price: "",
         stock_threshold: 10,
         wholesale_price: "",
+        vat_status: "Non-VAT",
     });
 
     const openModal = () => setOpen(true);

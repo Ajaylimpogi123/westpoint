@@ -14,6 +14,7 @@ export default function useEditMedicine(medicine) {
         retail_price: "",
         stock_threshold: 10,
         wholesale_price: "",
+        vat_status: "Non-VAT",
     });
 
     useEffect(() => {
@@ -29,6 +30,7 @@ export default function useEditMedicine(medicine) {
             retail_price: medicine.retail_price || "",
             stock_threshold: medicine.stock_threshold ?? 10,
             wholesale_price: medicine.wholesale_price || "",
+            vat_status: medicine.vat_status || "Non-VAT",
         });
     }, [medicine, open]);
 

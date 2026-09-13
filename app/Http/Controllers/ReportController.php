@@ -74,6 +74,18 @@ public function salesDetail(Request $request)
         ]);
     }
 
+        public function voidReturns(Request $request)
+    {
+        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'per_page']);
+
+        return Inertia::render('Reports/VoidReturns', [
+            'filters' => $filters,
+            'items' => Report::voidReturns($filters),
+            'totals' => Report::voidReturnsTotals($filters),
+            'branches' => $this->branchOptions(),
+        ]);
+    }
+
     public function stockOnHand(Request $request)
 {
     $filters = $request->only([
