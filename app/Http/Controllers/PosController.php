@@ -599,7 +599,7 @@ class PosController extends Controller
                     'vat_exempt',
                 ]);
             },
-            'items.product:id,med_name,dose,form,brand_name', 'vat_status',
+            'items.product:id,med_name,dose,form,brand_name,vat_status',
             'user:id,name',
         ]);
 

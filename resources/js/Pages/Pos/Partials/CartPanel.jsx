@@ -113,7 +113,6 @@ export default function CartPanel({
                                             min="0"
                                             max={100}
                                             step="0.01"
-                                            readOnly
                                             value={discountPercent}
                                             onChange={(event) =>
                                                 setDiscountPercent(
