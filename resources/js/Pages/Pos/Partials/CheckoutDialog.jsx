@@ -41,6 +41,7 @@ export default function CheckoutDialog({
     const [open, setOpen] = useState(false);
     const [paymentMethod, setPaymentMethod] = useState("cash");
     const [referenceNumber, setReferenceNumber] = useState("");
+    const [salesRemarks, setSalesRemarks] = useState("");
     const [amountReceived, setAmountReceived] = useState("");
     const [processing, setProcessing] = useState(false);
     const [reviewItems, setReviewItems] = useState([]);
@@ -95,7 +96,16 @@ export default function CheckoutDialog({
     const requiresReferenceNumber =
         paymentMethod === "gcash" ||
         paymentMethod === "debit_card" ||
-        paymentMethod === "credit_card";
+        paymentMethod === "credit_card" ||
+        paymentMethod === "PH_GAMOT" ||
+        paymentMethod === "bank_transfer" ||
+        paymentMethod === "others";
+
+    // Remarks are only meaningful for the two methods that don't have a
+    // structured reference to point to on their own — a note explaining
+    // the payment (which bank, who authorized it, etc).
+    const showRemarks =
+        paymentMethod === "bank_transfer" || paymentMethod === "others";
 
     const canConfirm =
         cartId &&
@@ -148,6 +158,7 @@ export default function CheckoutDialog({
                 reference_number: requiresReferenceNumber
                     ? referenceNumber.trim()
                     : null,
+                sales_remarks: showRemarks ? salesRemarks.trim() || null : null,
                 discount_amount: discountAmount,
                 discount_percent: discountPercent,
                 discount_type: discountType,
@@ -160,6 +171,7 @@ export default function CheckoutDialog({
                     setOpen(false);
                     setAmountReceived("");
                     setReferenceNumber("");
+                    setSalesRemarks("");
                     setPaymentMethod("cash");
                     setIdempotencyKey(newIdempotencyKey());
                     onCheckoutSuccess?.();
@@ -262,7 +274,10 @@ export default function CheckoutDialog({
                                 if (
                                     value === "gcash" ||
                                     value === "debit_card" ||
-                                    value === "credit_card"
+                                    value === "credit_card" ||
+                                    value === "PH_GAMOT" ||
+                                    value === "bank_transfer" ||
+                                    value === "others"
                                 ) {
                                     setAmountReceived(String(netTotal));
                                     setReferenceNumber("");
@@ -270,6 +285,7 @@ export default function CheckoutDialog({
                                     setAmountReceived("");
                                     setReferenceNumber("");
                                 }
+                                setSalesRemarks("");
                             }}
                         >
                             <SelectTrigger id="payment_method">
@@ -284,6 +300,13 @@ export default function CheckoutDialog({
                                 <SelectItem value="credit_card">
                                     Credit Card
                                 </SelectItem>
+                                <SelectItem value="PH_GAMOT">
+                                    PH GAMOT
+                                </SelectItem>
+                                <SelectItem value="bank_transfer">
+                                    Bank Transfer
+                                </SelectItem>
+                                <SelectItem value="others">Others</SelectItem>
                             </SelectContent>
                         </Select>
                     </div>
@@ -301,6 +324,31 @@ export default function CheckoutDialog({
                                     setReferenceNumber(event.target.value)
                                 }
                                 placeholder="Enter transaction reference"
+                            />
+                        </div>
+                    )}
+
+                    {showRemarks && (
+                        <div className="space-y-2">
+                            <Label htmlFor="sales_remarks">
+                                Remarks
+                                <span className="ml-1 font-normal text-muted-foreground">
+                                    (optional)
+                                </span>
+                            </Label>
+                            <textarea
+                                id="sales_remarks"
+                                rows={3}
+                                value={salesRemarks}
+                                onChange={(event) =>
+                                    setSalesRemarks(event.target.value)
+                                }
+                                placeholder={
+                                    paymentMethod === "bank_transfer"
+                                        ? "e.g. transferred to BDO account, sent by Juan Dela Cruz"
+                                        : "Describe the payment method used"
+                                }
+                                className="flex w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                             />
                         </div>
                     )}

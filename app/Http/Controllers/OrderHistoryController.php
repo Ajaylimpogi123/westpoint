@@ -41,6 +41,7 @@ class OrderHistoryController extends Controller
                 'refunded_amount',
                 'payment_method',
                 'reference_number',
+                'sales_remarks',
             ]);
 
         return Inertia::render('History/Index', [
@@ -83,6 +84,7 @@ class OrderHistoryController extends Controller
                 'refunded_amount' => $sale->refunded_amount,
                 'payment_method' => $sale->payment_method,
                 'reference_number' => $sale->reference_number,
+                'sales_remarks' => $sale->sales_remarks,
             ],
             'items' => $sale->items->map(function ($item) {
                 return [
@@ -105,31 +107,33 @@ class OrderHistoryController extends Controller
         ]);
     }
 
-    public function print(Sale $sale): Response
-    {
-        $this->assertBranchAccess($sale);
+   public function print(Sale $sale): Response
+{
+    $this->assertBranchAccess($sale);
 
-        $sale->load([
-            'items' => function ($query) {
-                $query->select([
-                    'id',
-                    'sale_id',
-                    'product_id',
-                    'unit_type',
-                    'quantity_sold',
-                    'returned_quantity',
-                    'price_used',
-                    'total_price',
-                ]);
-            },
-            'items.product:id,med_name,dose,form,brand_name',
-        ]);
+    $sale->load([
+        'items' => function ($query) {
+            $query->select([
+                'id',
+                'sale_id',
+                'product_id',
+                'unit_type',
+                'quantity_sold',
+                'returned_quantity',
+                'price_used',
+                'total_price',
+                'discount_amount',
+                'vat_exempt',
+            ]);
+        },
+        'items.product:id,med_name,dose,form,brand_name,vat_status',
+        'user:id,name',
+    ]);
 
-        return Inertia::render('History/Partials/ReceiptPrint', [
-            'sale' => $sale,
-        ]);
-    }
-
+    return Inertia::render('History/Partials/ReceiptPrint', [
+        'sale' => $sale,
+    ]);
+}
     /**
      * What can still be voided/returned for this sale, with the remaining
      * quantity per line already computed (quantity_sold minus what's

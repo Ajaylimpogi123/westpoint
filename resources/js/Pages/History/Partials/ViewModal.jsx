@@ -91,6 +91,9 @@ export default function ViewModal({ saleId, children }) {
     const refundedAmount = Number(details?.sale?.refunded_amount) || 0;
     const originalNetAmount = Number(details?.sale?.net_amount) || 0;
     const amountDue = Math.max(originalNetAmount - refundedAmount, 0);
+    const hasRemarks =
+        details?.sale?.sales_remarks &&
+        String(details.sale.sales_remarks).trim() !== "";
 
     return (
         <>
@@ -166,6 +169,17 @@ export default function ViewModal({ saleId, children }) {
                                         </div>
                                     )}
                             </div>
+
+                            {hasRemarks && (
+                                <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm">
+                                    <span className="font-medium text-amber-900">
+                                        Remarks:
+                                    </span>{" "}
+                                    <span className="text-amber-800">
+                                        {details.sale.sales_remarks}
+                                    </span>
+                                </div>
+                            )}
 
                             <div className="rounded-md border">
                                 <Table>

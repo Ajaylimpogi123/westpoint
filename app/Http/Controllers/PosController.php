@@ -367,7 +367,7 @@ class PosController extends Controller
             ],
             'items.*.apply_discount' => ['sometimes', 'boolean'],
             'items.*.vat_exempt' => ['sometimes', 'boolean'],
-            'payment_method' => ['required', 'string', 'in:cash,gcash,debit_card,credit_card'],
+            'payment_method' => ['required', 'string', 'in:cash,gcash,debit_card,credit_card, PH_GAMOT,bank_transfer,others'],
             'reference_number' => ['nullable', 'string', 'max:255'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -375,6 +375,7 @@ class PosController extends Controller
             'amount_received' => ['required', 'numeric', 'min:0'],
             'customer_name' => ['nullable', 'string', 'max:255'],
             'customer_id' => ['nullable', 'integer', 'exists:tbl_customers,customer_id'],
+            'sales_remarks' => ['nullable', 'string', 'max:1000'],
         ]);
 
         $cart = PosCart::query()
@@ -519,6 +520,9 @@ class PosController extends Controller
                 'reference_number' => isset($validated['reference_number'])
                     ? (trim($validated['reference_number']) ?: null)
                     : null,
+                'sales_remarks' => isset($validated['sales_remarks'])
+    ? (trim($validated['sales_remarks']) ?: null)
+    : null,
             ]);
 
             foreach ($lineItems as $lineItem) {

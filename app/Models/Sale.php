@@ -33,6 +33,7 @@ class Sale extends Model
         'refunded_amount',
         'payment_method',
         'reference_number',
+        'sales_remarks',
     ];
 
     protected function casts(): array

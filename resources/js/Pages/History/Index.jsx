@@ -29,6 +29,7 @@ export default function Index({ sales = [] }) {
             refunded_amount: refundedAmount,
             payment_method: sale.payment_method,
             reference_number: sale.reference_number,
+            sales_remarks: sale.sales_remarks,
         };
     });
 
