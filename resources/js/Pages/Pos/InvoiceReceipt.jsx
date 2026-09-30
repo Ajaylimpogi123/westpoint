@@ -171,8 +171,7 @@ export default function InvoiceReceipt({ sale }) {
                 <p>TIN: 439-169-208-00000</p>
                 <p>6th Lacson St., Bacolod City, Negros Occidental, 6100</p>
                 <p>sales@westpointpharma.com</p>
-                <p>Wholesale Quotations: (034)4792739/(0992)9895971</p>
-                <p>Retail pricing: (034) 454 1118 / (0917) 162 8332</p>
+                <p>(034) 454 1118 / (0917) 162 8332</p>
             </div>
 
             <div className="invoice-title">RECEIPT</div>
