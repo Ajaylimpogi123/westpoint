@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect, useMemo, useState } from "react";
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
     Table,
     TableBody,
@@ -17,8 +17,16 @@ import MedicineSearchSelect from "./MedicineSearchSelect";
 
 const EMPTY_ERRORS = {};
 const ITEMS_PER_PAGE = 10;
+const BOX_UNITS = ["BXS", "BOX", "BX"];
 const inputCls =
     "w-full rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500";
+
+const isBoxUnit = (unit) =>
+    BOX_UNITS.includes(
+        String(unit ?? "")
+            .trim()
+            .toUpperCase(),
+    );
 
 const ItemRow = memo(function ItemRow({
     item,
@@ -28,7 +36,6 @@ const ItemRow = memo(function ItemRow({
     removeItem,
     onSelectMedicine,
     onUnitChange,
-    onLotChange,
     onClearMedicine,
     canRemove,
 }) {
@@ -48,15 +55,40 @@ const ItemRow = memo(function ItemRow({
     );
 
     const hasLinkedProduct = Boolean(item.product_id);
-    const lots = item._medicineMeta?.lots ?? [];
-    const hasMultipleLots = lots.length > 1;
-    const selectedLotId = lots.find(
-        (lot) => lot.lot_number === item.lot_number,
-    )?.id;
+    const isBox = isBoxUnit(item.qt_unit);
+    const packSize = item._medicineMeta?.pack_size;
+
+    // Pre-fill pcs-per-box from the product's pack size the first time the
+    // row becomes a Box line. Runs once per switch, so clearing the field to
+    // type a different number doesn't get overwritten.
+    const autofilled = useRef(false);
+    useEffect(() => {
+        if (!isBox) {
+            autofilled.current = false;
+            return;
+        }
+        if (autofilled.current) return;
+        autofilled.current = true;
+        if (!item.qt_pcs_per_box && packSize) {
+            updateItem(index, "qt_pcs_per_box", String(packSize));
+        }
+    }, [isBox, packSize]);
+
+    const handleUnitSelect = (e) => {
+        const unit = e.target.value;
+
+        if (hasLinkedProduct) {
+            // Linked rows keep using the existing handler so the unit price
+            // still switches between retail and wholesale.
+            onUnitChange(index, unit);
+        } else {
+            updateItem(index, "qt_unit", unit);
+        }
+    };
 
     return (
         <TableRow>
-            <TableCell className="min-w-[220px] align-top">
+            <TableCell className="min-w-[260px] align-top">
                 <MedicineSearchSelect
                     value={item.qt_description}
                     onSelect={(product) => onSelectMedicine(index, product)}
@@ -70,14 +102,6 @@ const ItemRow = memo(function ItemRow({
             </TableCell>
             <TableCell className="align-top">
                 <Input
-                    type="text"
-                    value={item.lot_number ?? ""}
-                    onChange={handleChange("lot_number")}
-                    className="w-32"
-                />
-            </TableCell>
-            <TableCell className="align-top">
-                <Input
                     type="date"
                     value={item.expiry_date ?? ""}
                     onChange={handleChange("expiry_date")}
@@ -85,23 +109,35 @@ const ItemRow = memo(function ItemRow({
                 />
             </TableCell>
             <TableCell className="align-top">
-                {hasLinkedProduct ? (
-                    <select
-                        value={item.qt_unit || "PIECE"}
-                        onChange={(e) => onUnitChange(index, e.target.value)}
-                        className={`${inputCls} w-24`}
-                    >
-                        <option value="PIECE">PIECE</option>
-                        <option value="BXS">BXS</option>
-                    </select>
-                ) : (
-                    <Input
-                        type="text"
-                        value={item.qt_unit ?? ""}
-                        onChange={handleChange("qt_unit")}
-                        placeholder="BXS"
-                        className="w-24"
-                    />
+                <select
+                    value={isBox ? "BXS" : "PIECE"}
+                    onChange={handleUnitSelect}
+                    className={`${inputCls} w-28`}
+                >
+                    <option value="PIECE">Pcs</option>
+                    <option value="BXS">Box</option>
+                </select>
+
+                {isBox && (
+                    <div className="mt-2">
+                        <Input
+                            type="number"
+                            min="1"
+                            step="1"
+                            value={item.qt_pcs_per_box ?? ""}
+                            onChange={handleChange("qt_pcs_per_box")}
+                            placeholder="Pcs / box"
+                            className="w-28"
+                        />
+                        <p className="mt-1 text-[11px] text-slate-400">
+                            pcs per box
+                        </p>
+                        {rowErrors.qt_pcs_per_box && (
+                            <p className="mt-1 text-xs text-red-500">
+                                {rowErrors.qt_pcs_per_box}
+                            </p>
+                        )}
+                    </div>
                 )}
             </TableCell>
             <TableCell className="align-top">
@@ -159,7 +195,6 @@ export default function ItemsTable({
     removeItem,
     onSelectMedicine,
     onUnitChange,
-    onLotChange,
     onClearMedicine,
     total,
 }) {
@@ -195,18 +230,16 @@ export default function ItemsTable({
         <div>
             <Card className="overflow-hidden py-0">
                 <div className="overflow-x-auto">
-                    <Table className="min-w-[900px]">
+                    <Table className="min-w-[800px]">
                         <TableHeader>
                             <TableRow className="bg-slate-50 hover:bg-slate-50">
                                 <TableHead>Description</TableHead>
-                                <TableHead className="w-32">Lot No.</TableHead>
                                 <TableHead className="w-36">Expiry</TableHead>
-                                <TableHead className="w-24">Unit</TableHead>
+                                <TableHead className="w-32">Unit</TableHead>
                                 <TableHead className="w-16">Qty</TableHead>
                                 <TableHead className="w-28">
                                     Unit Price
                                 </TableHead>
-
                                 <TableHead className="w-32 text-right">
                                     Amount
                                 </TableHead>
@@ -226,7 +259,6 @@ export default function ItemsTable({
                                     removeItem={removeItem}
                                     onSelectMedicine={onSelectMedicine}
                                     onUnitChange={onUnitChange}
-                                    onLotChange={onLotChange}
                                     onClearMedicine={onClearMedicine}
                                     canRemove={items.length > 1}
                                 />

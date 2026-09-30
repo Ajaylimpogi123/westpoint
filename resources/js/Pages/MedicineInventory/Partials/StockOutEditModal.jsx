@@ -17,6 +17,7 @@ import MedicineSearchSelect from "./MedicineSearchSelect";
 import { formatDate } from "@/lib/dates";
 import { isBoxUnit, unitLabel } from "@/lib/units";
 import { useState } from "react";
+
 function formatLotLabel(lot) {
     const shelf = lot.shelf_number ? ` — Shelf: ${lot.shelf_number}` : "";
     return `Lot ${lot.lot_number} — Exp: ${formatDate(lot.expiry)}${shelf} — ${lot.quantity} pcs`;
@@ -41,7 +42,6 @@ export default function StockOutEditModal({ stockOutId, children }) {
         selectedLot,
         maxQuantity,
         piecesLabel,
-        boxesUnavailable,
         canAddToBasket,
         productMap,
         products,
@@ -310,6 +310,65 @@ export default function StockOutEditModal({ stockOutId, children }) {
                                     </div>
 
                                     <div className="grid gap-2">
+                                        <Label htmlFor="edit_unit_type">
+                                            Unit Type
+                                        </Label>
+                                        <select
+                                            id="edit_unit_type"
+                                            value={draft.unit_type}
+                                            onChange={(e) =>
+                                                updateDraft(
+                                                    "unit_type",
+                                                    e.target.value,
+                                                )
+                                            }
+                                            disabled={!draft.products_qty_id}
+                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                        >
+                                            {UNIT_TYPES.map((unitType) => (
+                                                <option
+                                                    key={unitType.value}
+                                                    value={unitType.value}
+                                                >
+                                                    {unitType.label}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {isBoxUnit(draft.unit_type) && (
+                                        <div className="grid gap-2">
+                                            <Label htmlFor="edit_pieces_per_box">
+                                                Pieces per Box
+                                            </Label>
+                                            <Input
+                                                id="edit_pieces_per_box"
+                                                type="number"
+                                                min="1"
+                                                step="1"
+                                                value={draft.pieces_per_box}
+                                                onChange={(e) =>
+                                                    updateDraft(
+                                                        "pieces_per_box",
+                                                        e.target.value,
+                                                    )
+                                                }
+                                                placeholder="e.g. 24"
+                                                disabled={
+                                                    !draft.products_qty_id
+                                                }
+                                            />
+                                            <p className="text-xs text-muted-foreground">
+                                                How many pieces are in one box
+                                                for this delivery. Pre-filled
+                                                from the medicine's saved pack
+                                                size when set, but always
+                                                editable.
+                                            </p>
+                                        </div>
+                                    )}
+
+                                    <div className="grid gap-2">
                                         <Label htmlFor="edit_quantity_deducted">
                                             Quantity
                                         </Label>
@@ -385,46 +444,6 @@ export default function StockOutEditModal({ stockOutId, children }) {
                                         )}
                                     </div>
 
-                                    <div className="grid gap-2">
-                                        <Label htmlFor="edit_unit_type">
-                                            Unit Type
-                                        </Label>
-                                        <select
-                                            id="edit_unit_type"
-                                            value={draft.unit_type}
-                                            onChange={(e) =>
-                                                updateDraft(
-                                                    "unit_type",
-                                                    e.target.value,
-                                                )
-                                            }
-                                            disabled={!draft.products_qty_id}
-                                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-                                        >
-                                            {UNIT_TYPES.map((unitType) => (
-                                                <option
-                                                    key={unitType.value}
-                                                    value={unitType.value}
-                                                    disabled={
-                                                        boxesUnavailable &&
-                                                        isBoxUnit(
-                                                            unitType.value,
-                                                        )
-                                                    }
-                                                >
-                                                    {unitType.label}
-                                                </option>
-                                            ))}
-                                        </select>
-                                        {boxesUnavailable && (
-                                            <p className="text-xs text-destructive">
-                                                This medicine has no pack size
-                                                set, so it can only be dispensed
-                                                by the piece.
-                                            </p>
-                                        )}
-                                    </div>
-
                                     <Button
                                         type="button"
                                         variant="secondary"
@@ -474,6 +493,9 @@ export default function StockOutEditModal({ stockOutId, children }) {
                                                                     {unitLabel(
                                                                         item.unit_type,
                                                                     )}
+                                                                    {item.pieces_per_box
+                                                                        ? ` (${item.pieces_per_box} pcs/box)`
+                                                                        : ""}
                                                                 </p>
                                                                 <p className="text-xs text-muted-foreground">
                                                                     Deducts{" "}
@@ -510,6 +532,9 @@ export default function StockOutEditModal({ stockOutId, children }) {
                                                                 ] ||
                                                                 errors[
                                                                     `items.${index}.unit_type`
+                                                                ] ||
+                                                                errors[
+                                                                    `items.${index}.pieces_per_box`
                                                                 ]
                                                             }
                                                         />

@@ -64,27 +64,9 @@ class QuotationController extends Controller
     // STORE — save new quotation + items
     // ──────────────────────────────────────────────────────
 
-    public function store(Request $request): RedirectResponse
+       public function store(Request $request): RedirectResponse
     {
-        $validated = $request->validate([
-            'customer_id'                  => ['required', 'integer', $this->customerExistsRule()],
-            'sid_no'                       => 'nullable|string|max:100',
-            'qt_date'                      => 'required|date',
-            'address'                      => 'nullable|string|max:255',
-            'delivery_type'                => 'required|in:pick-up,delivery',
-            'qt_remarks'                   => 'nullable|string',
-            'checked_by'                   => 'nullable|string|max:100',
-            'prepared_by'                  => 'nullable|string|max:100',
-
-            // Line items
-            'items'                        => 'required|array|min:1',
-            'items.*.qt_qty'               => 'required|integer|min:1',
-            'items.*.qt_unit'              => 'nullable|string|max:50',
-            'items.*.qt_description'       => 'required|string',
-            'items.*.lot_number'           => 'nullable|string|max:100',
-            'items.*.expiry_date'          => 'nullable|date',
-            'items.*.qt_unit_price'        => 'required|numeric|min:0',
-        ]);
+        $validated = $request->validate($this->quotationRules(), $this->quotationMessages());
 
         DB::transaction(function () use ($validated) {
             $quotation = Quotation::create([
@@ -102,16 +84,7 @@ class QuotationController extends Controller
             ]);
 
             foreach ($validated['items'] as $index => $item) {
-                QuotationItem::create([
-                    'quotation_id'   => $quotation->id,
-                    'qt_qty'         => $item['qt_qty'],
-                    'qt_unit'        => $item['qt_unit'] ?? null,
-                    'qt_description' => $item['qt_description'],
-                    'lot_number'     => $item['lot_number'] ?? null,
-                    'expiry_date'    => $item['expiry_date'] ?? null,
-                    'qt_unit_price'  => $item['qt_unit_price'],
-                    'sort_order'     => $index,
-                ]);
+                QuotationItem::create($this->itemAttributes($quotation->id, $item, $index));
             }
         });
 
@@ -151,29 +124,13 @@ class QuotationController extends Controller
     // UPDATE — replace header + items
     // ──────────────────────────────────────────────────────
 
-    public function update(Request $request, Quotation $quotation): RedirectResponse
+     public function update(Request $request, Quotation $quotation): RedirectResponse
     {
         if (! $quotation->isDraft()) {
             return back()->withErrors(['status' => 'Only draft quotations can be edited.']);
         }
 
-        $validated = $request->validate([
-            'customer_id'            => ['required', 'integer', $this->customerExistsRule()],
-            'sid_no'                 => 'nullable|string|max:100',
-            'qt_date'                => 'required|date',
-            'address'                => 'nullable|string|max:255',
-            'delivery_type'          => 'required|in:pick-up,delivery',
-            'qt_remarks'             => 'nullable|string',
-            'checked_by'             => 'nullable|string|max:100',
-            'prepared_by'            => 'nullable|string|max:100',
-            'items'                  => 'required|array|min:1',
-            'items.*.qt_qty'         => 'required|integer|min:1',
-            'items.*.qt_unit'        => 'nullable|string|max:50',
-            'items.*.qt_description' => 'required|string',
-            'items.*.lot_number'     => 'nullable|string|max:100',
-            'items.*.expiry_date'    => 'nullable|date',
-            'items.*.qt_unit_price'  => 'required|numeric|min:0',
-        ]);
+        $validated = $request->validate($this->quotationRules(), $this->quotationMessages());
 
         DB::transaction(function () use ($validated, $quotation) {
             $quotation->update([
@@ -190,16 +147,7 @@ class QuotationController extends Controller
             $quotation->items()->delete();
 
             foreach ($validated['items'] as $index => $item) {
-                QuotationItem::create([
-                    'quotation_id'   => $quotation->id,
-                    'qt_qty'         => $item['qt_qty'],
-                    'qt_unit'        => $item['qt_unit'] ?? null,
-                    'qt_description' => $item['qt_description'],
-                    'lot_number'     => $item['lot_number'] ?? null,
-                    'expiry_date'    => $item['expiry_date'] ?? null,
-                    'qt_unit_price'  => $item['qt_unit_price'],
-                    'sort_order'     => $index,
-                ]);
+                QuotationItem::create($this->itemAttributes($quotation->id, $item, $index));
             }
         });
 
@@ -245,25 +193,28 @@ class QuotationController extends Controller
     // MEDICINE SEARCH — branch-scoped product lookup for item rows
     // ──────────────────────────────────────────────────────
 
-    public function searchMedicines(Request $request): JsonResponse
+       public function searchMedicines(Request $request): JsonResponse
     {
         $branchId = $this->branchIdOrFail();
 
         $validated = $request->validate([
-            'search' => ['required', 'string', 'min:1', 'max:255'],
+            // Empty search = plain dropdown: return the first medicines A-Z.
+            'search' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $search = trim($validated['search']);
+        $search = trim($validated['search'] ?? '');
 
         $products = $this->branchMedicinesQuery($branchId)
-            ->where(function ($query) use ($search) {
-                $query->where('med_name', 'like', "%{$search}%")
-                    ->orWhere('brand_name', 'like', "%{$search}%")
-                    ->orWhere('dose', 'like', "%{$search}%")
-                    ->orWhere('form', 'like', "%{$search}%");
+            ->when($search !== '', function ($query) use ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('med_name', 'like', "%{$search}%")
+                        ->orWhere('brand_name', 'like', "%{$search}%")
+                        ->orWhere('dose', 'like', "%{$search}%")
+                        ->orWhere('form', 'like', "%{$search}%");
+                });
             })
             ->orderBy('med_name')
-            ->limit(20)
+            ->limit(30)
             ->get([
                 'id',
                 'med_name',
@@ -275,7 +226,6 @@ class QuotationController extends Controller
 
         return response()->json(['products' => $products]);
     }
-
  public function showMedicine(MedicineProduct $product): JsonResponse
 {
     $branchId = $this->branchIdOrFail();
@@ -349,6 +299,61 @@ class QuotationController extends Controller
         }
 
         return $rule;
+    }
+
+        private function quotationRules(): array
+    {
+        return [
+            'customer_id'            => ['required', 'integer', $this->customerExistsRule()],
+            'sid_no'                 => 'nullable|string|max:100',
+            'qt_date'                => 'required|date',
+            'address'                => 'nullable|string|max:255',
+            'delivery_type'          => 'required|in:pick-up,delivery',
+            'qt_remarks'             => 'nullable|string',
+            'checked_by'             => 'nullable|string|max:100',
+            'prepared_by'            => 'nullable|string|max:100',
+
+            'items'                  => 'required|array|min:1',
+            'items.*.qt_qty'         => 'required|integer|min:1',
+            'items.*.qt_unit'        => 'nullable|string|max:50',
+            // Required only when the line's unit is a box.
+            'items.*.qt_pcs_per_box' => 'nullable|integer|min:1|max:100000|required_if:items.*.qt_unit,BXS,BOX,BX',
+            'items.*.qt_description' => 'required|string',
+       
+            'items.*.expiry_date'    => 'nullable|date',
+            'items.*.qt_unit_price'  => 'required|numeric|min:0',
+        ];
+    }
+
+    private function quotationMessages(): array
+    {
+        return [
+            'items.*.qt_pcs_per_box.required_if' => 'Enter how many pcs are in the box.',
+        ];
+    }
+
+    private function isBoxUnit(?string $unit): bool
+    {
+        return in_array(strtoupper(trim((string) $unit)), ['BXS', 'BOX', 'BX'], true);
+    }
+
+    private function itemAttributes(int $quotationId, array $item, int $index): array
+    {
+        $isBox = $this->isBoxUnit($item['qt_unit'] ?? null);
+
+        return [
+            'quotation_id'   => $quotationId,
+            'qt_qty'         => $item['qt_qty'],
+            'qt_unit'        => $item['qt_unit'] ?? null,
+            // A pcs-per-box value only means something on box lines, so it's
+            // dropped if the cashier switched back to Pcs.
+            'qt_pcs_per_box' => $isBox ? ($item['qt_pcs_per_box'] ?? null) : null,
+            'qt_description' => $item['qt_description'],
+            'lot_number'     => null,
+            'expiry_date'    => $item['expiry_date'] ?? null,
+            'qt_unit_price'  => $item['qt_unit_price'],
+            'sort_order'     => $index,
+        ];
     }
 
 private function branchMedicinesQuery(int $branchId)

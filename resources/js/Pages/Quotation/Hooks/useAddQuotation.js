@@ -51,6 +51,7 @@ export default function useAddQuotation() {
                           _medicineMeta: null,
                           qt_description: "",
                           qt_unit: "",
+                          qt_pcs_per_box: "",
                           lot_number: "",
                           expiry_date: "",
                           qt_unit_price: "",

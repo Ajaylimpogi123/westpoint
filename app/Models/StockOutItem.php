@@ -21,6 +21,7 @@ class StockOutItem extends Model
         'pieces_deducted',
         'expiry',
         'unit_type',
+        'pieces_per_box',
         'unit_price',
     ];
 
@@ -30,6 +31,7 @@ class StockOutItem extends Model
             'quantity_deducted' => 'integer',
             'pieces_deducted' => 'integer',
             'expiry' => 'date',
+            'pieces_per_box' => 'integer',
             'unit_price' => 'decimal:2',
         ];
     }

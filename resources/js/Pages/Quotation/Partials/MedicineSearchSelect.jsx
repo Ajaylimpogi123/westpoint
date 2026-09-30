@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { ChevronDown } from "lucide-react";
 import { searchQuotationMedicines } from "../lib/quotationMedicinesApi";
 
 function formatProductLabel(product) {
@@ -8,8 +9,9 @@ function formatProductLabel(product) {
 }
 
 /**
- * Async medicine search for quotation item rows.
- * Dropdown is portaled to document.body so it is not clipped by table overflow.
+ * Searchable medicine dropdown for quotation item rows.
+ * Opens with the full A-Z list; typing narrows it down.
+ * The list is portaled to document.body so table overflow can't clip it.
  */
 export default function MedicineSearchSelect({
     value,
@@ -28,12 +30,14 @@ export default function MedicineSearchSelect({
     const wrapperRef = useRef(null);
     const inputRef = useRef(null);
     const dropdownRef = useRef(null);
-    const debounceRef = useRef(null);
+    const requestId = useRef(0);
 
     const selectedLabel = useMemo(() => {
         if (typeof value === "string") return value;
         return formatProductLabel(value);
     }, [value]);
+
+    const hasSelection = Boolean(selectedLabel);
 
     useEffect(() => {
         function handleClickOutside(e) {
@@ -58,7 +62,7 @@ export default function MedicineSearchSelect({
             if (!input) return;
 
             const rect = input.getBoundingClientRect();
-            const maxHeight = 224;
+            const maxHeight = 260;
             const spaceBelow = window.innerHeight - rect.bottom - 8;
             const spaceAbove = rect.top - 8;
             const openUpward =
@@ -67,7 +71,7 @@ export default function MedicineSearchSelect({
             setDropdownStyle({
                 position: "fixed",
                 left: rect.left,
-                width: rect.width,
+                width: Math.max(rect.width, 320),
                 top: openUpward ? undefined : rect.bottom + 4,
                 bottom: openUpward
                     ? window.innerHeight - rect.top + 4
@@ -88,50 +92,52 @@ export default function MedicineSearchSelect({
             window.removeEventListener("resize", updatePosition);
             window.removeEventListener("scroll", updatePosition, true);
         };
-    }, [open, query, results.length, loading]);
+    }, [open, results.length, loading]);
 
+    // Load the list whenever the dropdown is open. An empty query loads the
+    // default A-Z list right away; typing is debounced.
     useEffect(() => {
-        if (!open) {
-            return undefined;
-        }
+        if (!open) return undefined;
 
         const trimmed = query.trim();
-
-        if (trimmed.length < 1) {
-            setResults([]);
-            setLoading(false);
-            setSearchError("");
-            return undefined;
-        }
+        const thisRequest = ++requestId.current;
 
         setLoading(true);
         setSearchError("");
 
-        debounceRef.current = setTimeout(async () => {
-            try {
-                const data = await searchQuotationMedicines(trimmed);
-                setResults(data.products ?? []);
-                setHighlighted(0);
-            } catch {
-                setResults([]);
-                setSearchError("Failed to search medicines.");
-            } finally {
-                setLoading(false);
-            }
-        }, 300);
+        const timer = setTimeout(
+            async () => {
+                try {
+                    const data = await searchQuotationMedicines(trimmed);
+                    if (thisRequest !== requestId.current) return;
+                    setResults(data.products ?? []);
+                    setHighlighted(0);
+                } catch {
+                    if (thisRequest !== requestId.current) return;
+                    setResults([]);
+                    setSearchError("Failed to load medicines.");
+                } finally {
+                    if (thisRequest === requestId.current) setLoading(false);
+                }
+            },
+            trimmed === "" ? 0 : 300,
+        );
 
-        return () => {
-            if (debounceRef.current) {
-                clearTimeout(debounceRef.current);
-            }
-        };
+        return () => clearTimeout(timer);
     }, [open, query]);
+
+    // Keep the highlighted row visible while using the arrow keys.
+    useEffect(() => {
+        if (!open || !dropdownRef.current) return;
+        dropdownRef.current
+            .querySelector(`[data-index="${highlighted}"]`)
+            ?.scrollIntoView({ block: "nearest" });
+    }, [highlighted, open, results]);
 
     function selectProduct(product) {
         onSelect(product);
         setQuery("");
         setOpen(false);
-        setResults([]);
     }
 
     function handleKeyDown(e) {
@@ -159,48 +165,50 @@ export default function MedicineSearchSelect({
         }
     }
 
-    const hasSelection = Boolean(selectedLabel);
-
     const dropdown = open && dropdownStyle && (
         <ul
             ref={dropdownRef}
             style={dropdownStyle}
             className="overflow-auto rounded-lg border border-slate-200 bg-white py-1 text-sm shadow-lg"
         >
-            {loading ? (
-                <li className="px-3 py-2 text-slate-400">Searching...</li>
+            {loading && results.length === 0 ? (
+                <li className="px-3 py-2 text-slate-400">Loading...</li>
             ) : searchError ? (
                 <li className="px-3 py-2 text-red-500">{searchError}</li>
-            ) : query.trim().length < 1 ? (
-                <li className="px-3 py-2 text-slate-400">
-                    Type a medicine name or brand
-                </li>
             ) : results.length === 0 ? (
                 <li className="px-3 py-2 text-slate-400">No medicines found</li>
             ) : (
-                results.map((product, i) => (
-                    <li
-                        key={product.id}
-                        onMouseDown={() => selectProduct(product)}
-                        onMouseEnter={() => setHighlighted(i)}
-                        className={`cursor-pointer px-3 py-2 ${
-                            i === highlighted
-                                ? "bg-indigo-50 text-indigo-700"
-                                : ""
-                        }`}
-                    >
-                        <div className="font-medium">
-                            {formatProductLabel(product)}
-                        </div>
-                        {(product.dose || product.form) && (
-                            <div className="text-xs text-slate-400">
-                                {[product.dose, product.form]
-                                    .filter(Boolean)
-                                    .join(" · ")}
+                <>
+                    {results.map((product, i) => (
+                        <li
+                            key={product.id}
+                            data-index={i}
+                            onMouseDown={() => selectProduct(product)}
+                            onMouseEnter={() => setHighlighted(i)}
+                            className={`cursor-pointer px-3 py-2 ${
+                                i === highlighted
+                                    ? "bg-indigo-50 text-indigo-700"
+                                    : ""
+                            }`}
+                        >
+                            <div className="font-medium">
+                                {formatProductLabel(product)}
                             </div>
-                        )}
-                    </li>
-                ))
+                            {(product.dose || product.form) && (
+                                <div className="text-xs text-slate-400">
+                                    {[product.dose, product.form]
+                                        .filter(Boolean)
+                                        .join(" · ")}
+                                </div>
+                            )}
+                        </li>
+                    ))}
+                    {query.trim() === "" && results.length >= 30 && (
+                        <li className="border-t border-slate-100 px-3 py-2 text-xs text-slate-400">
+                            Showing the first 30 — type to search for more
+                        </li>
+                    )}
+                </>
             )}
         </ul>
     );
@@ -220,26 +228,39 @@ export default function MedicineSearchSelect({
                         setOpen(true);
                         if (hasSelection) setQuery("");
                     }}
+                    onClick={() => setOpen(true)}
                     onKeyDown={handleKeyDown}
-                    placeholder="Search medicine..."
+                    placeholder={
+                        open && hasSelection
+                            ? selectedLabel
+                            : "Select or search medicine..."
+                    }
                     disabled={disabled}
                     autoComplete="off"
-                    className={`w-full rounded-lg border px-3 py-2 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${
+                    className={`w-full rounded-lg border px-3 py-2 pr-14 text-sm shadow-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 ${
                         error ? "border-red-400" : "border-slate-300"
-                    } ${hasSelection && !open ? "pr-8" : ""}`}
+                    }`}
                 />
-                {hasSelection && !open && !disabled && onClear && (
-                    <button
-                        type="button"
-                        onClick={() => {
-                            onClear();
-                            setQuery("");
-                        }}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                    >
-                        ×
-                    </button>
-                )}
+                <div className="pointer-events-none absolute right-2 top-1/2 flex -translate-y-1/2 items-center gap-1 text-slate-400">
+                    {hasSelection && !open && !disabled && onClear && (
+                        <button
+                            type="button"
+                            onClick={() => {
+                                onClear();
+                                setQuery("");
+                            }}
+                            className="pointer-events-auto hover:text-slate-600"
+                            title="Clear"
+                        >
+                            ×
+                        </button>
+                    )}
+                    <ChevronDown
+                        className={`h-4 w-4 transition-transform ${
+                            open ? "rotate-180" : ""
+                        }`}
+                    />
+                </div>
             </div>
             {dropdown && createPortal(dropdown, document.body)}
             {error && <p className="mt-1 text-xs text-red-500">{error}</p>}

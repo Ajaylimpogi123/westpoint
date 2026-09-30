@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/table";
 
 import { formatDateTime } from "@/lib/dates";
-import { isBoxUnit } from "@/lib/units";
+import { isBoxUnit, unitLabel } from "@/lib/units";
 
 export default function StockOutViewModal({ stockOutId, children }) {
     const [open, setOpen] = useState(false);
@@ -181,41 +181,64 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                     </TableHeader>
                                     <TableBody>
                                         {details.items?.length ? (
-                                            details.items.map((item) => (
-                                                <TableRow key={item.item_id}>
-                                                    <TableCell>
-                                                        {item.product
-                                                            ?.med_name || "-"}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {item.product
-                                                            ?.brand_name || "-"}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {item.product?.dose +
-                                                            "/" +
-                                                            item.product
-                                                                ?.form || "-"}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {item.lot_number || "-"}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {isBoxUnit(
-                                                            item.unit_type,
-                                                        )
-                                                            ? "Box"
-                                                            : "Piece"}
-                                                    </TableCell>
-                                                    <TableCell>
-                                                        {item.quantity_deducted}
-                                                    </TableCell>
-                                                </TableRow>
-                                            ))
+                                            details.items.map((item) => {
+                                                const packSize = Number(
+                                                    item.pieces_per_box ??
+                                                        item.product?.pack_size,
+                                                );
+                                                const showPcsPerBox =
+                                                    isBoxUnit(item.unit_type) &&
+                                                    packSize > 0;
+
+                                                return (
+                                                    <TableRow
+                                                        key={item.item_id}
+                                                    >
+                                                        <TableCell>
+                                                            {item.product
+                                                                ?.med_name ||
+                                                                "-"}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {item.product
+                                                                ?.brand_name ||
+                                                                "-"}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {item.product
+                                                                ?.dose +
+                                                                "/" +
+                                                                item.product
+                                                                    ?.form ||
+                                                                "-"}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {item.lot_number ||
+                                                                "-"}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {unitLabel(
+                                                                item.unit_type,
+                                                            )}
+                                                            {showPcsPerBox && (
+                                                                <span className="block text-xs text-muted-foreground">
+                                                                    {packSize.toLocaleString()}{" "}
+                                                                    pcs/box
+                                                                </span>
+                                                            )}
+                                                        </TableCell>
+                                                        <TableCell>
+                                                            {
+                                                                item.quantity_deducted
+                                                            }
+                                                        </TableCell>
+                                                    </TableRow>
+                                                );
+                                            })
                                         ) : (
                                             <TableRow>
                                                 <TableCell
-                                                    colSpan={5}
+                                                    colSpan={6}
                                                     className="text-center"
                                                 >
                                                     No items found.

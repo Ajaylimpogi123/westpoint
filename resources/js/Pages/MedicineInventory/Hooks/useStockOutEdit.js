@@ -5,11 +5,10 @@ import {
     UNIT_PIECE,
     UNIT_TYPES,
     clampQuantity,
-    describePieces,
+    getPackSize,
     hasValidPackSize,
     isBoxUnit,
-    maxQuantityForUnit,
-    toPieces,
+    toWholeNumber,
 } from "@/lib/units";
 import { fetchBranchProducts } from "../lib/inventoryMedicinesApi";
 
@@ -18,6 +17,7 @@ const emptyDraft = () => ({
     products_qty_id: "",
     quantity_deducted: 1,
     unit_type: UNIT_PIECE,
+    pieces_per_box: "",
 });
 
 const emptyForm = () => ({
@@ -79,6 +79,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
                         lot_number: item.lot_number,
                         quantity_deducted: item.quantity_deducted,
                         unit_type: item.unit_type,
+                        pieces_per_box: item.pieces_per_box ?? null,
                         pieces_preview: item.pieces_deducted,
                     })),
                 });
@@ -154,36 +155,51 @@ export default function useStockOutEdit({ stockOutId, open }) {
     const boxesUnavailable =
         selectedProduct !== null && !hasValidPackSize(selectedProduct);
 
-    const maxQuantity = selectedLot
-        ? maxQuantityForUnit(
-              selectedLot.quantity,
-              selectedProduct,
-              draft.unit_type,
-          )
-        : 0;
-
-    const piecesLabel = selectedProduct
-        ? describePieces(
-              selectedProduct,
-              draft.quantity_deducted,
-              draft.unit_type,
-          )
-        : "";
-
     const lotFor = (productId, batchId) => {
         const lots = productMap[productId]?.batches ?? [];
         return lots.find((lot) => String(lot.id) === String(batchId)) ?? null;
     };
 
-    const ceilingFor = (productId, batchId, unitType) => {
+    const ceilingFor = (productId, batchId, unitType, piecesPerBoxValue) => {
         const lot = lotFor(productId, batchId);
+
         if (!lot) return 0;
-        return maxQuantityForUnit(
-            lot.quantity,
-            productMap[productId],
-            unitType,
-        );
+
+        const availablePieces = Math.max(toWholeNumber(lot.quantity), 0);
+
+        if (!isBoxUnit(unitType)) return availablePieces;
+
+        const packSize = toWholeNumber(piecesPerBoxValue);
+
+        return packSize >= 1 ? Math.floor(availablePieces / packSize) : 0;
     };
+
+    const effectivePiecesPerBox = isBoxUnit(draft.unit_type)
+        ? toWholeNumber(draft.pieces_per_box)
+        : 1;
+
+    const maxQuantity = selectedLot
+        ? ceilingFor(
+              draft.pd_id,
+              draft.products_qty_id,
+              draft.unit_type,
+              draft.pieces_per_box,
+          )
+        : 0;
+
+    const piecesPreview = selectedProduct
+        ? isBoxUnit(draft.unit_type)
+            ? (Number(draft.quantity_deducted) || 0) * effectivePiecesPerBox
+            : Number(draft.quantity_deducted) || 0
+        : 0;
+
+    const piecesLabel = selectedProduct
+        ? isBoxUnit(draft.unit_type)
+            ? effectivePiecesPerBox >= 1
+                ? `${piecesPreview} ${piecesPreview === 1 ? "piece" : "pieces"} (${effectivePiecesPerBox} pcs/box)`
+                : "Enter pcs per box to see how many pieces this will deduct"
+            : `${piecesPreview} ${piecesPreview === 1 ? "piece" : "pieces"}`
+        : "";
 
     const updateDraft = (field, value) => {
         setDraft((current) => {
@@ -193,6 +209,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
                 next.products_qty_id = "";
                 next.quantity_deducted = 1;
                 next.unit_type = UNIT_PIECE;
+                next.pieces_per_box = "";
                 return next;
             }
 
@@ -204,6 +221,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
                             current.pd_id,
                             value,
                             current.unit_type,
+                            current.pieces_per_box,
                         ),
                     },
                 );
@@ -211,12 +229,41 @@ export default function useStockOutEdit({ stockOutId, open }) {
             }
 
             if (field === "unit_type") {
+                if (isBoxUnit(value)) {
+                    if (!current.pieces_per_box) {
+                        const product = current.pd_id
+                            ? (productMap[current.pd_id] ?? null)
+                            : null;
+                        const defaultPack = product ? getPackSize(product) : 0;
+                        next.pieces_per_box =
+                            defaultPack >= 1 ? String(defaultPack) : "";
+                    }
+                } else {
+                    next.pieces_per_box = "";
+                }
+
                 next.quantity_deducted = clampQuantity(
                     current.quantity_deducted,
                     {
                         max: ceilingFor(
                             current.pd_id,
                             current.products_qty_id,
+                            value,
+                            next.pieces_per_box,
+                        ),
+                    },
+                );
+                return next;
+            }
+
+            if (field === "pieces_per_box") {
+                next.quantity_deducted = clampQuantity(
+                    current.quantity_deducted,
+                    {
+                        max: ceilingFor(
+                            current.pd_id,
+                            current.products_qty_id,
+                            current.unit_type,
                             value,
                         ),
                     },
@@ -233,6 +280,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
                     current.pd_id,
                     current.products_qty_id,
                     current.unit_type,
+                    current.pieces_per_box,
                 );
                 next.quantity_deducted = clampQuantity(value, {
                     min: 0,
@@ -253,6 +301,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
                     current.pd_id,
                     current.products_qty_id,
                     current.unit_type,
+                    current.pieces_per_box,
                 ),
             }),
         }));
@@ -268,6 +317,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
                         current.pd_id,
                         current.products_qty_id,
                         current.unit_type,
+                        current.pieces_per_box,
                     ),
                 }),
             };
@@ -280,7 +330,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
         Number(draft.quantity_deducted) >= 1 &&
         maxQuantity >= 1 &&
         Number(draft.quantity_deducted) <= maxQuantity &&
-        !(isBoxUnit(draft.unit_type) && boxesUnavailable);
+        (!isBoxUnit(draft.unit_type) || effectivePiecesPerBox >= 1);
 
     const addItemToBasket = () => {
         if (!canAddToBasket) return;
@@ -293,11 +343,10 @@ export default function useStockOutEdit({ stockOutId, open }) {
                 lot_number: selectedLot?.lot_number ?? "",
                 quantity_deducted: Number(draft.quantity_deducted),
                 unit_type: draft.unit_type,
-                pieces_preview: toPieces(
-                    selectedProduct,
-                    draft.quantity_deducted,
-                    draft.unit_type,
-                ),
+                pieces_per_box: isBoxUnit(draft.unit_type)
+                    ? effectivePiecesPerBox
+                    : null,
+                pieces_preview: piecesPreview,
             },
         ]);
         setDraft(emptyDraft());

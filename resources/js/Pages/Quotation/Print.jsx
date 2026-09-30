@@ -3,6 +3,42 @@ import { formatCurrency } from "./lib/quotationStatus";
 import { formatCustomerName } from "./lib/customerName";
 import { formatDate } from "@/lib/dates";
 
+const BOX_UNITS = ["BXS", "BOX", "BX"];
+const PIECE_UNITS = ["PIECE", "PCS", "PC"];
+
+const isBoxUnit = (unit) =>
+    BOX_UNITS.includes(
+        String(unit ?? "")
+            .trim()
+            .toUpperCase(),
+    );
+
+function unitLabel(unit) {
+    if (!unit) return "—";
+    if (isBoxUnit(unit)) return "Box";
+    if (PIECE_UNITS.includes(String(unit).trim().toUpperCase())) return "Pcs";
+    return unit;
+}
+
+// "2028-12-30" or "2028-12-30T00:00:00.000000Z" -> "December 30, 2028".
+// Built from the Y-M-D parts directly so a timezone offset can never
+// shift the printed day.
+function formatLongDate(value) {
+    if (!value) return "—";
+
+    const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})/);
+    if (!match) return "—";
+
+    const [, year, month, day] = match;
+    const date = new Date(Number(year), Number(month) - 1, Number(day));
+
+    return date.toLocaleDateString("en-US", {
+        month: "long",
+        day: "numeric",
+        year: "numeric",
+    });
+}
+
 export default function Print({ quotation }) {
     const itemCount = quotation.items?.length ?? 0;
 
@@ -105,7 +141,7 @@ export default function Print({ quotation }) {
                                     <span className="flex-1 border-b border-dotted border-slate-400">
                                         {quotation.customer?.lto_no}
                                         {quotation.customer?.lto_expiration &&
-                                            ` — Expiration: ${formatDate(quotation.customer.lto_expiration, "")}`}
+                                            ` — Expiration: ${formatLongDate(quotation.customer.lto_expiration)}`}
                                     </span>
                                 </div>
                             )}
@@ -157,6 +193,9 @@ export default function Print({ quotation }) {
                                 <th className="border border-slate-900 px-2 py-1.5 text-left">
                                     Description
                                 </th>
+                                <th className="border border-slate-900 px-2 py-1.5 text-left">
+                                    Expiration
+                                </th>
                                 <th className="border border-slate-900 px-2 py-1.5 text-right">
                                     Unit Price
                                 </th>
@@ -166,37 +205,46 @@ export default function Print({ quotation }) {
                             </tr>
                         </thead>
                         <tbody>
-                            {quotation.items?.map((item) => (
-                                <tr key={item.id}>
-                                    <td className="border border-slate-200 px-2 py-1.5 align-top">
-                                        {item.qt_qty}
-                                    </td>
-                                    <td className="border border-slate-200 px-2 py-1.5 align-top">
-                                        {item.qt_unit || "—"}
-                                    </td>
-                                    <td className="border border-slate-200 px-2 py-1.5 align-top">
-                                        <p>{item.qt_description}</p>
-                                        {(item.lot_number ||
-                                            item.expiry_date) && (
-                                            <p className="mt-0.5 text-[11px] text-slate-500">
-                                                {item.lot_number &&
-                                                    `Lot No.: ${item.lot_number}`}
-                                                {item.lot_number &&
-                                                    item.expiry_date &&
-                                                    "   "}
-                                                {item.expiry_date &&
-                                                    `Expiry Date: ${formatDate(item.expiry_date, "")}`}
-                                            </p>
-                                        )}
-                                    </td>
-                                    <td className="border border-slate-200 px-2 py-1.5 text-right align-top">
-                                        {formatCurrency(item.qt_unit_price)}
-                                    </td>
-                                    <td className="border border-slate-200 px-2 py-1.5 text-right align-top font-medium">
-                                        {formatCurrency(item.amount)}
-                                    </td>
-                                </tr>
-                            ))}
+                            {quotation.items?.map((item) => {
+                                const isBox = isBoxUnit(item.qt_unit);
+                                const pcsPerBox =
+                                    Number(item.qt_pcs_per_box) || 0;
+                                const showPcs = isBox && pcsPerBox > 0;
+
+                                return (
+                                    <tr key={item.id}>
+                                        <td className="border border-slate-200 px-2 py-1.5 align-top">
+                                            {item.qt_qty}
+                                        </td>
+                                        <td className="border border-slate-200 px-2 py-1.5 align-top">
+                                            {unitLabel(item.qt_unit)}
+                                            {showPcs && (
+                                                <p className="mt-0.5 text-[10px] text-slate-500">
+                                                    {pcsPerBox.toLocaleString()}{" "}
+                                                    pcs/box
+                                                </p>
+                                            )}
+                                        </td>
+                                        <td className="border border-slate-200 px-2 py-1.5 align-top">
+                                            <p>{item.qt_description}</p>
+                                            {item.lot_number && (
+                                                <p className="mt-0.5 text-[11px] text-slate-500">
+                                                    Lot No.: {item.lot_number}
+                                                </p>
+                                            )}
+                                        </td>
+                                        <td className="whitespace-nowrap border border-slate-200 px-2 py-1.5 align-top">
+                                            {formatLongDate(item.expiry_date)}
+                                        </td>
+                                        <td className="border border-slate-200 px-2 py-1.5 text-right align-top">
+                                            {formatCurrency(item.qt_unit_price)}
+                                        </td>
+                                        <td className="border border-slate-200 px-2 py-1.5 text-right align-top font-medium">
+                                            {formatCurrency(item.amount)}
+                                        </td>
+                                    </tr>
+                                );
+                            })}
                         </tbody>
                     </table>
 

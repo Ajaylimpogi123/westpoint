@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { Head, Link } from "@inertiajs/react";
 import { formatDate, formatDateTime } from "@/lib/dates";
-import { isBoxUnit } from "@/lib/units";
+import { isBoxUnit, unitLabel } from "@/lib/units";
 
 function formatCurrency(amount) {
     return `₱${Number(amount || 0).toLocaleString("en-PH", {
@@ -12,10 +12,6 @@ function formatCurrency(amount) {
 
 function receiptNumber(stockOutId) {
     return String(stockOutId ?? "").padStart(6, "0");
-}
-
-function unitLabel(unitType) {
-    return isBoxUnit(unitType) ? "BOX" : "PC";
 }
 
 const ONES = [
@@ -293,7 +289,7 @@ export default function StockOutReceipt({ stockOut }) {
                                 <Th align="left">Description</Th>
                                 <Th className="w-[72px]">Batch No.</Th>
                                 <Th className="w-[68px]">Expiry Date</Th>
-                                <Th className="w-12">Unit</Th>
+                                <Th className="w-14">Unit</Th>
                                 <Th className="w-10" align="right">
                                     Qty.
                                 </Th>
@@ -310,6 +306,16 @@ export default function StockOutReceipt({ stockOut }) {
                                 const qty = Number(item.quantity_deducted || 0);
                                 const unitPrice = priceFor(item);
                                 const amount = unitPrice * qty;
+                                // Prefer the pcs/box frozen on this transaction
+                                // (pieces_per_box); fall back to the product's
+                                // current pack size for records saved before
+                                // that column existed.
+                                const packSize = Number(
+                                    item.pieces_per_box ??
+                                        item.product?.pack_size,
+                                );
+                                const showPcsPerBox =
+                                    isBoxUnit(item.unit_type) && packSize > 0;
 
                                 return (
                                     <tr key={item.item_id ?? idx}>
@@ -340,6 +346,12 @@ export default function StockOutReceipt({ stockOut }) {
                                         </Td>
                                         <Td align="center">
                                             {unitLabel(item.unit_type)}
+                                            {showPcsPerBox && (
+                                                <span className="mt-0.5 block text-[8px] text-gray-500">
+                                                    {packSize.toLocaleString()}{" "}
+                                                    pcs/box
+                                                </span>
+                                            )}
                                         </Td>
                                         <Td align="right">
                                             <span className="font-bold">
