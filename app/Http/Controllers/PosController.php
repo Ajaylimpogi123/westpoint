@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentMethod;
 use App\Enums\UnitType;
 use App\Exceptions\InsufficientStockException;
 use App\Models\Branch;
@@ -9,7 +10,6 @@ use App\Models\BranchCustomer;
 use App\Models\MedicineProduct;
 use App\Models\PosCart;
 use App\Models\PosCartItem;
-use App\Models\ProductQty;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\SaleItemAllocation;
@@ -51,18 +51,18 @@ class PosController extends Controller
         $branchId = $this->branchIdOrFail();
 
         $validated = $request->validate([
-            'search'       => ['nullable', 'string', 'max:255'],
-            'page'         => ['sometimes', 'integer', 'min:1'],
-            'form'         => ['nullable', 'string', 'max:100'],
-            'best_seller'  => ['sometimes', 'boolean'],
-            'in_stock'     => ['sometimes', 'boolean'],
+            'search' => ['nullable', 'string', 'max:255'],
+            'page' => ['sometimes', 'integer', 'min:1'],
+            'form' => ['nullable', 'string', 'max:100'],
+            'best_seller' => ['sometimes', 'boolean'],
+            'in_stock' => ['sometimes', 'boolean'],
             'generic_only' => ['sometimes', 'boolean'],
         ]);
 
-        $search      = trim($validated['search'] ?? '');
-        $form        = trim($validated['form'] ?? '');
-        $bestSeller  = $request->boolean('best_seller', false);
-        $inStock     = $request->boolean('in_stock', true);
+        $search = trim($validated['search'] ?? '');
+        $form = trim($validated['form'] ?? '');
+        $bestSeller = $request->boolean('best_seller', false);
+        $inStock = $request->boolean('in_stock', true);
         $genericOnly = $request->boolean('generic_only', false);
 
         $products = $this->branchProductsQuery($branchId, $inStock, $bestSeller)
@@ -363,11 +363,11 @@ class PosController extends Controller
                 'required',
                 'integer',
                 'min:1',
-                'max:' . InventoryStockService::MAX_TRANSACTION_QUANTITY,
+                'max:'.InventoryStockService::MAX_TRANSACTION_QUANTITY,
             ],
             'items.*.apply_discount' => ['sometimes', 'boolean'],
             'items.*.vat_exempt' => ['sometimes', 'boolean'],
-            'payment_method' => ['required', 'string', 'in:cash,gcash,debit_card,credit_card, PH_GAMOT,bank_transfer,others'],
+            'payment_method' => ['required', 'string', Rule::in(PaymentMethod::posValues())],
             'reference_number' => ['nullable', 'string', 'max:255'],
             'discount_amount' => ['nullable', 'numeric', 'min:0'],
             'discount_percent' => ['nullable', 'numeric', 'min:0', 'max:100'],
@@ -429,78 +429,78 @@ class PosController extends Controller
             $totalDiscount = 0.0;
             $lineItems = [];
 
-      foreach ($validated['items'] as $item) {
-    $product = MedicineProduct::active()
-        ->forBranch($branchId)
-        ->findOrFail($item['product_id']);
-    $unitType = UnitType::fromInput($item['unit_type']);
-    $quantitySold = (int) $item['quantity_sold'];
+            foreach ($validated['items'] as $item) {
+                $product = MedicineProduct::active()
+                    ->forBranch($branchId)
+                    ->findOrFail($item['product_id']);
+                $unitType = UnitType::fromInput($item['unit_type']);
+                $quantitySold = (int) $item['quantity_sold'];
 
-    $applyDiscount = $discountPercent > 0 && ! empty($item['apply_discount']);
+                $applyDiscount = $discountPercent > 0 && ! empty($item['apply_discount']);
 
-    // VAT exemption is only honored when the discount is genuinely applied
-    // to this line and the product is actually a VAT item — matches the
-    // UI's own gating, recomputed here rather than trusted from the client.
-    $vatExempt = $applyDiscount
-        && ! empty($item['vat_exempt'])
-        && $product->isVatable();
+                // VAT exemption is only honored when the discount is genuinely applied
+                // to this line and the product is actually a VAT item — matches the
+                // UI's own gating, recomputed here rather than trusted from the client.
+                $vatExempt = $applyDiscount
+                    && ! empty($item['vat_exempt'])
+                    && $product->isVatable();
 
-    $basePrice = $unitType->isBox()
-        ? (float) $product->wholesale_price
-        : (float) $product->retail_price;
+                $basePrice = $unitType->isBox()
+                    ? (float) $product->wholesale_price
+                    : (float) $product->retail_price;
 
-    $priceUsed = $vatExempt
-        ? $basePrice
-        : ($unitType->isBox() ? $product->effective_wholesale_price : $product->effective_retail_price);
+                $priceUsed = $vatExempt
+                    ? $basePrice
+                    : ($unitType->isBox() ? $product->effective_wholesale_price : $product->effective_retail_price);
 
-    $lineTotal = round($priceUsed * $quantitySold, 2);
-    $grossAmount += $lineTotal;
+                $lineTotal = round($priceUsed * $quantitySold, 2);
+                $grossAmount += $lineTotal;
 
-    $lineDiscount = $applyDiscount
-        ? round($lineTotal * $discountPercent / 100, 2)
-        : 0.0;
-    $totalDiscount += $lineDiscount;
+                $lineDiscount = $applyDiscount
+                    ? round($lineTotal * $discountPercent / 100, 2)
+                    : 0.0;
+                $totalDiscount += $lineDiscount;
 
-    $piecesNeeded = $product->toPieces($quantitySold, $unitType);
+                $piecesNeeded = $product->toPieces($quantitySold, $unitType);
 
-    $this->assertSufficientBranchStock(
-        $product->id,
-        $branchId,
-        $piecesNeeded,
-        $product->med_name
-    );
+                $this->assertSufficientBranchStock(
+                    $product->id,
+                    $branchId,
+                    $piecesNeeded,
+                    $product->med_name
+                );
 
-    $deductions = $this->deductStockFefo(
-        $product->id,
-        $branchId,
-        $piecesNeeded,
-        $product->med_name
-    );
+                $deductions = $this->deductStockFefo(
+                    $product->id,
+                    $branchId,
+                    $piecesNeeded,
+                    $product->med_name
+                );
 
-    $lineItems[] = [
-        'product_id' => $product->id,
-        'unit_type' => $unitType->value,
-        'quantity_sold' => $quantitySold,
-        'pieces_sold' => $piecesNeeded,
-        'price_used' => $priceUsed,
-        'total_price' => $lineTotal,
-        'discount_amount' => $lineDiscount,
-        'vat_exempt' => $vatExempt,
-        'deductions' => $deductions,
-    ];
-}
+                $lineItems[] = [
+                    'product_id' => $product->id,
+                    'unit_type' => $unitType->value,
+                    'quantity_sold' => $quantitySold,
+                    'pieces_sold' => $piecesNeeded,
+                    'price_used' => $priceUsed,
+                    'total_price' => $lineTotal,
+                    'discount_amount' => $lineDiscount,
+                    'vat_exempt' => $vatExempt,
+                    'deductions' => $deductions,
+                ];
+            }
 
             $netAmount = max(round($grossAmount - $totalDiscount, 2), 0);
             $amountReceived = (float) $validated['amount_received'];
 
-            if ($validated['payment_method'] === 'cash' && $amountReceived < $netAmount) {
+            if ($validated['payment_method'] === PaymentMethod::Cash->value && $amountReceived < $netAmount) {
                 throw new \RuntimeException('Amount received is less than the net total.');
             }
 
             // Change only means something for cash; for GCash/card the
             // "amount received" is just the net total passed through, so
             // change is always zero and not worth displaying.
-            $changeDue = $validated['payment_method'] === 'cash'
+            $changeDue = $validated['payment_method'] === PaymentMethod::Cash->value
                 ? round($amountReceived - $netAmount, 2)
                 : 0.0;
 

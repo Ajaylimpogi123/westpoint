@@ -1,8 +1,13 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useChartJs } from "../Hooks/useChartJs";
-import { baseChartOptions, formatChartCurrency } from "./chartOptions";
+import { chartDataKey, useChartJs } from "../Hooks/useChartJs";
+import { baseChartOptions, formatChartCurrency, toChartNumbers } from "./chartOptions";
 
-export default function BranchComparisonChart({ labels = [], values = [] }) {
+export default function BranchComparisonChart({
+    labels = [],
+    values: rawValues = [],
+    subtitle = null,
+}) {
+    const values = toChartNumbers(rawValues);
     const hasData = values.some((value) => value > 0);
 
     const canvasRef = useChartJs(
@@ -51,7 +56,8 @@ export default function BranchComparisonChart({ labels = [], values = [] }) {
                 },
             },
         }),
-        [labels, values],
+        chartDataKey(labels, values),
+        hasData,
     );
 
     return (
@@ -59,7 +65,8 @@ export default function BranchComparisonChart({ labels = [], values = [] }) {
             <CardHeader>
                 <CardTitle>Branch Comparison</CardTitle>
                 <CardDescription>
-                    Side-by-side revenue comparison across all branches
+                    Net revenue side by side across all branches
+                    {subtitle ? ` · ${subtitle}` : ""}
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -69,7 +76,7 @@ export default function BranchComparisonChart({ labels = [], values = [] }) {
                     </div>
                 ) : (
                     <p className="text-sm text-muted-foreground">
-                        No branch sales data available yet.
+                        No branch sales data available for these filters.
                     </p>
                 )}
             </CardContent>

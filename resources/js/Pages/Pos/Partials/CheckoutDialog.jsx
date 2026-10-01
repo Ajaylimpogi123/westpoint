@@ -26,6 +26,7 @@ import { formatCurrency } from "../lib/pricing";
 import { getCustomerIdNumber } from "@/Pages/CustomerManagement/lib/customerType";
 import { formatCustomerName } from "../lib/customerDiscount";
 import { newIdempotencyKey } from "@/lib/idempotency";
+import { PAYMENT_METHODS } from "@/lib/paymentMethods";
 
 export default function CheckoutDialog({
     children,
@@ -292,21 +293,14 @@ export default function CheckoutDialog({
                                 <SelectValue />
                             </SelectTrigger>
                             <SelectContent>
-                                <SelectItem value="cash">Cash</SelectItem>
-                                <SelectItem value="gcash">GCash</SelectItem>
-                                <SelectItem value="debit_card">
-                                    Debit Card
-                                </SelectItem>
-                                <SelectItem value="credit_card">
-                                    Credit Card
-                                </SelectItem>
-                                <SelectItem value="PH_GAMOT">
-                                    PH GAMOT
-                                </SelectItem>
-                                <SelectItem value="bank_transfer">
-                                    Bank Transfer
-                                </SelectItem>
-                                <SelectItem value="others">Others</SelectItem>
+                                {PAYMENT_METHODS.map((method) => (
+                                    <SelectItem
+                                        key={method.value}
+                                        value={method.value}
+                                    >
+                                        {method.label}
+                                    </SelectItem>
+                                ))}
                             </SelectContent>
                         </Select>
                     </div>

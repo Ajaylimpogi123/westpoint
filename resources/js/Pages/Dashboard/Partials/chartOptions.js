@@ -16,6 +16,16 @@ export function formatChartCurrency(value) {
     })}`;
 }
 
+/**
+ * Coerce series values to numbers. Decimal sums can arrive as strings, and a
+ * string in the doughnut tooltip's reduce() concatenated instead of summing.
+ */
+export function toChartNumbers(values) {
+    return (Array.isArray(values) ? values : []).map(
+        (value) => Number(value) || 0,
+    );
+}
+
 export const baseChartOptions = {
     responsive: true,
     maintainAspectRatio: false,

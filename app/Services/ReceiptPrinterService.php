@@ -2,11 +2,12 @@
 
 namespace App\Services;
 
+use App\Enums\PaymentMethod;
 use App\Models\Sale;
-use Mike42\Escpos\Printer;
+use Illuminate\Support\Facades\Log;
 use Mike42\Escpos\PrintConnectors\FilePrintConnector;
 use Mike42\Escpos\PrintConnectors\NetworkPrintConnector;
-use Illuminate\Support\Facades\Log;
+use Mike42\Escpos\Printer;
 
 class ReceiptPrinterService
 {
@@ -24,17 +25,18 @@ class ReceiptPrinterService
 
         $profile = config("printer.printers.{$printerName}");
 
-        if (!$profile || !($profile['enabled'] ?? false)) {
+        if (! $profile || ! ($profile['enabled'] ?? false)) {
             return false;
         }
 
         $connector = $this->resolveConnector($profile);
 
-        if (!$connector) {
+        if (! $connector) {
             Log::warning("Printer '{$printerName}' not reachable, skipping auto-print.", [
                 'sale_id' => $sale->id,
                 'invoice_number' => $sale->invoice_number,
             ]);
+
             return false;
         }
 
@@ -42,11 +44,13 @@ class ReceiptPrinterService
             $printer = new Printer($connector);
             $this->buildReceipt($printer, $sale);
             $printer->close();
+
             return true;
         } catch (\Exception $e) {
-            Log::error("Receipt print failed: " . $e->getMessage(), [
+            Log::error('Receipt print failed: '.$e->getMessage(), [
                 'sale_id' => $sale->id,
             ]);
+
             return false;
         }
     }
@@ -90,7 +94,7 @@ class ReceiptPrinterService
 
         $socket = @fsockopen($ip, $port, $errno, $errstr, $timeout);
 
-        if (!$socket) {
+        if (! $socket) {
             return null;
         }
 
@@ -110,16 +114,16 @@ class ReceiptPrinterService
 
         $printer->setJustification(Printer::JUSTIFY_CENTER);
         $printer->setEmphasis(true);
-        $printer->text(config('printer.store_name') . "\n");
+        $printer->text(config('printer.store_name')."\n");
         $printer->setEmphasis(false);
         $printer->text("Invoice: {$sale->invoice_number}\n");
-        $printer->text($sale->created_at->format('Y-m-d H:i') . "\n");
+        $printer->text($sale->created_at->format('Y-m-d H:i')."\n");
 
         if ($sale->customer_name) {
             $printer->text("Customer: {$sale->customer_name}\n");
         }
 
-        $printer->text(str_repeat('-', 32) . "\n");
+        $printer->text(str_repeat('-', 32)."\n");
         $printer->setJustification(Printer::JUSTIFY_LEFT);
 
         foreach ($sale->items as $item) {
@@ -130,26 +134,26 @@ class ReceiptPrinterService
             $lineTotal = number_format($item->total_price, 2);
 
             $printer->text(sprintf("%-20s\n", $name));
-            $printer->text(sprintf("  %d %s x %s", $qty, $unit, $price));
+            $printer->text(sprintf('  %d %s x %s', $qty, $unit, $price));
             $printer->setJustification(Printer::JUSTIFY_RIGHT);
             $printer->text("P{$lineTotal}\n");
             $printer->setJustification(Printer::JUSTIFY_LEFT);
         }
 
-        $printer->text(str_repeat('-', 32) . "\n");
+        $printer->text(str_repeat('-', 32)."\n");
         $printer->setJustification(Printer::JUSTIFY_RIGHT);
 
-        $printer->text("Gross: P" . number_format($sale->gross_amount, 2) . "\n");
+        $printer->text('Gross: P'.number_format($sale->gross_amount, 2)."\n");
 
         if ($sale->discount_amount > 0) {
-            $printer->text("Discount: -P" . number_format($sale->discount_amount, 2) . "\n");
+            $printer->text('Discount: -P'.number_format($sale->discount_amount, 2)."\n");
         }
 
         $printer->setEmphasis(true);
-        $printer->text("TOTAL: P" . number_format($sale->net_amount, 2) . "\n");
+        $printer->text('TOTAL: P'.number_format($sale->net_amount, 2)."\n");
         $printer->setEmphasis(false);
 
-        $printer->text("Payment: " . ucfirst(str_replace('_', ' ', $sale->payment_method)) . "\n");
+        $printer->text('Payment: '.PaymentMethod::labelFor($sale->payment_method)."\n");
 
         if ($sale->reference_number) {
             $printer->text("Ref #: {$sale->reference_number}\n");

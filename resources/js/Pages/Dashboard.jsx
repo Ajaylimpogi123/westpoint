@@ -1,6 +1,14 @@
+import { useMemo } from "react";
+import { format } from "date-fns";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import { Head, router } from "@inertiajs/react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+    Card,
+    CardContent,
+    CardDescription,
+    CardHeader,
+    CardTitle,
+} from "@/components/ui/card";
 import {
     Table,
     TableBody,
@@ -14,6 +22,11 @@ import { DollarSign, Receipt } from "lucide-react";
 import RevenueTrendChart from "./Dashboard/Partials/RevenueTrendChart";
 import ProductBreakdownChart from "./Dashboard/Partials/ProductBreakdownChart";
 import BranchComparisonChart from "./Dashboard/Partials/BranchComparisonChart";
+import { getPackSize } from "@/lib/units";
+import {
+    ALL_PAYMENT_METHODS,
+    resolvePaymentMethodOptions,
+} from "@/lib/paymentMethods";
 
 function formatCurrency(amount) {
     return `₱${Number(amount).toLocaleString(undefined, {
@@ -22,7 +35,61 @@ function formatCurrency(amount) {
     })}`;
 }
 
-function StatsCard({ title, value, icon: Icon, iconColor, iconBg, subtitle }) {
+function formatCount(value) {
+    return Number(value ?? 0).toLocaleString();
+}
+
+/**
+ * Today in the browser's local timezone. toISOString() is UTC, which in the
+ * Philippines (UTC+8) picked yesterday's date before 08:00.
+ */
+function defaultStatsDate(statsPeriod) {
+    return format(new Date(), statsPeriod === "monthly" ? "yyyy-MM" : "yyyy-MM-dd");
+}
+
+/** Keep the user's selected day/month when switching between periods. */
+function carryStatsDate(currentDate, nextPeriod) {
+    if (!currentDate) {
+        return defaultStatsDate(nextPeriod);
+    }
+
+    if (nextPeriod === "monthly") {
+        return /^\d{4}-\d{2}/.test(currentDate)
+            ? currentDate.slice(0, 7)
+            : defaultStatsDate(nextPeriod);
+    }
+
+    return /^\d{4}-\d{2}-\d{2}$/.test(currentDate)
+        ? currentDate
+        : defaultStatsDate(nextPeriod);
+}
+
+/** "2 box + 5 pcs" when pack_size makes a box equivalent meaningful. */
+function boxEquivalent(medicine) {
+    const packSize = getPackSize(medicine);
+    const pieces = Number(medicine?.total_quantity ?? 0);
+
+    if (packSize <= 1 || pieces < packSize) {
+        return null;
+    }
+
+    const boxes = Math.floor(pieces / packSize);
+    const remainder = pieces % packSize;
+
+    return remainder > 0
+        ? `${boxes.toLocaleString()} box + ${remainder} pcs`
+        : `${boxes.toLocaleString()} box`;
+}
+
+function StatsCard({
+    title,
+    value,
+    icon: Icon,
+    iconColor,
+    iconBg,
+    subtitle,
+    footnote,
+}) {
     return (
         <Card className="border-0 shadow-sm">
             <CardContent className="p-6">
@@ -37,6 +104,11 @@ function StatsCard({ title, value, icon: Icon, iconColor, iconBg, subtitle }) {
                         <p className="mt-2 text-3xl font-bold tracking-tight">
                             {value}
                         </p>
+                        {footnote && (
+                            <p className="mt-1 text-xs text-muted-foreground">
+                                {footnote}
+                            </p>
+                        )}
                     </div>
                     <div className={`rounded-lg p-3 ${iconBg}`}>
                         <Icon className={`h-6 w-6 ${iconColor}`} />
@@ -52,16 +124,6 @@ const STATS_PERIOD_OPTIONS = [
     { value: "daily", label: "Daily" },
     { value: "weekly", label: "Weekly" },
     { value: "monthly", label: "Monthly" },
-];
-
-const PAYMENT_METHOD_OPTIONS = [
-    { value: "all", label: "All Payments" },
-    { value: "cash", label: "Cash" },
-
-    { value: "gcash", label: "GCash" },
-    { value: "debit_card", label: "Debit Card" },
-    { value: "credit_card", label: "Credit Card" },
-
 ];
 
 function statsCardTitle(baseTitle, statsPeriod) {
@@ -90,42 +152,49 @@ export default function Dashboard({
     filters = {},
     statsPeriodLabel = null,
     paymentMethodLabel = null,
+    paymentMethods = [],
     canViewAllBranches = false,
     branchName = null,
     dashboardRoute = "dashboard",
 }) {
-    const selectedBranchId = filters?.branch_id ?? "all";
+    const selectedBranchId = String(filters?.branch_id ?? "all");
     const selectedStatsPeriod = filters?.stats_period ?? "all";
     const selectedStatsDate =
-        filters?.stats_date ??
-        (selectedStatsPeriod === "monthly"
-            ? new Date().toISOString().slice(0, 7)
-            : new Date().toISOString().slice(0, 10));
-    const selectedPaymentMethod = filters?.payment_method ?? "all";
+        filters?.stats_date ?? defaultStatsDate(selectedStatsPeriod);
+    const selectedPaymentMethod =
+        filters?.payment_method ?? ALL_PAYMENT_METHODS;
     const statsSubtitle = buildStatsSubtitle(
         statsPeriodLabel,
         paymentMethodLabel,
     );
 
-    const buildFilterParams = (overrides = {}) => ({
-        branch_id: overrides.branch_id ?? selectedBranchId,
-        stats_period: overrides.stats_period ?? selectedStatsPeriod,
-        stats_date:
-            (overrides.stats_period ?? selectedStatsPeriod) === "all"
-                ? undefined
-                : (overrides.stats_date ?? selectedStatsDate),
-        payment_method: overrides.payment_method ?? selectedPaymentMethod,
-    });
+    const paymentOptions = useMemo(
+        () => resolvePaymentMethodOptions(paymentMethods),
+        [paymentMethods],
+    );
+
+    const totalRefunded = Number(stats?.totalRefunded ?? 0);
+    const voidedTransactions = Number(stats?.voidedTransactions ?? 0);
 
     const applyFilters = (overrides = {}) => {
-        const params = buildFilterParams(overrides);
+        const params = {
+            branch_id: selectedBranchId,
+            stats_period: selectedStatsPeriod,
+            stats_date: selectedStatsDate,
+            payment_method: selectedPaymentMethod,
+            ...overrides,
+        };
 
-        if (params.stats_period === "all") {
+        if (params.stats_period === "all" || !params.stats_date) {
             delete params.stats_date;
         }
 
-        if (params.payment_method === "all") {
+        if (params.payment_method === ALL_PAYMENT_METHODS) {
             delete params.payment_method;
+        }
+
+        if (!canViewAllBranches || params.branch_id === "all") {
+            delete params.branch_id;
         }
 
         router.get(route(dashboardRoute), params, {
@@ -142,14 +211,20 @@ export default function Dashboard({
     const handleStatsPeriodChange = (statsPeriod) => {
         applyFilters({
             stats_period: statsPeriod,
-            stats_date:
-                statsPeriod === "monthly"
-                    ? new Date().toISOString().slice(0, 7)
-                    : new Date().toISOString().slice(0, 10),
+            stats_date: carryStatsDate(
+                selectedStatsPeriod === "all" ? null : selectedStatsDate,
+                statsPeriod,
+            ),
         });
     };
 
     const handleStatsDateChange = (statsDate) => {
+        // Clearing a date input fires onChange with ""; ignore it rather
+        // than sending an empty filter that silently resets to today.
+        if (!statsDate) {
+            return;
+        }
+
         applyFilters({ stats_date: statsDate });
     };
 
@@ -274,7 +349,10 @@ export default function Dashboard({
                                 }
                                 className="mt-1 block w-full rounded-md border-gray-300 bg-white shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
                             >
-                                {PAYMENT_METHOD_OPTIONS.map((option) => (
+                                <option value={ALL_PAYMENT_METHODS}>
+                                    All payment methods
+                                </option>
+                                {paymentOptions.map((option) => (
                                     <option
                                         key={option.value}
                                         value={option.value}
@@ -321,7 +399,7 @@ export default function Dashboard({
                             {statsPeriodLabel && (
                                 <>
                                     {" "}
-                                    · Stats:{" "}
+                                    · Period:{" "}
                                     <span className="text-white">
                                         {statsPeriodLabel}
                                     </span>
@@ -347,6 +425,11 @@ export default function Dashboard({
                             )}
                             subtitle={statsSubtitle}
                             value={formatCurrency(stats?.totalRevenue ?? 0)}
+                            footnote={
+                                totalRefunded > 0
+                                    ? `Net of ${formatCurrency(totalRefunded)} refunded`
+                                    : "Net of refunds, excludes voided sales"
+                            }
                             icon={DollarSign}
                             iconColor="text-green-600"
                             iconBg="bg-green-50"
@@ -357,9 +440,12 @@ export default function Dashboard({
                                 selectedStatsPeriod,
                             )}
                             subtitle={statsSubtitle}
-                            value={Number(
-                                stats?.totalTransactions ?? 0,
-                            ).toLocaleString()}
+                            value={formatCount(stats?.totalTransactions)}
+                            footnote={
+                                voidedTransactions > 0
+                                    ? `Excludes ${formatCount(voidedTransactions)} voided`
+                                    : "Excludes voided sales"
+                            }
                             icon={Receipt}
                             iconColor="text-blue-600"
                             iconBg="bg-blue-50"
@@ -369,30 +455,38 @@ export default function Dashboard({
                     <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
                         <RevenueTrendChart
                             labels={charts?.revenueTrend?.labels ?? []}
-                            values={charts?.revenueTrend?.values ?? []}
+                            values={charts?.revenueTrend?.values}
                             period={charts?.revenueTrend?.period ?? "monthly"}
+                            paymentLabel={paymentMethodLabel}
                         />
                         <ProductBreakdownChart
                             labels={charts?.productBreakdown?.labels ?? []}
-                            values={charts?.productBreakdown?.values ?? []}
+                            values={charts?.productBreakdown?.values}
+                            subtitle={statsSubtitle}
                         />
                     </div>
 
                     {canViewAllBranches && charts?.branchComparison && (
                         <BranchComparisonChart
                             labels={charts.branchComparison.labels ?? []}
-                            values={charts.branchComparison.values ?? []}
+                            values={charts.branchComparison.values}
+                            subtitle={statsSubtitle}
                         />
                     )}
 
                     <Card className="border-0 shadow-sm">
                         <CardHeader>
                             <CardTitle>Top Selling Medicines</CardTitle>
+                            <CardDescription>
+                                Ranked by pieces sold, net of returns
+                                {statsSubtitle ? ` · ${statsSubtitle}` : ""}
+                            </CardDescription>
                         </CardHeader>
                         <CardContent>
                             {topMedicines.length === 0 ? (
                                 <p className="text-sm text-muted-foreground">
-                                    No sales recorded yet for this scope.
+                                    No medicine sales found for the selected
+                                    filters.
                                 </p>
                             ) : (
                                 <Table>
@@ -404,15 +498,18 @@ export default function Dashboard({
                                             <TableHead>Medicine</TableHead>
                                             <TableHead>Brand</TableHead>
                                             <TableHead className="text-right">
-                                                Qty Sold
+                                                Qty (pcs)
                                             </TableHead>
                                             <TableHead className="text-right">
-                                                Revenue
+                                                Net Revenue
                                             </TableHead>
                                         </TableRow>
                                     </TableHeader>
                                     <TableBody>
-                                        {topMedicines.map((medicine, index) => (
+                                        {topMedicines.map((medicine, index) => {
+                                            const boxes = boxEquivalent(medicine);
+
+                                            return (
                                             <TableRow key={medicine.id}>
                                                 <TableCell className="font-medium">
                                                     {index + 1}
@@ -424,7 +521,14 @@ export default function Dashboard({
                                                     {medicine.brand_name || "—"}
                                                 </TableCell>
                                                 <TableCell className="text-right">
-                                                    {medicine.total_quantity.toLocaleString()}
+                                                    {formatCount(
+                                                        medicine.total_quantity,
+                                                    )}
+                                                    {boxes && (
+                                                        <span className="block text-xs text-muted-foreground">
+                                                            {boxes}
+                                                        </span>
+                                                    )}
                                                 </TableCell>
                                                 <TableCell className="text-right font-medium text-green-600">
                                                     {formatCurrency(
@@ -432,7 +536,8 @@ export default function Dashboard({
                                                     )}
                                                 </TableCell>
                                             </TableRow>
-                                        ))}
+                                            );
+                                        })}
                                     </TableBody>
                                 </Table>
                             )}
@@ -443,11 +548,15 @@ export default function Dashboard({
                         <Card className="border-0 shadow-sm">
                             <CardHeader>
                                 <CardTitle>Performance Breakdown</CardTitle>
+                                <CardDescription>
+                                    All active branches
+                                    {statsSubtitle ? ` · ${statsSubtitle}` : ""}
+                                </CardDescription>
                             </CardHeader>
                             <CardContent>
                                 {branchPerformance.length === 0 ? (
                                     <p className="text-sm text-muted-foreground">
-                                        No branch sales data available yet.
+                                        No active branches to compare.
                                     </p>
                                 ) : (
                                     <Table>
@@ -455,7 +564,7 @@ export default function Dashboard({
                                             <TableRow>
                                                 <TableHead>Branch</TableHead>
                                                 <TableHead className="text-right">
-                                                    Total Revenue
+                                                    Net Revenue
                                                 </TableHead>
                                                 <TableHead className="text-right">
                                                     Transactions
@@ -474,7 +583,9 @@ export default function Dashboard({
                                                         )}
                                                     </TableCell>
                                                     <TableCell className="text-right">
-                                                        {branch.transaction_count.toLocaleString()}
+                                                        {formatCount(
+                                                            branch.transaction_count,
+                                                        )}
                                                     </TableCell>
                                                 </TableRow>
                                             ))}

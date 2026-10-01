@@ -1,6 +1,7 @@
 import React, { useEffect } from "react";
 import { Head } from "@inertiajs/react";
 import { formatDateTime } from "@/lib/dates";
+import { paymentMethodLabel } from "@/lib/paymentMethods";
 
 export default function InvoiceReceipt({ sale }) {
     useEffect(() => {
@@ -269,7 +270,7 @@ export default function InvoiceReceipt({ sale }) {
                 <div>
                     <span>Payment Method:</span>
                     <span className="capitalize">
-                        {String(sale.payment_method).replace(/_/g, " ")}
+                        {paymentMethodLabel(sale.payment_method)}
                     </span>
                 </div>
                 {sale.payment_method === "cash" && (

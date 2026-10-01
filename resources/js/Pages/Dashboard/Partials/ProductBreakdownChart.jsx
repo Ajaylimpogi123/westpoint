@@ -1,12 +1,19 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useChartJs } from "../Hooks/useChartJs";
-import { baseChartOptions, CHART_COLORS, formatChartCurrency } from "./chartOptions";
+import { chartDataKey, useChartJs } from "../Hooks/useChartJs";
+import {
+    baseChartOptions,
+    CHART_COLORS,
+    formatChartCurrency,
+    toChartNumbers,
+} from "./chartOptions";
 
-export default function ProductBreakdownChart({ labels = [], values = [] }) {
+export default function ProductBreakdownChart({
+    labels = [],
+    values: rawValues = [],
+    subtitle = null,
+}) {
+    const values = toChartNumbers(rawValues);
     const hasData = values.some((value) => value > 0);
-    const backgroundColors = labels.map(
-        (_, index) => CHART_COLORS[index % CHART_COLORS.length],
-    );
 
     const canvasRef = useChartJs(
         () => ({
@@ -15,9 +22,12 @@ export default function ProductBreakdownChart({ labels = [], values = [] }) {
                 labels,
                 datasets: [
                     {
-                        label: "Revenue",
+                        label: "Net Revenue",
                         data: values,
-                        backgroundColor: backgroundColors,
+                        backgroundColor: labels.map(
+                            (_, index) =>
+                                CHART_COLORS[index % CHART_COLORS.length],
+                        ),
                         borderWidth: 2,
                         borderColor: "#ffffff",
                     },
@@ -38,7 +48,7 @@ export default function ProductBreakdownChart({ labels = [], values = [] }) {
                         callbacks: {
                             label: (context) => {
                                 const total = context.dataset.data.reduce(
-                                    (sum, value) => sum + value,
+                                    (sum, value) => sum + Number(value || 0),
                                     0,
                                 );
                                 const share =
@@ -53,7 +63,8 @@ export default function ProductBreakdownChart({ labels = [], values = [] }) {
                 },
             },
         }),
-        [labels, values],
+        chartDataKey(labels, values),
+        hasData,
     );
 
     return (
@@ -61,7 +72,8 @@ export default function ProductBreakdownChart({ labels = [], values = [] }) {
             <CardHeader>
                 <CardTitle>Product Breakdown</CardTitle>
                 <CardDescription>
-                    Sales distribution by medicine form
+                    Net revenue by medicine form
+                    {subtitle ? ` · ${subtitle}` : ""}
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -71,7 +83,7 @@ export default function ProductBreakdownChart({ labels = [], values = [] }) {
                     </div>
                 ) : (
                     <p className="text-sm text-muted-foreground">
-                        No product sales data available for this scope yet.
+                        No product sales found for the selected filters.
                     </p>
                 )}
             </CardContent>

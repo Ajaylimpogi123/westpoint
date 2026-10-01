@@ -1,9 +1,30 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { useChartJs } from "../Hooks/useChartJs";
-import { baseChartOptions, formatChartCurrency } from "./chartOptions";
+import { chartDataKey, useChartJs } from "../Hooks/useChartJs";
+import { baseChartOptions, formatChartCurrency, toChartNumbers } from "./chartOptions";
 
-export default function RevenueTrendChart({ labels = [], values = [], period = "monthly" }) {
+const PERIOD_LABELS = {
+    daily: "Daily",
+    weekly: "Weekly",
+    monthly: "Monthly",
+};
+
+/**
+ * The trend is a fixed window (last 6 months) and intentionally ignores the
+ * Stats Period filter; it still respects the branch and payment filters.
+ */
+export default function RevenueTrendChart({
+    labels = [],
+    values: rawValues = [],
+    period = "monthly",
+    paymentLabel = null,
+}) {
+    const values = toChartNumbers(rawValues);
     const hasData = values.some((value) => value > 0);
+    const periodLabel = PERIOD_LABELS[period] ?? "Monthly";
+    const windowLabel =
+        period === "monthly" && labels.length > 0
+            ? `last ${labels.length} month${labels.length === 1 ? "" : "s"}`
+            : "over time";
 
     const canvasRef = useChartJs(
         () => ({
@@ -12,7 +33,7 @@ export default function RevenueTrendChart({ labels = [], values = [], period = "
                 labels,
                 datasets: [
                     {
-                        label: "Revenue",
+                        label: "Net Revenue",
                         data: values,
                         borderColor: "#10b981",
                         backgroundColor: "rgba(16, 185, 129, 0.15)",
@@ -50,7 +71,8 @@ export default function RevenueTrendChart({ labels = [], values = [], period = "
                 },
             },
         }),
-        [labels, values],
+        chartDataKey(labels, values),
+        hasData,
     );
 
     return (
@@ -58,7 +80,9 @@ export default function RevenueTrendChart({ labels = [], values = [], period = "
             <CardHeader>
                 <CardTitle>Revenue Trend</CardTitle>
                 <CardDescription>
-                    {period === "weekly" ? "Weekly" : "Monthly"} sales revenue over time
+                    {periodLabel} net revenue, {windowLabel}
+                    {paymentLabel ? ` · ${paymentLabel}` : ""} (not affected
+                    by Stats Period)
                 </CardDescription>
             </CardHeader>
             <CardContent>
@@ -68,7 +92,8 @@ export default function RevenueTrendChart({ labels = [], values = [], period = "
                     </div>
                 ) : (
                     <p className="text-sm text-muted-foreground">
-                        No revenue data available for this scope yet.
+                        No revenue recorded in this window for the selected
+                        filters.
                     </p>
                 )}
             </CardContent>
