@@ -80,7 +80,18 @@ export default function Index({
 
                         <TabsContent value="inventory" className="space-y-6">
                             <div className="flex justify-end">
-                                <AddModal>
+                                <AddModal
+                                    branchId={branchId}
+                                    branchName={branchName}
+                                    branches={branches}
+                                    canAssignBranch={canAssignBranch}
+                                    preferredBranchId={
+                                        filters?.branch_id &&
+                                        filters.branch_id !== "all"
+                                            ? filters.branch_id
+                                            : null
+                                    }
+                                >
                                     <Button
                                         size="sm"
                                         className="flex items-center gap-2"

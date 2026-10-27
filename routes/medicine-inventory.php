@@ -6,8 +6,20 @@ use Illuminate\Support\Facades\Route;
 Route::middleware('auth')->group(function () {
     Route::get('/medicine-inventory/products', [MedicineInventoryController::class, 'branchProducts'])
         ->name('medicine-inventory.products');
+    Route::get('/medicine-inventory/catalog', [MedicineInventoryController::class, 'catalog'])
+        ->name('medicine-inventory.catalog');
+    Route::get('/medicine-inventory/similar', [MedicineInventoryController::class, 'similar'])
+        ->name('medicine-inventory.similar');
     Route::get('/medicine-inventory', [MedicineInventoryController::class, 'index'])
         ->name('medicine-inventory.index');
+    Route::get('/medicine-inventory/{id}/branches', [MedicineInventoryController::class, 'branchPresence'])
+        ->middleware('role:2,3')
+        ->whereNumber('id')
+        ->name('medicine-inventory.branch-presence');
+    Route::post('/medicine-inventory/{id}/copy', [MedicineInventoryController::class, 'copyToBranches'])
+        ->middleware('role:2,3')
+        ->whereNumber('id')
+        ->name('medicine-inventory.copy');
     Route::post('/medicine-inventory', [MedicineInventoryController::class, 'store'])
         ->name('medicine-inventory.store');
     Route::patch('/medicine-inventory/{id}', [MedicineInventoryController::class, 'update'])

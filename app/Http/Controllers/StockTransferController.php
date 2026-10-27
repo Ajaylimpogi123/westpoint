@@ -480,7 +480,18 @@ class StockTransferController extends Controller
             'brand_name' => $sourceProduct->brand_name,
         ];
 
-        $destProduct = MedicineProduct::where($identity)->first();
+        // Match case/whitespace-insensitively so a branch's "amoxicillin " still
+        // receives stock into its existing "Amoxicillin" instead of a new copy.
+        $destProduct = MedicineProduct::query()
+            ->forBranch($toBranchId)
+            ->sameIdentity(
+                $sourceProduct->med_name,
+                $sourceProduct->dose,
+                $sourceProduct->form,
+                $sourceProduct->brand_name,
+            )
+            ->orderBy('id')
+            ->first();
 
         if ($destProduct) {
             if ((int) $destProduct->pack_size !== (int) $sourceProduct->pack_size) {

@@ -14,9 +14,12 @@ use App\Models\CustomerReturn;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -278,47 +281,123 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
 
     public function store(Request $request): RedirectResponse
     {
-        $branchId = $this->branchIdOrFail();
-
         $validated = $request->validate([
-            'med_name' => ['required', 'string', 'max:244'],
-            'dose' => ['nullable', 'string', 'max:100'],
-            'form' => ['nullable', 'string', 'max:100'],
-            'pack_size' => ['required', 'integer', 'min:1'],
-            'brand_name' => ['nullable', 'string', 'max:244'],
-            'is_generic' => ['sometimes', 'boolean'],
-            'retail_price' => ['required', 'numeric', 'min:0'],
-            'vat_status' => ['required', 'string', 'in:VAT,Non-VAT'],
-            'stock_threshold' => ['nullable', 'integer', 'min:0'],
-            'wholesale_price' => ['required', 'numeric', 'min:0'],
+            'branch_ids' => ['nullable', 'array'],
+            'branch_ids.*' => ['integer', 'distinct', 'exists:branches,id'],
+            ...self::medicineDetailRules(),
+            'confirm_new_name' => ['sometimes', 'boolean'],
         ]);
 
-        $medicine = MedicineProduct::create([
-            ...$validated,
-            'branch_id' => $branchId,
-            'status' => 'Active',
-        ]);
+        $branchIds = $this->resolveTargetBranchIds($validated['branch_ids'] ?? []);
+        $details = $this->cleanMedicineDetails($validated);
 
-        InventoryMovementLogger::log(
-            branchId: $branchId,
-            movementType: InventoryMovementLog::TYPE_MEDICINE_ADDED,
-            referenceLabel: "Medicine #{$medicine->id}",
-            referenceId: $medicine->id,
-            pdId: $medicine->id,
-            medicineName: $medicine->med_name,
-            remarks: $medicine->brand_name
-                ? "Brand: {$medicine->brand_name}"
-                : null,
-            metadata: [
-                'snapshot' => InventoryMovementLogger::snapshotFields(
-                    $medicine->toArray(),
-                    self::MEDICINE_DETAIL_FIELDS,
-                ),
-            ],
-        );
+        $this->assertNotDuplicatedInBranches($details, $branchIds);
+
+        if (! $request->boolean('confirm_new_name')) {
+            $this->assertNoSimilarName($details['med_name']);
+        }
+
+        DB::transaction(function () use ($details, $branchIds) {
+            foreach ($branchIds as $branchId) {
+                $this->createMedicineForBranch($details, $branchId);
+            }
+        });
 
         return redirect()->route('medicine-inventory.index')
-            ->with('success', 'Medicine added successfully.');
+            ->with('success', 'Medicine added to ' . $this->branchNamesLabel($branchIds) . '.');
+    }
+
+    /**
+     * Copy an existing medicine's details into other branches, so the same
+     * product is never retyped (and misspelled) per branch.
+     */
+    public function copyToBranches(Request $request, int $id): RedirectResponse
+    {
+        $source = $this->findMedicineForCurrentUserOrFail($id);
+
+        $validated = $request->validate([
+            'branch_ids' => ['required', 'array', 'min:1'],
+            'branch_ids.*' => ['integer', 'distinct', 'exists:branches,id'],
+        ]);
+
+        $branchIds = array_values(array_unique(array_map('intval', $validated['branch_ids'])));
+        $details = $source->only(self::MEDICINE_DETAIL_FIELDS);
+
+        $this->assertNotDuplicatedInBranches($details, $branchIds, 'branch_ids');
+
+        DB::transaction(function () use ($details, $branchIds, $source) {
+            foreach ($branchIds as $branchId) {
+                $this->createMedicineForBranch(
+                    $details,
+                    $branchId,
+                    "Copied from Medicine #{$source->id}",
+                );
+            }
+        });
+
+        return redirect()->back()
+            ->with('success', "{$source->med_name} added to " . $this->branchNamesLabel($branchIds) . '.');
+    }
+
+    /**
+     * Existing medicines (from any branch) whose name or brand matches the
+     * search, grouped by identity so the Add form can reuse their spelling.
+     */
+    public function catalog(Request $request): JsonResponse
+    {
+        $search = MedicineProduct::cleanText($request->input('search'));
+
+        if (! $search || mb_strlen($search) < 2) {
+            return response()->json(['medicines' => []]);
+        }
+
+        $like = '%' . addcslashes($search, '%_\\') . '%';
+
+        $products = MedicineProduct::query()
+            ->where('status', '!=', 'Deleted')
+            ->where(function ($query) use ($like, $search) {
+                $query->where('med_name', 'like', $like)
+                    ->orWhere('brand_name', 'like', $like);
+
+                // Sound-alike match catches misspellings such as "Amoxicilin".
+                if (mb_strlen($search) >= 4) {
+                    $query->orWhereRaw('SOUNDEX(med_name) = SOUNDEX(?)', [$search]);
+                }
+            })
+            ->with('branch:id,branch_name')
+            ->orderBy('med_name')
+            ->orderBy('id')
+            ->limit(100)
+            ->get();
+
+        return response()->json(['medicines' => $this->groupByIdentity($products)]);
+    }
+
+    /**
+     * Existing medicines whose name sounds like this one but is spelled
+     * differently — probable misspellings the user should confirm.
+     */
+    public function similar(Request $request): JsonResponse
+    {
+        return response()->json([
+            'medicines' => $this->groupByIdentity(
+                $this->similarNameProducts($request->input('med_name')),
+            ),
+        ]);
+    }
+
+    /**
+     * Branch ids that already carry this medicine (any status).
+     */
+    public function branchPresence(int $id): JsonResponse
+    {
+        $medicine = $this->findMedicineForCurrentUserOrFail($id);
+
+        return response()->json([
+            'branch_ids' => $this->branchesWithIdentity($medicine->only(['med_name', 'dose', 'form', 'brand_name']))
+                ->keys()
+                ->values(),
+        ]);
     }
 
     public function update(Request $request, int $id): RedirectResponse
@@ -326,18 +405,11 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
         $medicine = $this->findMedicineForCurrentUserOrFail($id);
         $branchId = (int) $medicine->branch_id;
 
-        $validated = $request->validate([
-            'med_name' => ['required', 'string', 'max:244'],
-            'dose' => ['nullable', 'string', 'max:100'],
-            'form' => ['nullable', 'string', 'max:100'],
-            'pack_size' => ['required', 'integer', 'min:1'],
-            'brand_name' => ['nullable', 'string', 'max:244'],
-            'is_generic' => ['sometimes', 'boolean'],
-            'retail_price' => ['required', 'numeric', 'min:0'],
-            'vat_status' => ['required', 'string', 'in:VAT,Non-VAT'],
-            'stock_threshold' => ['nullable', 'integer', 'min:0'],
-            'wholesale_price' => ['required', 'numeric', 'min:0'],
-        ]);
+        $validated = $this->cleanMedicineDetails(
+            $request->validate(self::medicineDetailRules()),
+        );
+
+        $this->assertNotDuplicatedInBranches($validated, [$branchId], 'med_name', $medicine->id);
 
         $before = $medicine->only(self::MEDICINE_DETAIL_FIELDS);
 
@@ -579,6 +651,235 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', 'Medicine has been restored.');
+    }
+
+    private static function medicineDetailRules(): array
+    {
+        return [
+            'med_name' => ['required', 'string', 'max:244'],
+            'dose' => ['nullable', 'string', 'max:100'],
+            'form' => ['nullable', 'string', 'max:100'],
+            'pack_size' => ['required', 'integer', 'min:1'],
+            'brand_name' => ['nullable', 'string', 'max:244'],
+            'is_generic' => ['sometimes', 'boolean'],
+            'retail_price' => ['required', 'numeric', 'min:0'],
+            'vat_status' => ['required', 'string', 'in:VAT,Non-VAT'],
+            'stock_threshold' => ['nullable', 'integer', 'min:0'],
+            'wholesale_price' => ['required', 'numeric', 'min:0'],
+        ];
+    }
+
+    private function cleanMedicineDetails(array $validated): array
+    {
+        $details = Arr::only($validated, self::MEDICINE_DETAIL_FIELDS);
+
+        foreach (['med_name', 'dose', 'form', 'brand_name'] as $field) {
+            if (array_key_exists($field, $details)) {
+                $details[$field] = MedicineProduct::cleanText($details[$field]);
+            }
+        }
+
+        return $details;
+    }
+
+    private static function identityKey(array $details): string
+    {
+        return collect(['med_name', 'dose', 'form', 'brand_name'])
+            ->map(fn ($field) => mb_strtolower(MedicineProduct::cleanText($details[$field] ?? null) ?? ''))
+            ->implode('|');
+    }
+
+    /**
+     * Admins/superadmins may target any branches; staff are pinned to their
+     * session branch.
+     *
+     * @return int[]
+     */
+    private function resolveTargetBranchIds(array $requestedBranchIds): array
+    {
+        $requestedBranchIds = array_values(array_unique(array_map('intval', $requestedBranchIds)));
+
+        if ($this->canViewAllBranches() && $requestedBranchIds) {
+            return $requestedBranchIds;
+        }
+
+        $sessionBranchId = $this->branchIdOrFail();
+
+        if ($requestedBranchIds && $requestedBranchIds !== [$sessionBranchId]) {
+            throw ValidationException::withMessages([
+                'branch_ids' => 'You can only add medicines to your assigned branch.',
+            ]);
+        }
+
+        return [$sessionBranchId];
+    }
+
+    /**
+     * Medicines matching these details, keyed by branch id.
+     */
+    private function branchesWithIdentity(array $details, ?int $exceptId = null, ?array $branchIds = null)
+    {
+        return MedicineProduct::query()
+            ->sameIdentity(
+                $details['med_name'] ?? null,
+                $details['dose'] ?? null,
+                $details['form'] ?? null,
+                $details['brand_name'] ?? null,
+            )
+            ->when($branchIds !== null, fn ($query) => $query->whereIn('branch_id', $branchIds))
+            ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
+            ->with('branch:id,branch_name')
+            ->get(['id', 'branch_id', 'status'])
+            ->keyBy('branch_id');
+    }
+
+    private function assertNotDuplicatedInBranches(
+        array $details,
+        array $branchIds,
+        string $errorKey = 'med_name',
+        ?int $exceptId = null,
+    ): void {
+        $existing = $this->branchesWithIdentity($details, $exceptId, $branchIds);
+
+        if ($existing->isEmpty()) {
+            return;
+        }
+
+        $label = collect([
+            $details['med_name'] ?? null,
+            $details['dose'] ?? null,
+            $details['form'] ?? null,
+            ! empty($details['brand_name']) ? "({$details['brand_name']})" : null,
+        ])->filter()->implode(' ');
+
+        $where = $existing
+            ->map(fn ($product) => ($product->branch?->branch_name ?? "Branch #{$product->branch_id}")
+                . ($product->status === 'Deleted' ? ' (deactivated — restore it instead)' : ''))
+            ->implode(', ');
+
+        throw ValidationException::withMessages([
+            $errorKey => "{$label} already exists in {$where}.",
+        ]);
+    }
+
+    /**
+     * Products in any branch whose name sounds like $medName but is spelled
+     * differently. Empty when the exact spelling is already in use somewhere,
+     * since the user is then following an established name.
+     */
+    private function similarNameProducts(?string $medName)
+    {
+        $medName = MedicineProduct::cleanText($medName);
+
+        if (! $medName || mb_strlen($medName) < 4) {
+            return collect();
+        }
+
+        $normalized = mb_strtolower($medName);
+        $nameSql = "LOWER(TRIM(COALESCE(tbl_products.med_name, '')))";
+
+        $spellingInUse = MedicineProduct::query()
+            ->where('status', '!=', 'Deleted')
+            ->whereRaw("{$nameSql} = ?", [$normalized])
+            ->exists();
+
+        if ($spellingInUse) {
+            return collect();
+        }
+
+        return MedicineProduct::query()
+            ->where('status', '!=', 'Deleted')
+            ->whereRaw('SOUNDEX(tbl_products.med_name) = SOUNDEX(?)', [$medName])
+            ->whereRaw("{$nameSql} <> ?", [$normalized])
+            ->with('branch:id,branch_name')
+            ->orderBy('med_name')
+            ->orderBy('id')
+            ->limit(50)
+            ->get();
+    }
+
+    private function assertNoSimilarName(?string $medName): void
+    {
+        $similar = $this->groupByIdentity($this->similarNameProducts($medName));
+
+        if ($similar->isEmpty()) {
+            return;
+        }
+
+        $list = $similar
+            ->take(3)
+            ->map(fn ($medicine) => $medicine['label'] . ' in '
+                . collect($medicine['branches'])->pluck('branch_name')->implode(', '))
+            ->implode('; ');
+
+        throw ValidationException::withMessages([
+            'confirm_new_name' => "A similar medicine already exists: {$list}. Use the existing one, or confirm this is a different medicine.",
+        ]);
+    }
+
+    /**
+     * Collapse per-branch rows into one entry per medicine identity, listing
+     * the branches that carry it.
+     */
+    private function groupByIdentity($products)
+    {
+        return $products
+            ->groupBy(fn (MedicineProduct $product) => self::identityKey($product->only(['med_name', 'dose', 'form', 'brand_name'])))
+            ->take(10)
+            ->map(function ($group) {
+                $first = $group->first();
+
+                return [
+                    ...$first->only(self::MEDICINE_DETAIL_FIELDS),
+                    'label' => $first->identityLabel(),
+                    'branches' => $group
+                        ->map(fn ($product) => [
+                            'id' => (int) $product->branch_id,
+                            'branch_name' => $product->branch?->branch_name,
+                        ])
+                        ->unique('id')
+                        ->values(),
+                ];
+            })
+            ->values();
+    }
+
+    private function createMedicineForBranch(array $details, int $branchId, ?string $remarks = null): MedicineProduct
+    {
+        $medicine = MedicineProduct::create([
+            ...$details,
+            'branch_id' => $branchId,
+            'status' => 'Active',
+        ]);
+
+        InventoryMovementLogger::log(
+            branchId: $branchId,
+            movementType: InventoryMovementLog::TYPE_MEDICINE_ADDED,
+            referenceLabel: "Medicine #{$medicine->id}",
+            referenceId: $medicine->id,
+            pdId: $medicine->id,
+            medicineName: $medicine->med_name,
+            remarks: $remarks ?? ($medicine->brand_name
+                ? "Brand: {$medicine->brand_name}"
+                : null),
+            metadata: [
+                'snapshot' => InventoryMovementLogger::snapshotFields(
+                    $medicine->toArray(),
+                    self::MEDICINE_DETAIL_FIELDS,
+                ),
+            ],
+        );
+
+        return $medicine;
+    }
+
+    private function branchNamesLabel(array $branchIds): string
+    {
+        return Branch::query()
+            ->whereKey($branchIds)
+            ->orderBy('branch_name')
+            ->pluck('branch_name')
+            ->implode(', ');
     }
 
     private function roleId(): int

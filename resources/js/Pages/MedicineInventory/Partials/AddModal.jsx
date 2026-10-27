@@ -22,7 +22,14 @@ import InputError from "@/components/InputError";
 import useAddMedicine from "../Hooks/useAddMedicine";
 import { MEDICINE_FORMS } from "../lib/medicineForms";
 
-export default function AddModal({ children }) {
+export default function AddModal({
+    children,
+    branchId = null,
+    branchName = null,
+    branches = [],
+    canAssignBranch = false,
+    preferredBranchId = null,
+}) {
     const {
         open,
         openModal,
@@ -32,34 +39,198 @@ export default function AddModal({ children }) {
         errors,
         processing,
         handleSubmit,
-    } = useAddMedicine();
+        canAssignBranch: canChangeBranch,
+        branches: branchOptions,
+        suggestions,
+        showSuggestions,
+        hideSuggestions,
+        handleNameChange,
+        pickSuggestion,
+        existingMatch,
+        existingBranchIds,
+        toggleBranch,
+        selectAllBranches,
+        needsNameConfirmation,
+        similarMedicines,
+        confirmNewName,
+    } = useAddMedicine({
+        branchId,
+        canAssignBranch,
+        branches,
+        preferredBranchId,
+    });
 
     return (
         <>
             <div onClick={openModal}>{children}</div>
 
             <Dialog open={open} onOpenChange={closeModal}>
-                <DialogContent className="sm:max-w-[520px]">
+                <DialogContent className="max-h-[90vh] overflow-y-auto sm:max-w-[520px]">
                     <form onSubmit={handleSubmit}>
                         <DialogHeader className="pb-4">
                             <DialogTitle>Add Medicine</DialogTitle>
                             <DialogDescription>
                                 Register a new medicine product. Retail price is
-                                per piece; wholesale price is per box.
+                                per piece; wholesale price is per box. Start
+                                typing the name to reuse an existing medicine.
                             </DialogDescription>
                         </DialogHeader>
 
                         <div className="grid gap-4">
+                            <div className="grid gap-3">
+                                <div className="flex items-center justify-between">
+                                    <Label>
+                                        {canChangeBranch ? "Branches" : "Branch"}
+                                    </Label>
+                                    {canChangeBranch &&
+                                        branchOptions.length > 1 && (
+                                            <button
+                                                type="button"
+                                                className="text-xs font-medium text-primary hover:underline"
+                                                onClick={selectAllBranches}
+                                            >
+                                                Select all
+                                            </button>
+                                        )}
+                                </div>
+                                {canChangeBranch ? (
+                                    <div className="grid grid-cols-2 gap-2 rounded-md border p-3">
+                                        {branchOptions.map((branch) => {
+                                            const id = String(branch.id);
+                                            const alreadyHasIt =
+                                                existingBranchIds.has(id);
+
+                                            return (
+                                                <div
+                                                    key={branch.id}
+                                                    className="flex items-center gap-2"
+                                                >
+                                                    <Checkbox
+                                                        id={`add_medicine_branch_${id}`}
+                                                        checked={data.branch_ids.includes(
+                                                            id,
+                                                        )}
+                                                        disabled={alreadyHasIt}
+                                                        onCheckedChange={(
+                                                            checked,
+                                                        ) =>
+                                                            toggleBranch(
+                                                                id,
+                                                                checked === true,
+                                                            )
+                                                        }
+                                                    />
+                                                    <Label
+                                                        htmlFor={`add_medicine_branch_${id}`}
+                                                        className={
+                                                            alreadyHasIt
+                                                                ? "font-normal text-muted-foreground"
+                                                                : "cursor-pointer font-normal"
+                                                        }
+                                                    >
+                                                        {branch.branch_name}
+                                                        {alreadyHasIt &&
+                                                            " (already has it)"}
+                                                    </Label>
+                                                </div>
+                                            );
+                                        })}
+                                    </div>
+                                ) : (
+                                    <Input
+                                        value={
+                                            branchName ?? "No branch assigned"
+                                        }
+                                        readOnly
+                                        className="bg-muted"
+                                    />
+                                )}
+                                <InputError
+                                    message={
+                                        errors.branch_ids ??
+                                        Object.entries(errors).find(([key]) =>
+                                            key.startsWith("branch_ids."),
+                                        )?.[1]
+                                    }
+                                />
+                            </div>
+
                             <div className="grid gap-3">
                                 <Label htmlFor="med_name">Medicine Name</Label>
                                 <Input
                                     id="med_name"
                                     value={data.med_name}
                                     onChange={(e) =>
-                                        setData("med_name", e.target.value)
+                                        handleNameChange(e.target.value)
                                     }
+                                    onKeyDown={(e) => {
+                                        if (e.key === "Escape" && showSuggestions) {
+                                            e.preventDefault();
+                                            e.stopPropagation();
+                                            hideSuggestions();
+                                        }
+                                    }}
                                     placeholder="e.g. Paracetamol"
+                                    autoComplete="off"
                                 />
+                                {showSuggestions && (
+                                    <div className="overflow-hidden rounded-md border">
+                                        <p className="border-b bg-muted/50 px-3 py-1.5 text-xs text-muted-foreground">
+                                            Existing medicines — pick one to
+                                            reuse its exact details
+                                        </p>
+                                        <ul className="max-h-48 overflow-y-auto">
+                                            {suggestions.map((medicine) => (
+                                                <li
+                                                    key={`${medicine.label}-${medicine.branches
+                                                        .map((b) => b.id)
+                                                        .join(",")}`}
+                                                >
+                                                    <button
+                                                        type="button"
+                                                        className="flex w-full flex-col items-start px-3 py-2 text-left text-sm hover:bg-muted"
+                                                        onClick={() =>
+                                                            pickSuggestion(
+                                                                medicine,
+                                                            )
+                                                        }
+                                                    >
+                                                        <span className="font-medium">
+                                                            {medicine.label}
+                                                        </span>
+                                                        <span className="text-xs text-muted-foreground">
+                                                            Pack of{" "}
+                                                            {medicine.pack_size}{" "}
+                                                            · In:{" "}
+                                                            {medicine.branches
+                                                                .map(
+                                                                    (b) =>
+                                                                        b.branch_name,
+                                                                )
+                                                                .join(", ")}
+                                                        </span>
+                                                    </button>
+                                                </li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                )}
+                                {existingMatch && (
+                                    <p className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+                                        {existingMatch.label} already exists in{" "}
+                                        {existingMatch.branches
+                                            .map((b) => b.branch_name)
+                                            .join(", ")}
+                                        .{" "}
+                                        {canChangeBranch
+                                            ? "Those branches are skipped; tick the branches that still need it."
+                                            : existingBranchIds.has(
+                                                    String(branchId),
+                                                )
+                                              ? "Your branch already has it — add stock to the existing medicine instead."
+                                              : "Its details have been filled in for your branch."}
+                                    </p>
+                                )}
                                 <InputError message={errors.med_name} />
                             </div>
 
@@ -241,6 +412,64 @@ export default function AddModal({ children }) {
                                 <InputError message={errors.stock_threshold} />
                             </div>
                         </div>
+
+                        {needsNameConfirmation && (
+                            <div className="mt-4 space-y-3 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm text-amber-900">
+                                <p className="font-medium">
+                                    Is this the same as an existing medicine?
+                                </p>
+                                {similarMedicines.length > 0 ? (
+                                    <ul className="space-y-2">
+                                        {similarMedicines.map((medicine) => (
+                                            <li
+                                                key={`${medicine.label}-${medicine.branches
+                                                    .map((b) => b.id)
+                                                    .join(",")}`}
+                                                className="flex items-center justify-between gap-3 rounded border border-amber-200 bg-white px-3 py-2"
+                                            >
+                                                <span>
+                                                    <span className="font-medium">
+                                                        {medicine.label}
+                                                    </span>
+                                                    <span className="block text-xs text-muted-foreground">
+                                                        In:{" "}
+                                                        {medicine.branches
+                                                            .map(
+                                                                (b) =>
+                                                                    b.branch_name,
+                                                            )
+                                                            .join(", ")}
+                                                    </span>
+                                                </span>
+                                                <Button
+                                                    type="button"
+                                                    size="sm"
+                                                    variant="outline"
+                                                    onClick={() =>
+                                                        pickSuggestion(medicine)
+                                                    }
+                                                >
+                                                    Use this
+                                                </Button>
+                                            </li>
+                                        ))}
+                                    </ul>
+                                ) : (
+                                    <p>{errors.confirm_new_name}</p>
+                                )}
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    disabled={processing}
+                                    onClick={confirmNewName}
+                                    className="h-auto whitespace-normal text-left"
+                                >
+                                    No, “{data.med_name.trim()}” is a different
+                                    medicine — save it
+                                </Button>
+                            </div>
+                        )}
 
                         <DialogFooter className="mt-4">
                             <DialogClose asChild>

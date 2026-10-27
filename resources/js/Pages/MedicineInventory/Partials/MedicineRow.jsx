@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { TableCell, TableRow } from "@/components/ui/table";
 import { useForm } from "@inertiajs/react";
 import {
+    Building2,
     ChevronDown,
     ChevronRight,
     Pencil,
@@ -11,6 +12,7 @@ import {
 } from "lucide-react";
 import Swal from "sweetalert2";
 import EditModal from "./EditModal";
+import CopyToBranchModal from "./CopyToBranchModal";
 import BatchTable from "./BatchTable";
 import StockStatusBadge from "./StockStatusBadge";
 import { getMedicineStockStatus } from "../lib/stockStatus";
@@ -23,6 +25,7 @@ export default function MedicineRow({
     onToggle,
     canEditMedicine = false,
     showBranchColumn = false,
+    branches = [],
 }) {
     const { delete: destroy, patch: restore } = useForm();
 
@@ -158,6 +161,22 @@ export default function MedicineRow({
                                         Edit
                                     </Button>
                                 </EditModal>
+                            )}
+                            {canEditMedicine && branches.length > 1 && (
+                                <CopyToBranchModal
+                                    medicine={medicine}
+                                    branches={branches}
+                                >
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        size="sm"
+                                        className="flex items-center gap-1"
+                                    >
+                                        <Building2 className="h-3.5 w-3.5" />
+                                        Add to branch
+                                    </Button>
+                                </CopyToBranchModal>
                             )}
                             {canEditMedicine && (
                                 <Button

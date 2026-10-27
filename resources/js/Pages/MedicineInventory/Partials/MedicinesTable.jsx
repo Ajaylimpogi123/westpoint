@@ -169,6 +169,7 @@ function MedicinesTable({
                 onToggle={() => toggleRow(medicine.id)}
                 canEditMedicine={canEditMedicine}
                 showBranchColumn={showBranchColumn}
+                branches={branches}
             />
         ));
     }, [
@@ -177,6 +178,7 @@ function MedicinesTable({
         toggleRow,
         canEditMedicine,
         showBranchColumn,
+        branches,
     ]);
 
     return (

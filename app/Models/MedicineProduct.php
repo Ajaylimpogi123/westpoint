@@ -141,6 +141,50 @@ class MedicineProduct extends Model
         return $query->where('branch_id', $branchId);
     }
 
+    /**
+     * Name, dose, form and brand together identify "the same medicine" across
+     * branches. Matching ignores case and surrounding whitespace so that
+     * "Amoxicillin " and "amoxicillin" are treated as one product.
+     */
+    public function scopeSameIdentity($query, ?string $medName, ?string $dose, ?string $form, ?string $brandName)
+    {
+        $identity = [
+            'med_name' => $medName,
+            'dose' => $dose,
+            'form' => $form,
+            'brand_name' => $brandName,
+        ];
+
+        foreach ($identity as $column => $value) {
+            $query->whereRaw(
+                "LOWER(TRIM(COALESCE(tbl_products.{$column}, ''))) = ?",
+                [mb_strtolower(self::cleanText($value) ?? '')],
+            );
+        }
+
+        return $query;
+    }
+
+    /**
+     * Trim and collapse inner whitespace; blank becomes null.
+     */
+    public static function cleanText(?string $value): ?string
+    {
+        $value = trim(preg_replace('/\s+/u', ' ', (string) $value));
+
+        return $value === '' ? null : $value;
+    }
+
+    public function identityLabel(): string
+    {
+        return collect([
+            $this->med_name,
+            $this->dose,
+            $this->form,
+            $this->brand_name ? "({$this->brand_name})" : null,
+        ])->filter()->implode(' ');
+    }
+
     public function scopeStockLevel($query, ?string $level)
     {
         if (! $level || $level === 'all') {
