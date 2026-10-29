@@ -81,6 +81,7 @@ class InventoryCoreQaTest extends TestCase
             'transaction_subtype' => 'Delivery to Customer',
             'branch_id' => $this->branchA->id,
             'issued_by' => 'QA Issuer',
+            'delivered_to' => 'QA Clinic',
             'patient_reference' => 'Walk-in',
             'items' => $items,
         ], $extra);
@@ -195,6 +196,7 @@ class InventoryCoreQaTest extends TestCase
         $response = $this->actingAsWithSession($this->staff)
             ->put(route('stock-out.update', $stockOut->stock_out_id), [
                 'issued_by' => 'QA Issuer',
+                'delivered_to' => 'QA Clinic',
                 'items' => [$this->line(70), $this->line(70)],
             ]);
 
@@ -265,6 +267,7 @@ class InventoryCoreQaTest extends TestCase
         $response = $this->actingAsWithSession($this->staff)
             ->put(route('stock-out.update', $stockOut->stock_out_id), [
                 'issued_by' => 'Legacy edited',
+                'delivered_to' => 'QA Clinic',
                 'items' => $items,
             ]);
 
@@ -420,6 +423,7 @@ class InventoryCoreQaTest extends TestCase
         $this->assertSucceeded($this->actingAsWithSession($this->staff)
             ->put(route('stock-out.update', $stockOut->stock_out_id), [
                 'issued_by' => 'QA Issuer',
+                'delivered_to' => 'QA Clinic',
                 'items' => [$this->line(4, 'Box', 10)],
             ]));
 
@@ -571,7 +575,25 @@ class InventoryCoreQaTest extends TestCase
 
     public function test_add_stock_box_on_medicine_without_pack_size_is_refused_without_writes(): void
     {
-        DB::table('tbl_products')->where('id', $this->product->id)->update(['pack_size' => 0]);
+        // pack_size is NOT NULL and chk_pack_size_min (migration 45) rejects 0.
+        // That CHECK is only advisory on MySQL < 8.0.16, so the application
+        // guard must still hold: plant the bad row with the check switched
+        // off for this session only (MariaDB; no DDL, so RefreshDatabase
+        // keeps its transaction).
+        try {
+            DB::statement('SET SESSION check_constraint_checks = 0');
+        } catch (\Illuminate\Database\QueryException) {
+            // MySQL has no such switch; there the CHECK (8.0.16+) makes a
+            // zero pack size impossible to store at all.
+            $this->markTestSkipped('Cannot plant pack_size = 0 on this server; the DB invariant enforces it.');
+        }
+
+        try {
+            DB::table('tbl_products')->where('id', $this->product->id)->update(['pack_size' => 0]);
+        } finally {
+            DB::statement('SET SESSION check_constraint_checks = 1');
+        }
+        $this->assertSame(0, (int) DB::table('tbl_products')->where('id', $this->product->id)->value('pack_size'));
 
         $response = $this->actingAsWithSession($this->staff)->post(route('medicine-inventory.store-stock'), [
             'product_id' => $this->product->id,
@@ -684,7 +706,8 @@ class InventoryCoreQaTest extends TestCase
         ]);
 
         $this->assertNoServerError($response);
-        $this->assertNotNull(session('error'));
+        // stock-out-validation-basket: now a line validation error, not a flash error.
+        $response->assertSessionHasErrors('items.0.pieces_per_box');
         $this->assertSame(100, (int) $this->batch->fresh()->quantity);
         $this->assertDatabaseCount('tbl_stock_outs', 0);
         $this->assertDatabaseMissing('tbl_idempotency_keys', ['idempotency_key' => 'nopcs']);
@@ -701,7 +724,8 @@ class InventoryCoreQaTest extends TestCase
         ]);
 
         $this->assertNoServerError($response);
-        $this->assertNotNull(session('error'));
+        // stock-out-validation-basket: now a line validation error, not a flash error.
+        $response->assertSessionHasErrors('items.1.quantity_deducted');
         $this->assertSame(100, (int) $this->batch->fresh()->quantity);
         $this->assertDatabaseCount('tbl_stock_outs', 0);
         $this->assertSame(0, InventoryMovementLog::count());

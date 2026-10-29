@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import { Head, Link } from "@inertiajs/react";
 import { formatDate, formatDateTime } from "@/lib/dates";
 import { isBoxUnit, unitLabel } from "@/lib/units";
+import { paginateItems, PRINT_PAGE_CSS } from "@/lib/printPages";
 
 function formatCurrency(amount) {
     return `₱${Number(amount || 0).toLocaleString("en-PH", {
@@ -96,12 +97,20 @@ function amountInWords(amount) {
     return result;
 }
 
-const MIN_TABLE_ROWS = 14;
+// Item lines per printed sheet. Leaves room on a letter page for the header,
+// customer block, totals and signatures even when every line has a second
+// (dose / form / brand) row.
+const ROWS_PER_PAGE = 12;
 
 /**
  * StockOutReceipt
  * Standalone printable delivery receipt — no AuthenticatedLayout so the nav
  * doesn't appear on print. Accessed via GET /stock-out/{id}/receipt
+ *
+ * Long deliveries print as several sheets under the same DR number. Every
+ * sheet repeats the letterhead, customer block and column headings and is
+ * numbered "Page x of y"; totals, amount in words and signatures appear only
+ * on the last sheet.
  */
 export default function StockOutReceipt({ stockOut }) {
     const items = stockOut.items ?? [];
@@ -120,14 +129,15 @@ export default function StockOutReceipt({ stockOut }) {
         return Number(value || 0);
     };
 
-    const totalAmount = useMemo(() => {
-        return items.reduce((sum, item) => {
-            const unitPrice = priceFor(item);
-            return sum + unitPrice * Number(item.quantity_deducted || 0);
-        }, 0);
-    }, [items]);
+    const amountFor = (item) =>
+        priceFor(item) * Number(item.quantity_deducted || 0);
 
-    const blankRowCount = Math.max(0, MIN_TABLE_ROWS - items.length);
+    const totalAmount = useMemo(
+        () => items.reduce((sum, item) => sum + amountFor(item), 0),
+        [items],
+    );
+
+    const pages = useMemo(() => paginateItems(items, ROWS_PER_PAGE), [items]);
 
     return (
         <>
@@ -153,11 +163,13 @@ export default function StockOutReceipt({ stockOut }) {
                         max-width: none !important;
                         width: 100% !important;
                         padding: 0 !important;
+                        margin: 0 !important;
                     }
                 }
                 @media screen {
                     body { background: #f3f4f6; }
                 }
+                ${PRINT_PAGE_CSS}
             `}</style>
 
             <div
@@ -173,6 +185,7 @@ export default function StockOutReceipt({ stockOut }) {
                 <div className="flex items-center gap-4">
                     <span className="text-sm text-gray-400 font-mono">
                         #{receiptNumber(stockOut.stock_out_id)}
+                        {pages.length > 1 && ` · ${pages.length} pages`}
                     </span>
                     <button
                         onClick={() => window.print()}
@@ -184,284 +197,360 @@ export default function StockOutReceipt({ stockOut }) {
                 </div>
             </div>
 
-            <div className="min-h-screen py-6 px-4 flex justify-center print:py-0 print:px-0">
-                <div
-                    className="slip-card w-full max-w-[8.5in] bg-white
-                    shadow-lg border border-gray-300 overflow-hidden font-serif text-[11px] text-gray-900
-                    print:shadow-none print:border-0 px-8 py-6 print:px-0 print:py-0"
-                >
-                    {/* Letterhead */}
-                    <div className="flex items-start gap-3 border-b-2 border-gray-900 pb-2 mb-1">
-                        {/* <img
-                            src="/images/logo/Westpoint.png"
-                            alt="Westpoint Pharma and Medical Supplies Distribution"
-                            className="h-28 w-28 shrink-0 object-contain"
-                        /> */}
-                        <div className="flex-1 text-center pt-0.5">
-                            <h1 className="text-[15px] font-bold uppercase leading-tight tracking-tight">
-                                Westpoint Pharma and Medical Supplies
-                                Distribution
-                            </h1>
-                            <p className="text-[9px] mt-0.5 leading-snug">
-                                6th Lacson St., Bacolod City, Negros Occidental,
-                                6100
-                            </p>
-                            <p className="text-[9px] leading-snug">
-                                VAT Reg. TIN: 439-169-208-00000
-                            </p>
-                            <p className="text-[9px] leading-snug">
-                                sales@westpointpharma.com
-                            </p>
-                            <p className="text-[9px] leading-snug">
-                                Bulk/Wholesale: (034) 479 2739 / (0992) 989 5971
-                                &nbsp;•&nbsp; Retail: (034) 454 1118 / (0917)
-                                162 8332
-                            </p>
-                        </div>
-                        <div className="w-16 shrink-0" aria-hidden="true" />
-                    </div>
+            <div className="min-h-screen py-6 px-4 flex flex-col items-center gap-6 print:block print:py-0 print:px-0">
+                {pages.map((page) => {
+                    const pageSubtotal = page.items.reduce(
+                        (sum, item) => sum + amountFor(item),
+                        0,
+                    );
 
-                    <div className="relative mb-3">
-                        <h2 className="text-center text-sm font-bold uppercase tracking-widest">
-                            Delivery Receipt
-                        </h2>
-                        <p className="absolute right-0 top-0 text-xs font-semibold text-red-600">
-                            №{" "}
-                            <span className="font-mono">
-                                {receiptNumber(stockOut.stock_out_id)}
-                            </span>
-                        </p>
-                    </div>
+                    return (
+                        <div
+                            key={page.pageNumber}
+                            className="print-page slip-card w-full max-w-[8.5in] bg-white
+                            shadow-lg border border-gray-300 overflow-hidden font-serif text-[11px] text-gray-900
+                            print:shadow-none print:border-0 px-8 py-6 print:px-0 print:py-0"
+                        >
+                            {/* Letterhead */}
+                            <div className="flex items-start gap-3 border-b-2 border-gray-900 pb-2 mb-1">
+                                <div className="flex-1 text-center pt-0.5">
+                                    <h1 className="text-[15px] font-bold uppercase leading-tight tracking-tight">
+                                        Westpoint Pharma and Medical Supplies
+                                        Distribution
+                                    </h1>
+                                    <p className="text-[9px] mt-0.5 leading-snug">
+                                        6th Lacson St., Bacolod City, Negros
+                                        Occidental, 6100
+                                    </p>
+                                    <p className="text-[9px] leading-snug">
+                                        VAT Reg. TIN: 439-169-208-00000
+                                    </p>
+                                    <p className="text-[9px] leading-snug">
+                                        sales@westpointpharma.com
+                                    </p>
+                                    <p className="text-[9px] leading-snug">
+                                        Bulk/Wholesale: (034) 479 2739 / (0992)
+                                        989 5971 &nbsp;•&nbsp; Retail: (034) 454
+                                        1118 / (0917) 162 8332
+                                    </p>
+                                </div>
+                                <div className="w-16 shrink-0" aria-hidden="true" />
+                            </div>
 
-                    {/* Customer block — matches classic DR form */}
-                    <div className="border border-gray-900 mb-2">
-                        <div className="grid grid-cols-[1fr_140px] border-b border-gray-900">
-                            <HeaderCell label="Delivered to">
-                                {stockOut.delivered_to}
-                            </HeaderCell>
-                            <HeaderCell label="Date" borderedLeft>
-                                {formatDateTime(stockOut.created_at)}
-                            </HeaderCell>
-                        </div>
-                        <div className="grid grid-cols-[1fr_140px] border-b border-gray-900">
-                            <HeaderCell label="TIN" blank />
-                            <HeaderCell label="Terms" borderedLeft blank />
-                        </div>
-                        <div className="grid grid-cols-[1fr_140px]">
-                            <HeaderCell label="Address">
-                                {stockOut.delivered_to_address}
-                            </HeaderCell>
-                            <HeaderCell label="Invoice #" borderedLeft blank />
-                        </div>
-                    </div>
+                            <div className="relative mb-3">
+                                <h2 className="text-center text-sm font-bold uppercase tracking-widest">
+                                    Delivery Receipt
+                                </h2>
+                                <div className="absolute right-0 top-0 text-right">
+                                    <p className="text-xs font-semibold text-red-600">
+                                        №{" "}
+                                        <span className="font-mono">
+                                            {receiptNumber(stockOut.stock_out_id)}
+                                        </span>
+                                    </p>
+                                    {page.totalPages > 1 && (
+                                        <p className="text-[9px] font-semibold">
+                                            Page {page.pageNumber} of{" "}
+                                            {page.totalPages}
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
 
-                    {/* Existing transaction details (unchanged data) */}
-                    <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mb-2 text-[10px]">
-                        <FieldLine
-                            label="Source branch"
-                            value={stockOut.branch?.branch_name}
-                        />
-                        <FieldLine
-                            label="Transaction type"
-                            value={stockOut.transaction_subtype}
-                        />
-                        <FieldLine
-                            label="Patient / Reference"
-                            value={stockOut.patient_reference}
-                        />
-                        <FieldLine
-                            label="Issued by"
-                            value={stockOut.issued_by}
-                        />
-                    </div>
+                            {/* Customer block — matches classic DR form */}
+                            <div className="border border-gray-900 mb-2">
+                                <div className="grid grid-cols-[1fr_140px] border-b border-gray-900">
+                                    <HeaderCell label="Delivered to">
+                                        {stockOut.delivered_to}
+                                    </HeaderCell>
+                                    <HeaderCell label="Date" borderedLeft>
+                                        {formatDateTime(stockOut.created_at)}
+                                    </HeaderCell>
+                                </div>
+                                <div className="grid grid-cols-[1fr_140px] border-b border-gray-900">
+                                    <HeaderCell label="TIN">
+                                        {stockOut.delivered_to_tin}
+                                    </HeaderCell>
+                                    <HeaderCell label="Terms" borderedLeft blank />
+                                </div>
+                                <div className="grid grid-cols-[1fr_140px]">
+                                    <HeaderCell label="Address">
+                                        {stockOut.delivered_to_address}
+                                    </HeaderCell>
+                                    <HeaderCell
+                                        label="Invoice #"
+                                        borderedLeft
+                                        blank
+                                    />
+                                </div>
+                            </div>
 
-                    {stockOut.remarks && (
-                        <div className="border border-gray-400 px-2 py-1 mb-2 text-[10px]">
-                            <span className="text-gray-600">Remarks: </span>
-                            <span>{stockOut.remarks}</span>
-                        </div>
-                    )}
+                            {/* Transaction details */}
+                            <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mb-2 text-[10px]">
+                                <FieldLine
+                                    label="Source branch"
+                                    value={stockOut.branch?.branch_name}
+                                />
+                                <FieldLine
+                                    label="Transaction type"
+                                    value={stockOut.transaction_subtype}
+                                />
+                                <FieldLine
+                                    label="Patient / Reference"
+                                    value={stockOut.patient_reference}
+                                />
+                                <FieldLine
+                                    label="Issued by"
+                                    value={stockOut.issued_by}
+                                />
+                            </div>
 
-                    <table className="w-full border-collapse border border-gray-900 text-[10px]">
-                        <thead>
-                            <tr className="bg-white">
-                                <Th className="w-8">No.</Th>
-                                <Th align="left">Description</Th>
-                                <Th className="w-[72px]">Batch No.</Th>
-                                <Th className="w-[68px]">Expiry Date</Th>
-                                <Th className="w-14">Unit</Th>
-                                <Th className="w-10" align="right">
-                                    Qty.
-                                </Th>
-                                <Th className="w-[72px]" align="right">
-                                    Unit Price
-                                </Th>
-                                <Th className="w-[76px]" align="right">
-                                    Amount
-                                </Th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {items.map((item, idx) => {
-                                const qty = Number(item.quantity_deducted || 0);
-                                const unitPrice = priceFor(item);
-                                const amount = unitPrice * qty;
-                                // Prefer the pcs/box frozen on this transaction
-                                // (pieces_per_box); fall back to the product's
-                                // current pack size for records saved before
-                                // that column existed.
-                                const packSize = Number(
-                                    item.pieces_per_box ??
-                                        item.product?.pack_size,
-                                );
-                                const showPcsPerBox =
-                                    isBoxUnit(item.unit_type) && packSize > 0;
-
-                                return (
-                                    <tr key={item.item_id ?? idx}>
-                                        <Td align="center">{idx + 1}</Td>
-                                        <Td align="left">
-                                            <span className="font-semibold">
-                                                {item.product?.med_name ?? "—"}
-                                            </span>
-                                            {(item.product?.dose ||
-                                                item.product?.form ||
-                                                item.product?.brand_name) && (
-                                                <span className="block text-[9px] text-gray-600">
-                                                    {item.product?.dose ?? ""}
-                                                    {item.product?.form
-                                                        ? ` / ${item.product.form}`
-                                                        : ""}
-                                                    {item.product?.brand_name
-                                                        ? ` — ${item.product.brand_name}`
-                                                        : ""}
-                                                </span>
-                                            )}
-                                        </Td>
-                                        <Td align="center" mono>
-                                            {item.lot_number ?? "—"}
-                                        </Td>
-                                        <Td align="center">
-                                            {formatDate(item.expiry)}
-                                        </Td>
-                                        <Td align="center">
-                                            {unitLabel(item.unit_type)}
-                                            {showPcsPerBox && (
-                                                <span className="mt-0.5 block text-[8px] text-gray-500">
-                                                    {packSize.toLocaleString()}{" "}
-                                                    pcs/box
-                                                </span>
-                                            )}
-                                        </Td>
-                                        <Td align="right">
-                                            <span className="font-bold">
-                                                {qty}
-                                            </span>
-                                        </Td>
-                                        <Td align="right">
-                                            {formatCurrency(unitPrice)}
-                                        </Td>
-                                        <Td align="right">
-                                            {formatCurrency(amount)}
-                                        </Td>
-                                    </tr>
-                                );
-                            })}
-
-                            {Array.from({ length: blankRowCount }).map(
-                                (_, i) => (
-                                    <tr key={`blank-${i}`}>
-                                        <Td>&nbsp;</Td>
-                                        <Td />
-                                        <Td />
-                                        <Td />
-                                        <Td />
-                                        <Td />
-                                        <Td />
-                                        <Td />
-                                    </tr>
-                                ),
+                            {/* Remarks once, on the first sheet. */}
+                            {page.pageNumber === 1 && stockOut.remarks && (
+                                <div className="border border-gray-400 px-2 py-1 mb-2 text-[10px]">
+                                    <span className="text-gray-600">
+                                        Remarks:{" "}
+                                    </span>
+                                    <span>{stockOut.remarks}</span>
+                                </div>
                             )}
-                        </tbody>
-                        <tfoot>
-                            <tr>
-                                <td
-                                    colSpan={5}
-                                    rowSpan={3}
-                                    className="border border-gray-900 align-top p-2"
-                                >
-                                    <p className="text-[9px] font-semibold uppercase mb-1">
-                                        Amount in Words
-                                    </p>
-                                    <p className="text-[10px] font-medium leading-snug min-h-[3rem]">
-                                        {amountInWords(totalAmount)}
-                                    </p>
-                                </td>
-                                <td
-                                    colSpan={2}
-                                    className="border border-gray-900 px-2 py-1 text-right font-semibold uppercase text-[9px]"
-                                >
-                                    Total Sales
-                                </td>
-                                <td className="border border-gray-900 px-2 py-1 text-right">
-                                    {formatCurrency(totalAmount)}
-                                </td>
-                            </tr>
-                            <tr>
-                                <td
-                                    colSpan={2}
-                                    className="border border-gray-900 px-2 py-1 text-right font-semibold uppercase text-[9px]"
-                                >
-                                    Less: Withholding Tax
-                                </td>
-                                <td className="border border-gray-900 px-2 py-1 text-right">
-                                    &nbsp;
-                                </td>
-                            </tr>
-                            <tr>
-                                <td
-                                    colSpan={2}
-                                    className="border border-gray-900 px-2 py-1 text-right font-bold uppercase text-[9px]"
-                                >
-                                    Total Amount Due
-                                </td>
-                                <td className="border border-gray-900 px-2 py-1 text-right font-bold text-xs">
-                                    {formatCurrency(totalAmount)}
-                                </td>
-                            </tr>
-                        </tfoot>
-                    </table>
 
-                    <div className="mt-6 grid grid-cols-[1fr_200px] gap-4 items-end">
-                        <div className="grid grid-cols-3 gap-3">
-                            <SignatureBox
-                                label="Prepared By"
-                                name={stockOut.issued_by}
-                            />
-                            <SignatureBox label="Pre-approved By" blank />
-                            <SignatureBox label="Approved By" blank />
-                        </div>
-                        <div className="text-[9px]">
-                            <p className="italic mb-6 leading-snug">
-                                Received the above merchandise in good order and
-                                condition
-                            </p>
-                            <p>
-                                <span className="font-semibold">By:</span>{" "}
-                                <span className="inline-block min-w-[120px] border-b border-gray-800">
-                                    &nbsp;
-                                </span>
-                            </p>
-                            <p className="text-[8px] text-center mt-0.5 text-gray-600">
-                                Signature Over Printed Name / Date
-                            </p>
-                        </div>
-                    </div>
+                            <table className="w-full border-collapse border border-gray-900 text-[10px]">
+                                <thead>
+                                    <tr className="bg-white">
+                                        <Th className="w-8">No.</Th>
+                                        <Th align="left">Description</Th>
+                                        <Th className="w-[72px]">Batch No.</Th>
+                                        <Th className="w-[68px]">
+                                            Expiry Date
+                                        </Th>
+                                        <Th className="w-14">Unit</Th>
+                                        <Th className="w-10" align="right">
+                                            Qty.
+                                        </Th>
+                                        <Th className="w-[72px]" align="right">
+                                            Unit Price
+                                        </Th>
+                                        <Th className="w-[76px]" align="right">
+                                            Amount
+                                        </Th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {page.items.map((item, idx) => {
+                                        const qty = Number(
+                                            item.quantity_deducted || 0,
+                                        );
+                                        const unitPrice = priceFor(item);
+                                        // Prefer the pcs/box frozen on this
+                                        // transaction (pieces_per_box); fall
+                                        // back to the product's current pack
+                                        // size for records saved before that
+                                        // column existed.
+                                        const packSize = Number(
+                                            item.pieces_per_box ??
+                                                item.product?.pack_size,
+                                        );
+                                        const showPcsPerBox =
+                                            isBoxUnit(item.unit_type) &&
+                                            packSize > 0;
 
-                    <p className="text-center text-[10px] font-bold uppercase mt-6 tracking-wide">
-                        This document is not valid for claiming of input taxes
-                    </p>
-                </div>
+                                        return (
+                                            <tr key={item.item_id ?? idx}>
+                                                <Td align="center">
+                                                    {page.startIndex + idx + 1}
+                                                </Td>
+                                                <Td align="left">
+                                                    <span className="font-semibold">
+                                                        {item.product?.med_name ??
+                                                            "—"}
+                                                    </span>
+                                                    {(item.product?.dose ||
+                                                        item.product?.form ||
+                                                        item.product
+                                                            ?.brand_name) && (
+                                                        <span className="block text-[9px] text-gray-600">
+                                                            {item.product
+                                                                ?.dose ?? ""}
+                                                            {item.product?.form
+                                                                ? ` / ${item.product.form}`
+                                                                : ""}
+                                                            {item.product
+                                                                ?.brand_name
+                                                                ? ` — ${item.product.brand_name}`
+                                                                : ""}
+                                                        </span>
+                                                    )}
+                                                </Td>
+                                                <Td align="center" mono>
+                                                    {item.lot_number ?? "—"}
+                                                </Td>
+                                                <Td align="center">
+                                                    {formatDate(item.expiry)}
+                                                </Td>
+                                                <Td align="center">
+                                                    {unitLabel(item.unit_type)}
+                                                    {showPcsPerBox && (
+                                                        <span className="mt-0.5 block text-[8px] text-gray-500">
+                                                            {packSize.toLocaleString()}{" "}
+                                                            pcs/box
+                                                        </span>
+                                                    )}
+                                                </Td>
+                                                <Td align="right">
+                                                    <span className="font-bold">
+                                                        {qty}
+                                                    </span>
+                                                </Td>
+                                                <Td align="right">
+                                                    {formatCurrency(unitPrice)}
+                                                </Td>
+                                                <Td align="right">
+                                                    {formatCurrency(
+                                                        unitPrice * qty,
+                                                    )}
+                                                </Td>
+                                            </tr>
+                                        );
+                                    })}
+
+                                    {Array.from({
+                                        length: page.blankRows,
+                                    }).map((_, i) => (
+                                        <tr key={`blank-${i}`}>
+                                            <Td>&nbsp;</Td>
+                                            <Td />
+                                            <Td />
+                                            <Td />
+                                            <Td />
+                                            <Td />
+                                            <Td />
+                                            <Td />
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                <tfoot>
+                                    {page.isLast ? (
+                                        <>
+                                            <tr>
+                                                <td
+                                                    colSpan={5}
+                                                    rowSpan={3}
+                                                    className="border border-gray-900 align-top p-2"
+                                                >
+                                                    <p className="text-[9px] font-semibold uppercase mb-1">
+                                                        Amount in Words
+                                                    </p>
+                                                    <p className="text-[10px] font-medium leading-snug min-h-[3rem]">
+                                                        {amountInWords(
+                                                            totalAmount,
+                                                        )}
+                                                    </p>
+                                                </td>
+                                                <td
+                                                    colSpan={2}
+                                                    className="border border-gray-900 px-2 py-1 text-right font-semibold uppercase text-[9px]"
+                                                >
+                                                    Total Sales
+                                                </td>
+                                                <td className="border border-gray-900 px-2 py-1 text-right">
+                                                    {formatCurrency(totalAmount)}
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td
+                                                    colSpan={2}
+                                                    className="border border-gray-900 px-2 py-1 text-right font-semibold uppercase text-[9px]"
+                                                >
+                                                    Less: Withholding Tax
+                                                </td>
+                                                <td className="border border-gray-900 px-2 py-1 text-right">
+                                                    &nbsp;
+                                                </td>
+                                            </tr>
+                                            <tr>
+                                                <td
+                                                    colSpan={2}
+                                                    className="border border-gray-900 px-2 py-1 text-right font-bold uppercase text-[9px]"
+                                                >
+                                                    Total Amount Due
+                                                </td>
+                                                <td className="border border-gray-900 px-2 py-1 text-right font-bold text-xs">
+                                                    {formatCurrency(totalAmount)}
+                                                </td>
+                                            </tr>
+                                        </>
+                                    ) : (
+                                        <tr>
+                                            <td
+                                                colSpan={5}
+                                                className="border border-gray-900 px-2 py-1 text-[9px] italic text-gray-600"
+                                            >
+                                                Continued on page{" "}
+                                                {page.pageNumber + 1} of{" "}
+                                                {page.totalPages} — totals and
+                                                signatures on the last page
+                                            </td>
+                                            <td
+                                                colSpan={2}
+                                                className="border border-gray-900 px-2 py-1 text-right font-semibold uppercase text-[9px]"
+                                            >
+                                                Page Subtotal
+                                            </td>
+                                            <td className="border border-gray-900 px-2 py-1 text-right">
+                                                {formatCurrency(pageSubtotal)}
+                                            </td>
+                                        </tr>
+                                    )}
+                                </tfoot>
+                            </table>
+
+                            {page.isLast && (
+                                <>
+                                    <div className="mt-6 grid grid-cols-[1fr_200px] gap-4 items-end">
+                                        <div className="grid grid-cols-3 gap-3">
+                                            <SignatureBox
+                                                label="Prepared By"
+                                                name={stockOut.issued_by}
+                                            />
+                                            <SignatureBox
+                                                label="Pre-approved By"
+                                                blank
+                                            />
+                                            <SignatureBox
+                                                label="Approved By"
+                                                blank
+                                            />
+                                        </div>
+                                        <div className="text-[9px]">
+                                            <p className="italic mb-6 leading-snug">
+                                                Received the above merchandise
+                                                in good order and condition
+                                            </p>
+                                            <p>
+                                                <span className="font-semibold">
+                                                    By:
+                                                </span>{" "}
+                                                <span className="inline-block min-w-[120px] border-b border-gray-800">
+                                                    &nbsp;
+                                                </span>
+                                            </p>
+                                            <p className="text-[8px] text-center mt-0.5 text-gray-600">
+                                                Signature Over Printed Name /
+                                                Date
+                                            </p>
+                                        </div>
+                                    </div>
+
+                                    <p className="text-center text-[10px] font-bold uppercase mt-6 tracking-wide">
+                                        This document is not valid for claiming
+                                        of input taxes
+                                    </p>
+                                </>
+                            )}
+                        </div>
+                    );
+                })}
             </div>
         </>
     );

@@ -1002,9 +1002,18 @@ class MedicineInventoryController extends Controller
                 'form',
                 'retail_price',
                 'wholesale_price',
+                // Needed for the appended effective_* (VAT-inclusive) prices.
+                'vat_status',
                 'pack_size',
                 'stock_threshold',
-            ]);
+            ])
+            ->each(function (MedicineProduct $product) {
+                // An Active lot past its expiry (not yet flipped by the nightly
+                // job) is rejected on save; flag it so the UI can disable it.
+                $product->batches->each(
+                    fn (ProductQty $batch) => $batch->setAttribute('is_expired', $batch->isExpired())
+                );
+            });
     }
 
     /**

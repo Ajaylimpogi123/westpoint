@@ -15,10 +15,13 @@ use Illuminate\Support\Facades\DB;
 class IdempotencyGuard
 {
     public const SCOPE_STOCK_IN = 'stock_in';
+
     public const SCOPE_STOCK_OUT = 'stock_out';
+
     public const SCOPE_POS_CHECKOUT = 'pos_checkout';
+
     public const SCOPE_CUSTOMER_RETURN = 'customer_return';
-  
+
     private const TABLE = 'tbl_idempotency_keys';
 
     /**
@@ -49,6 +52,26 @@ class IdempotencyGuard
         ]);
 
         return $inserted > 0;
+    }
+
+    /**
+     * Read-only check whether a key is already held. Lets a controller
+     * recognise a replay of a saved submission before validating it against
+     * stock that the first submission already changed. claim() remains the
+     * atomic gate for concurrent requests.
+     */
+    public static function isClaimed(string $scope, ?string $key): bool
+    {
+        $key = trim((string) $key);
+
+        if ($key === '') {
+            return false;
+        }
+
+        return DB::table(self::TABLE)
+            ->where('scope', $scope)
+            ->where('idempotency_key', $key)
+            ->exists();
     }
 
     /**

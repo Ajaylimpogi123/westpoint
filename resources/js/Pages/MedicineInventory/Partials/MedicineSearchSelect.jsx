@@ -25,6 +25,50 @@ function matchesQuery(product, query) {
     return haystack.includes(query);
 }
 
+function formatPrice(value) {
+    const price = Number(value);
+
+    return value !== null && value !== undefined && value !== "" && Number.isFinite(price)
+        ? `₱${price.toFixed(2)}`
+        : "—";
+}
+
+/** Pieces across Active lots, when the product carries its batches. */
+function availablePieces(product) {
+    if (!Array.isArray(product?.batches)) {
+        return null;
+    }
+
+    return product.batches
+        .filter((lot) => (lot.status ?? "Active") === "Active" && !lot.is_expired)
+        .reduce((sum, lot) => sum + (Number(lot.quantity) || 0), 0);
+}
+
+/** Extra result lines used when `detailed` is set (Stock Out). */
+function DetailedResult({ product }) {
+    const pieces = availablePieces(product);
+    const packSize = Number(product.pack_size) >= 1 ? Number(product.pack_size) : null;
+
+    return (
+        <div className="mt-0.5 space-y-0.5 text-xs text-muted-foreground">
+            <div>
+                {[product.dose, product.form].filter(Boolean).join(" · ") || "No dose / form"}
+                {" · "}
+                {packSize ? `${packSize} pcs/box` : "No pack size"}
+            </div>
+            <div className="flex flex-wrap gap-x-3">
+                <span>Retail {formatPrice(product.retail_price)}/pc</span>
+                <span>Wholesale {formatPrice(product.wholesale_price)}/box</span>
+                {pieces !== null && (
+                    <span className={pieces > 0 ? "text-foreground" : "text-destructive"}>
+                        {pieces > 0 ? `${pieces.toLocaleString()} pcs available` : "No stock"}
+                    </span>
+                )}
+            </div>
+        </div>
+    );
+}
+
 export default function MedicineSearchSelect({
     id,
     products,
@@ -33,6 +77,10 @@ export default function MedicineSearchSelect({
     placeholder = "Search medicine...",
     className,
     disabled = false,
+    // Opt-in: show pack size, prices and available pieces in each result.
+    // Off by default so other forms keep their compact list.
+    detailed = false,
+    invalid = false,
 }) {
     const [query, setQuery] = useState("");
     const [open, setOpen] = useState(false);
@@ -129,9 +177,16 @@ export default function MedicineSearchSelect({
                 onKeyDown={handleKeyDown}
                 placeholder={placeholder}
                 autoComplete="off"
+                aria-invalid={invalid || undefined}
+                className={cn(invalid && "border-red-500 focus-visible:ring-red-500")}
             />
             {open && (
-                <ul className="absolute z-50 mt-1 max-h-56 w-full overflow-auto rounded-md border border-input bg-popover py-1 text-sm shadow-md">
+                <ul
+                    className={cn(
+                        "absolute z-50 mt-1 w-full overflow-auto rounded-md border border-input bg-popover py-1 text-sm shadow-md",
+                        detailed ? "max-h-80" : "max-h-56",
+                    )}
+                >
                     {filtered.length === 0 ? (
                         <li className="px-3 py-2 text-muted-foreground">
                             No medicines found
@@ -150,7 +205,9 @@ export default function MedicineSearchSelect({
                                 <div className="font-medium">
                                     {formatMedicineLabel(product)}
                                 </div>
-                                {(product.dose || product.form) && (
+                                {detailed ? (
+                                    <DetailedResult product={product} />
+                                ) : (product.dose || product.form) && (
                                     <div className="text-xs text-muted-foreground">
                                         {[product.dose, product.form]
                                             .filter(Boolean)

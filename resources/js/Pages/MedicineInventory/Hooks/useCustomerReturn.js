@@ -314,9 +314,22 @@ export default function useCustomerReturn({
         if (processing || !data.branch_id || data.items.length === 0) return;
 
         post(route("customer-return.store"), {
-            onSuccess: () => closeModal(),
+            // A refused save redirects back with flash.error; keep the
+            // modal and basket open so the user can fix it.
+            onSuccess: (page) => {
+                if (!page.props.flash?.error) {
+                    closeModal();
+                }
+            },
             preserveScroll: true,
-            only: ["customerReturns", "medicines", "products", "movementLogs"],
+            // Include "flash" or the server's message is dropped.
+            only: [
+                "customerReturns",
+                "medicines",
+                "products",
+                "movementLogs",
+                "flash",
+            ],
         });
     };
 

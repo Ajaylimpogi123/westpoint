@@ -19,6 +19,7 @@ class StockOut extends Model
         'issued_by',
         'remarks',
         'delivered_to',
+        'delivered_to_tin',
         'delivered_to_address',
         'delivery_confirmed',
     ];

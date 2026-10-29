@@ -104,6 +104,23 @@ trait ResolvesTransactionBranch
      */
     protected function assertItemsBelongToBranch(array $items, int $branchId, bool $checkBatches = false): void
     {
+        $errors = $this->itemBranchErrors($items, $branchId, $checkBatches);
+
+        if ($errors !== []) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
+    /**
+     * Same checks as assertItemsBelongToBranch(), returned as
+     * `items.<i>.<field> => message` instead of thrown. With $lineNumbers
+     * each message is prefixed "Line <i+1>: " so the UI can show it as-is.
+     *
+     * @param  array<int, array<string, mixed>>  $items
+     * @return array<string, string>
+     */
+    protected function itemBranchErrors(array $items, int $branchId, bool $checkBatches = false, bool $lineNumbers = false): array
+    {
         $branchName = Branch::withTrashed()->whereKey($branchId)->value('branch_name') ?? "branch #{$branchId}";
 
         $productIds = collect($items)->pluck('pd_id')->map(fn ($id) => (int) $id)->unique()->all();
@@ -125,9 +142,10 @@ trait ResolvesTransactionBranch
         foreach ($items as $index => $item) {
             $product = $products->get((int) $item['pd_id']);
             $name = $product?->med_name ?? 'This medicine';
+            $prefix = $lineNumbers ? 'Line '.((int) $index + 1).': ' : '';
 
             if (! $product || (int) $product->branch_id !== $branchId || $product->status !== 'Active') {
-                $errors["items.{$index}.pd_id"] = "{$name} is not available in {$branchName}. Remove it from the list.";
+                $errors["items.{$index}.pd_id"] = "{$prefix}{$name} is not available in {$branchName}. Remove it from the list.";
 
                 continue;
             }
@@ -139,20 +157,20 @@ trait ResolvesTransactionBranch
             $batch = $batches->get((int) ($item['products_qty_id'] ?? 0));
 
             if (! $batch || (int) $batch->product_id !== (int) $product->id || $batch->isDeleted()) {
-                $errors["items.{$index}.products_qty_id"] = "The selected lot is not available for {$name} in {$branchName}.";
+                $errors["items.{$index}.products_qty_id"] = $prefix
+                    .($lineNumbers ? 'the' : 'The')." selected lot is not available for {$name} in {$branchName}.";
 
                 continue;
             }
 
             if ($batch->status === ProductQty::STATUS_EXPIRED || $batch->isExpired()) {
                 $expiry = $batch->expiry?->format('d M Y') ?? 'an earlier date';
-                $errors["items.{$index}.products_qty_id"] = "Lot {$batch->lot_number} of {$name} expired on {$expiry} and cannot be dispensed.";
+                $errors["items.{$index}.products_qty_id"] = $prefix
+                    .($lineNumbers ? 'lot' : 'Lot')." {$batch->lot_number} of {$name} expired on {$expiry} and cannot be dispensed.";
             }
         }
 
-        if ($errors !== []) {
-            throw ValidationException::withMessages($errors);
-        }
+        return $errors;
     }
 
     /**

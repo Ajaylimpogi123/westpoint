@@ -262,9 +262,16 @@ export default function useStockIn({
         }
 
         post(route("stock-in.store"), {
-            onSuccess: () => closeModal(),
+            // A refused save redirects back with flash.error; keep the
+            // modal and basket open so the user can fix it.
+            onSuccess: (page) => {
+                if (!page.props.flash?.error) {
+                    closeModal();
+                }
+            },
             preserveScroll: true,
-            only: ["stockIns", "medicines", "products", "movementLogs"],
+            // Include "flash" or the server's message is dropped.
+            only: ["stockIns", "medicines", "products", "movementLogs", "flash"],
         });
     };
 

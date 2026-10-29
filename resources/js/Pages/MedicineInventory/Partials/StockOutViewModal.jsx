@@ -156,6 +156,14 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                 </div>
                                 <div>
                                     <span className="text-muted-foreground">
+                                        TIN:
+                                    </span>{" "}
+                                    <span className="font-medium">
+                                        {details.stock_out.delivered_to_tin || "—"}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">
                                         Recorded:
                                     </span>{" "}
                                     <span className="font-medium">

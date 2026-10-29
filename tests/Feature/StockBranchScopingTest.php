@@ -341,6 +341,7 @@ class StockBranchScopingTest extends TestCase
         $this->actingWithoutSessionBranch($this->superadmin)
             ->post(route('stock-out.store'), $this->stockOutPayload($this->branchB->id, $this->productB->id, $this->batchB->id, [], [
                 'transaction_subtype' => 'Delivery to Customer',
+                'delivered_to' => 'ABC Clinic',
             ]))
             ->assertSessionHasNoErrors();
 
@@ -356,6 +357,7 @@ class StockBranchScopingTest extends TestCase
 
         $updatePayload = [
             'issued_by' => 'Issuer',
+            'delivered_to' => 'ABC Clinic',
             'items' => [[
                 'pd_id' => $this->product->id,
                 'products_qty_id' => $this->batch->id,
@@ -403,6 +405,7 @@ class StockBranchScopingTest extends TestCase
         $this->actingAsWithSession($this->admin)
             ->post(route('stock-out.store'), $this->stockOutPayload($this->branchB->id, $this->productB->id, $this->batchB->id, [], [
                 'transaction_subtype' => 'Delivery to Customer',
+                'delivered_to' => 'ABC Clinic',
             ]))
             ->assertSessionHasNoErrors();
 

@@ -1,33 +1,19 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { useForm } from "@inertiajs/react";
-import {
-    UNIT_PIECE,
-    UNIT_TYPES,
-    clampQuantity,
-    getPackSize,
-    hasValidPackSize,
-    isBoxUnit,
-    toWholeNumber,
-} from "@/lib/units";
+import { UNIT_TYPES } from "@/lib/units";
 import { newIdempotencyKey } from "@/lib/idempotency";
 import useBranchProducts, { resolveDefaultBranchId } from "./useBranchProducts";
 import useBranchSwitch from "./useBranchSwitch";
-
-const TRANSACTION_SUBTYPES = ["Delivery to Customer", "Returned to supplier"];
-
-const emptyDraft = () => ({
-    pd_id: "",
-    products_qty_id: "",
-    quantity_deducted: 1,
-    unit_type: UNIT_PIECE,
-    // Pieces-per-box for THIS transaction. Pre-filled from the product's
-    // stored pack size when available, but always editable — a shipment's
-    // real box count doesn't always match the product's master data, and
-    // this is what actually gets deducted, not product.pack_size.
-    pieces_per_box: "",
-});
+import useStockOutBasket from "./useStockOutBasket";
+import useStockOutFeedback from "./useStockOutFeedback";
+import {
+    TRANSACTION_SUBTYPES,
+    validateStockOutHeader,
+} from "../lib/stockOutValidation";
 
 const emptyForm = (branchId) => ({
+    // Generated when the modal opens and reused for every retry of this
+    // submission, so a double click or resend can't record it twice.
     idempotency_key: newIdempotencyKey(),
     transaction_subtype: "",
     branch_id: branchId ? String(branchId) : "",
@@ -35,9 +21,12 @@ const emptyForm = (branchId) => ({
     issued_by: "",
     remarks: "",
     delivered_to: "",
+    delivered_to_tin: "",
     delivered_to_address: "",
     items: [],
 });
+
+const RELOAD_PROPS = ["stockOuts", "medicines", "products", "movementLogs", "flash"];
 
 export default function useStockOut({
     branchId,
@@ -51,7 +40,7 @@ export default function useStockOut({
     );
 
     const [open, setOpen] = useState(false);
-    const [draft, setDraft] = useState(emptyDraft);
+    const formRef = useRef(null);
 
     const { data, setData, post, errors, processing, reset, clearErrors } =
         useForm(emptyForm(defaultBranchId));
@@ -65,92 +54,49 @@ export default function useStockOut({
         reload: reloadProducts,
     } = useBranchProducts({ open, branchId: data.branch_id });
 
-    const productMap = useMemo(() => {
-        return Object.fromEntries(
-            (products ?? []).map((product) => [String(product.id), product]),
-        );
-    }, [products]);
-
-    const selectedProduct = draft.pd_id
-        ? (productMap[draft.pd_id] ?? null)
-        : null;
-
-    const availableLots = (selectedProduct?.batches ?? []).filter(
-        (lot) =>
-            (lot.status ?? "Active") === "Active" && Number(lot.quantity) > 0,
+    const productMap = useMemo(
+        () =>
+            Object.fromEntries(
+                (products ?? []).map((product) => [String(product.id), product]),
+            ),
+        [products],
     );
 
-    const selectedLot = draft.products_qty_id
-        ? (availableLots.find(
-              (lot) => String(lot.id) === String(draft.products_qty_id),
-          ) ?? null)
-        : null;
+    const basket = useStockOutBasket({
+        items: data.items,
+        setData,
+        productMap,
+        productsReady: !productsLoading && !productsError && Boolean(data.branch_id),
+        errors,
+        clearErrors,
+    });
 
-    // Informational only now — Box stays selectable either way, since
-    // pieces-per-box is entered per transaction rather than relying solely
-    // on the product's master data.
-    const boxesUnavailable =
-        selectedProduct !== null && !hasValidPackSize(selectedProduct);
+    const headerErrors = validateStockOutHeader(data, {
+        subtype: data.transaction_subtype,
+    });
 
-    const lotFor = (productId, batchId) => {
-        const lots = productMap[productId]?.batches ?? [];
+    const feedback = useStockOutFeedback({
+        formRef,
+        serverErrors: errors,
+        headerErrors,
+        itemErrors: basket.itemErrors,
+        itemCount: data.items.length,
+    });
 
-        return lots.find((lot) => String(lot.id) === String(batchId)) ?? null;
-    };
+    /** setData + drop the stale server error for that field. */
+    const setField = (field, value) => {
+        setData(field, value);
 
-    /** Max whole units of `unitType` this lot's pieces will cover, using the
-     * typed pieces-per-box for Box lines rather than the product's stored
-     * pack size. */
-    const ceilingFor = (productId, batchId, unitType, piecesPerBoxValue) => {
-        const lot = lotFor(productId, batchId);
-
-        if (!lot) {
-            return 0;
+        if (errors[field]) {
+            clearErrors(field);
         }
-
-        const availablePieces = Math.max(toWholeNumber(lot.quantity), 0);
-
-        if (!isBoxUnit(unitType)) {
-            return availablePieces;
-        }
-
-        const packSize = toWholeNumber(piecesPerBoxValue);
-
-        return packSize >= 1 ? Math.floor(availablePieces / packSize) : 0;
     };
-
-    const effectivePiecesPerBox = isBoxUnit(draft.unit_type)
-        ? toWholeNumber(draft.pieces_per_box)
-        : 1;
-
-    const maxQuantity = selectedLot
-        ? ceilingFor(
-              draft.pd_id,
-              draft.products_qty_id,
-              draft.unit_type,
-              draft.pieces_per_box,
-          )
-        : 0;
-
-    const piecesPreview = selectedProduct
-        ? isBoxUnit(draft.unit_type)
-            ? (Number(draft.quantity_deducted) || 0) * effectivePiecesPerBox
-            : Number(draft.quantity_deducted) || 0
-        : 0;
-
-    const piecesLabel = selectedProduct
-        ? isBoxUnit(draft.unit_type)
-            ? effectivePiecesPerBox >= 1
-                ? `${piecesPreview} ${piecesPreview === 1 ? "piece" : "pieces"} (${effectivePiecesPerBox} pcs/box)`
-                : "Enter pcs per box to see how many pieces this will deduct"
-            : `${piecesPreview} ${piecesPreview === 1 ? "piece" : "pieces"}`
-        : "";
 
     // Switching branch clears the basket and draft in one step so lots
     // picked from the previous branch can never be posted to the new one.
     const applyBranchChange = (value) => {
         setData((current) => ({ ...current, branch_id: value, items: [] }));
-        setDraft(emptyDraft());
+        basket.resetDraft();
         clearErrors();
     };
 
@@ -168,213 +114,63 @@ export default function useStockOut({
 
     const openModal = () => {
         clearErrors();
-        setDraft(emptyDraft());
+        basket.resetDraft();
         resetBranchSwitch();
+        feedback.resetFeedback();
         setData(emptyForm(defaultBranchId));
         setOpen(true);
     };
 
     const closeModal = () => {
-        setOpen(false);
-        setDraft(emptyDraft());
-        resetBranchSwitch();
-        reset();
-        clearErrors();
-    };
-
-    const updateDraft = (field, value) => {
-        setDraft((current) => {
-            const next = { ...current, [field]: value };
-
-            if (field === "pd_id") {
-                next.products_qty_id = "";
-                next.quantity_deducted = 1;
-                next.unit_type = UNIT_PIECE;
-                next.pieces_per_box = "";
-
-                return next;
-            }
-
-            if (field === "products_qty_id") {
-                next.quantity_deducted = clampQuantity(
-                    current.quantity_deducted,
-                    {
-                        max: ceilingFor(
-                            current.pd_id,
-                            value,
-                            current.unit_type,
-                            current.pieces_per_box,
-                        ),
-                    },
-                );
-
-                return next;
-            }
-
-            if (field === "unit_type") {
-                if (isBoxUnit(value)) {
-                    // Pre-fill from the product's pack size the first time
-                    // Box is chosen for this row; leave typed values alone.
-                    if (!current.pieces_per_box) {
-                        const product = current.pd_id
-                            ? (productMap[current.pd_id] ?? null)
-                            : null;
-                        const defaultPack = product ? getPackSize(product) : 0;
-                        next.pieces_per_box =
-                            defaultPack >= 1 ? String(defaultPack) : "";
-                    }
-                } else {
-                    next.pieces_per_box = "";
-                }
-
-                next.quantity_deducted = clampQuantity(
-                    current.quantity_deducted,
-                    {
-                        max: ceilingFor(
-                            current.pd_id,
-                            current.products_qty_id,
-                            value,
-                            next.pieces_per_box,
-                        ),
-                    },
-                );
-
-                return next;
-            }
-
-            if (field === "pieces_per_box") {
-                // The box ceiling depends on this value, so re-clamp the
-                // quantity whenever it changes.
-                next.quantity_deducted = clampQuantity(
-                    current.quantity_deducted,
-                    {
-                        max: ceilingFor(
-                            current.pd_id,
-                            current.products_qty_id,
-                            current.unit_type,
-                            value,
-                        ),
-                    },
-                );
-
-                return next;
-            }
-
-            if (field === "quantity_deducted") {
-                if (value === "") {
-                    next.quantity_deducted = "";
-
-                    return next;
-                }
-
-                const max = ceilingFor(
-                    current.pd_id,
-                    current.products_qty_id,
-                    current.unit_type,
-                    current.pieces_per_box,
-                );
-
-                next.quantity_deducted = clampQuantity(value, {
-                    min: 0,
-                    max,
-                    fallback: current.quantity_deducted || 0,
-                });
-            }
-
-            return next;
-        });
-    };
-
-    const normalizeQuantity = () => {
-        setDraft((current) => ({
-            ...current,
-            quantity_deducted: clampQuantity(current.quantity_deducted, {
-                max: ceilingFor(
-                    current.pd_id,
-                    current.products_qty_id,
-                    current.unit_type,
-                    current.pieces_per_box,
-                ),
-            }),
-        }));
-    };
-
-    const updateQuantity = (delta) => {
-        setDraft((current) => {
-            const base = Number(current.quantity_deducted) || 0;
-
-            return {
-                ...current,
-                quantity_deducted: clampQuantity(base + delta, {
-                    max: ceilingFor(
-                        current.pd_id,
-                        current.products_qty_id,
-                        current.unit_type,
-                        current.pieces_per_box,
-                    ),
-                }),
-            };
-        });
-    };
-
-    const canAddToBasket =
-        Boolean(draft.pd_id) &&
-        Boolean(draft.products_qty_id) &&
-        Number(draft.quantity_deducted) >= 1 &&
-        maxQuantity >= 1 &&
-        Number(draft.quantity_deducted) <= maxQuantity &&
-        (!isBoxUnit(draft.unit_type) || effectivePiecesPerBox >= 1);
-
-    const addItemToBasket = () => {
-        if (!canAddToBasket) {
+        if (processing) {
             return;
         }
 
-        setData("items", [
-            ...data.items,
-            {
-                pd_id: draft.pd_id,
-                products_qty_id: draft.products_qty_id,
-                lot_number: selectedLot?.lot_number ?? "",
-                quantity_deducted: Number(draft.quantity_deducted),
-                unit_type: draft.unit_type,
-                pieces_per_box: isBoxUnit(draft.unit_type)
-                    ? effectivePiecesPerBox
-                    : null,
-                pieces_preview: piecesPreview,
-            },
-        ]);
-        setDraft(emptyDraft());
-    };
-
-    const removeItemFromBasket = (index) => {
-        setData(
-            "items",
-            data.items.filter((_, itemIndex) => itemIndex !== index),
-        );
-
-        // Per-item server errors are keyed by position ("items.2.pd_id");
-        // once rows shift they would point at the wrong medicine.
-        const itemErrorKeys = Object.keys(errors).filter((key) =>
-            key.startsWith("items."),
-        );
-
-        if (itemErrorKeys.length > 0) {
-            clearErrors(...itemErrorKeys);
-        }
+        setOpen(false);
+        basket.resetDraft();
+        resetBranchSwitch();
+        feedback.resetFeedback();
+        reset();
+        clearErrors();
     };
 
     const handleSubmit = (event) => {
         event.preventDefault();
 
-        if (processing || !data.branch_id || data.items.length === 0) {
+        if (processing || !feedback.beforeSubmit()) {
             return;
         }
 
         post(route("stock-out.store"), {
-            onSuccess: () => closeModal(),
             preserveScroll: true,
-            only: ["stockOuts", "medicines", "products", "movementLogs"],
+            // "flash" must be reloaded too, or the success/error message
+            // from the server is dropped and the submit looks like it did
+            // nothing.
+            only: RELOAD_PROPS,
+            // A refused save (flash.error) also redirects back. Keep the
+            // modal and basket open then so the user can retry with the
+            // same idempotency key instead of losing everything.
+            onSuccess: (page) => {
+                if (feedback.handleServerFlash(page)) {
+                    return;
+                }
+
+                setOpen(false);
+                basket.resetDraft();
+                resetBranchSwitch();
+                feedback.resetFeedback();
+                reset();
+                clearErrors();
+            },
+            onError: (serverErrors) => {
+                feedback.handleValidationErrors(serverErrors);
+
+                // A lot may have changed since the list was loaded (another
+                // user took stock); refresh so availability is current.
+                if (Object.keys(serverErrors ?? {}).some((key) => key.startsWith("items."))) {
+                    reloadProducts();
+                }
+            },
         });
     };
 
@@ -384,20 +180,11 @@ export default function useStockOut({
         open,
         openModal,
         closeModal,
+        formRef,
         data,
         setData,
-        draft,
-        updateDraft,
-        updateQuantity,
-        normalizeQuantity,
-        selectedProduct,
-        availableLots,
-        selectedLot,
-        maxQuantity,
-        piecesPreview,
-        piecesLabel,
-        boxesUnavailable,
-        canAddToBasket,
+        setField,
+        ...basket,
         productMap,
         products,
         productsLoading,
@@ -409,9 +196,12 @@ export default function useStockOut({
         pendingBranchId,
         confirmBranchChange,
         cancelBranchChange,
-        addItemToBasket,
-        removeItemFromBasket,
-        errors,
+        errors: feedback.fieldErrors,
+        generalErrors: feedback.generalErrors,
+        serverError: feedback.serverError,
+        dismissServerError: feedback.dismissServerError,
+        attempted: feedback.attempted,
+        problemCount: feedback.problemCount,
         processing,
         handleSubmit,
         clearErrors,

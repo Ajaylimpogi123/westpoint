@@ -4,7 +4,6 @@ namespace App\Http\Controllers;
 
 use App\Enums\UnitType;
 use App\Exceptions\InsufficientStockException;
-use App\Exceptions\InvalidPackSizeException;
 use App\Http\Controllers\Concerns\ResolvesTransactionBranch;
 use App\Models\InventoryMovementLog;
 use App\Models\MedicineProduct;
@@ -20,7 +19,9 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Validator;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
@@ -33,47 +34,82 @@ class StockOutController extends Controller
 
     private const FORBIDDEN_MESSAGE = 'You do not have access to this stock-out transaction.';
 
+    private const SUBTYPE_DELIVERY = 'Delivery to Customer';
+
+    private const SUBTYPES = [self::SUBTYPE_DELIVERY, 'Returned to supplier'];
+
+    /**
+     * Philippine TIN: 9 digits (dashes optional) plus an optional 3-5 digit
+     * branch code. Mirrored in the frontend; keep both in sync.
+     */
+    private const TIN_PATTERN = '/^\d{3}-?\d{3}-?\d{3}(?:-?\d{3,5})?$/';
+
     public function store(Request $request): RedirectResponse
     {
         // Only staff need a session branch; admins/superadmins pick any branch.
         $this->assertCanSubmitForAnyBranch();
 
-        $validated = $request->validate([
-            'transaction_subtype' => ['required', 'string', Rule::in([
-                'Delivery to Customer',
-                'Returned to supplier',
-            ])],
+        $idempotencyKey = is_string($request->input('idempotency_key'))
+            ? $request->input('idempotency_key')
+            : null;
+
+        // A replay of a submission that was already saved must be reported
+        // as saved, not re-validated against the stock it already took.
+        if (IdempotencyGuard::isClaimed(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey)) {
+            return $this->alreadySaved();
+        }
+
+        $input = $this->normaliseInput($request->all());
+        $isDelivery = ($input['transaction_subtype'] ?? null) === self::SUBTYPE_DELIVERY;
+        $branchId = null;
+
+        $validator = Validator::make($input, [
+            'transaction_subtype' => ['required', 'string', Rule::in(self::SUBTYPES)],
             'branch_id' => $this->branchIdRules(),
-            'patient_reference' => ['nullable', 'string', 'max:255'],
-            'issued_by' => ['required', 'string', 'max:255'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
-            'delivered_to' => ['nullable', 'string', 'max:255'],
-            'delivered_to_address' => ['nullable', 'string', 'max:500'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
-            'items.*.products_qty_id' => ['required', 'integer', 'exists:products_qty,id'],
-            'items.*.quantity_deducted' => ['required', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
-            'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
-            // Only meaningful (and only validated as required) for Box lines
-            // — enforced in the loop below, since it depends on unit_type.
-            'items.*.pieces_per_box' => ['nullable', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
-        ]);
+            ...$this->headerRules(deliveredToRequired: $isDelivery),
+            ...$this->itemRules(),
+        ], $this->validationMessages());
 
-        $branchId = $this->resolveTransactionBranchId((int) $validated['branch_id']);
+        $validator->after(function ($validator) use ($input, &$branchId) {
+            $errors = $validator->errors();
 
-        // Medicines and lots must come from the source branch; a stale basket
-        // from a previously selected branch is rejected before claiming.
-        $this->assertItemsBelongToBranch($validated['items'], $branchId, checkBatches: true);
+            if ($errors->has('branch_id')) {
+                return;
+            }
 
-        $idempotencyKey = $request->input('idempotency_key');
+            $requestedBranchId = (int) $input['branch_id'];
 
+            if (! $this->canAssignBranch() && $requestedBranchId !== $this->sessionBranchId()) {
+                $errors->add('branch_id', 'You can only record transactions for your assigned branch.');
+
+                return;
+            }
+
+            $branchId = $requestedBranchId;
+
+            $this->addBasketErrors($validator, $input['items'] ?? [], $branchId);
+        });
+
+        // Every rule (header, lines, branch ownership, expiry, lot totals)
+        // is checked before the key is claimed, so a rejected basket can be
+        // fixed and resent with the same key.
+        $validated = $validator->validate();
+
+        // Atomic gate for two identical requests racing past isClaimed().
         if (! IdempotencyGuard::claim(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey)) {
-            return redirect()->route('medicine-inventory.index')
-                ->with('success', 'This stock-out was already saved.');
+            return $this->alreadySaved();
         }
 
         try {
             DB::transaction(function () use ($validated, $branchId) {
+                // Re-check under row locks: another transaction may have taken
+                // stock from these lots since validation ran.
+                [$errors, $lines] = $this->resolveBasket($validated['items'], $branchId, lockLots: true);
+
+                if ($errors !== []) {
+                    throw ValidationException::withMessages($errors);
+                }
+
                 $stockOut = StockOut::create([
                     'transaction_subtype' => $validated['transaction_subtype'],
                     'branch_id' => $branchId,
@@ -81,59 +117,19 @@ class StockOutController extends Controller
                     'issued_by' => $validated['issued_by'],
                     'remarks' => $validated['remarks'] ?? null,
                     'delivered_to' => $validated['delivered_to'] ?? null,
+                    'delivered_to_tin' => $validated['delivered_to_tin'] ?? null,
                     'delivered_to_address' => $validated['delivered_to_address'] ?? null,
                 ]);
 
-                foreach ($validated['items'] as $item) {
-                    $medicine = MedicineProduct::query()
-                        ->active()
-                        ->forBranch($branchId)
-                        ->findOrFail($item['pd_id']);
-
-                    $unitType = UnitType::fromInput($item['unit_type']);
-
-                    $batch = $this->resolveBatchOrFail(
-                        (int) $item['products_qty_id'],
-                        $medicine,
-                    );
-
-                    $quantity = (int) $item['quantity_deducted'];
-
-                    // Pieces-per-box comes from what the operator typed for
-                    // THIS delivery, not the product's stored pack size — a
-                    // shipment's actual box count doesn't always match the
-                    // product's master data, and this is what really gets
-                    // deducted from the lot.
-                    if ($unitType->isBox()) {
-                        $piecesPerBox = (int) ($item['pieces_per_box'] ?? 0);
-
-                        if ($piecesPerBox < 1) {
-                            throw new \RuntimeException(
-                                "Enter how many pieces are in one box for {$medicine->med_name}."
-                            );
-                        }
-
-                        $piecesToDeduct = $quantity * $piecesPerBox;
-                    } else {
-                        $piecesPerBox = null;
-                        $piecesToDeduct = $quantity;
-                    }
-
-                    if ($validated['transaction_subtype'] === 'Delivery to Customer') {
-                        // Stock isn't deducted yet — that happens once the delivery is
-                        // confirmed. Just make sure the lot can currently cover it.
-                        if ($piecesToDeduct > $batch->quantity) {
-                            throw new InsufficientStockException(
-                                "Not enough stock in lot {$batch->lot_number} for {$medicine->med_name}."
-                            );
-                        }
-                    } else {
-                        // "Returned to supplier" has no confirmation step, so it still
-                        // leaves the branch immediately.
+                foreach ($lines as $line) {
+                    // "Delivery to Customer" takes no stock until the delivery
+                    // is confirmed. "Returned to supplier" has no confirmation
+                    // step, so it leaves the branch immediately.
+                    if ($validated['transaction_subtype'] !== self::SUBTYPE_DELIVERY) {
                         InventoryStockService::deductFromBatch(
-                            batchId: $batch->id,
-                            quantityInPieces: $piecesToDeduct,
-                            medicineName: $medicine->med_name,
+                            batchId: $line['batch']->id,
+                            quantityInPieces: $line['pieces'],
+                            medicineName: $line['medicine']->med_name,
                         );
 
                         InventoryMovementLogger::log(
@@ -141,31 +137,22 @@ class StockOutController extends Controller
                             movementType: InventoryMovementLog::TYPE_STOCK_OUT,
                             referenceLabel: "Stock Out #{$stockOut->stock_out_id}",
                             referenceId: $stockOut->stock_out_id,
-                            pdId: $medicine->id,
-                            medicineName: $medicine->med_name,
-                            lotNumber: $batch->lot_number,
-                            quantity: -$piecesToDeduct,
+                            pdId: $line['medicine']->id,
+                            medicineName: $line['medicine']->med_name,
+                            lotNumber: $line['batch']->lot_number,
+                            quantity: -$line['pieces'],
                             remarks: $validated['remarks'] ?? $validated['transaction_subtype'],
                         );
                     }
 
-                    StockOutItem::create([
-                        'stock_out_id' => $stockOut->stock_out_id,
-                        'pd_id' => $medicine->id,
-                        'products_qty_id' => $batch->id,
-                        'lot_number' => $batch->lot_number,
-                        'quantity_deducted' => $quantity,
-                        'pieces_deducted' => $piecesToDeduct,
-                        'expiry' => $batch->expiry,
-                        'unit_type' => $unitType->value,
-                        'pieces_per_box' => $piecesPerBox,
-                        'unit_price' => $unitType->isBox()
-                            ? $medicine->wholesale_price
-                            : $medicine->retail_price,
-                    ]);
+                    $this->createItem($stockOut, $line);
                 }
             });
-        } catch (InvalidPackSizeException|InsufficientStockException|\RuntimeException $exception) {
+        } catch (ValidationException $exception) {
+            IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey);
+
+            throw $exception;
+        } catch (InsufficientStockException|\RuntimeException $exception) {
             IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey);
 
             return redirect()->back()
@@ -216,6 +203,7 @@ class StockOutController extends Controller
                 'issued_by' => $stockOut->issued_by,
                 'remarks' => $stockOut->remarks,
                 'delivered_to' => $stockOut->delivered_to,
+                'delivered_to_tin' => $stockOut->delivered_to_tin,
                 'delivered_to_address' => $stockOut->delivered_to_address,
                 'delivery_confirmed' => (bool) $stockOut->delivery_confirmed,
                 'created_at' => $stockOut->created_at,
@@ -410,6 +398,7 @@ class StockOutController extends Controller
                 'issued_by' => $stockOut->issued_by,
                 'remarks' => $stockOut->remarks,
                 'delivered_to' => $stockOut->delivered_to,
+                'delivered_to_tin' => $stockOut->delivered_to_tin,
                 'delivered_to_address' => $stockOut->delivered_to_address,
             ],
             'items' => $stockOut->items->map(fn (StockOutItem $item) => [
@@ -418,7 +407,8 @@ class StockOutController extends Controller
                 'lot_number' => $item->lot_number,
                 'quantity_deducted' => $item->quantity_deducted,
                 'pieces_deducted' => $item->pieces_deducted,
-                'unit_type' => $item->unit_type,
+                // Legacy rows stored lowercase 'piece'/'box'.
+                'unit_type' => UnitType::tryFromInput($item->unit_type)?->value ?? $item->unit_type,
                 'pieces_per_box' => $item->pieces_per_box,
             ]),
         ]);
@@ -433,90 +423,52 @@ class StockOutController extends Controller
                 ->with('error', 'This stock-out can no longer be edited.');
         }
 
-        $validated = $request->validate([
-            'patient_reference' => ['nullable', 'string', 'max:255'],
-            'issued_by' => ['required', 'string', 'max:255'],
-            'remarks' => ['nullable', 'string', 'max:2000'],
-            'delivered_to' => ['nullable', 'string', 'max:255'],
-            'delivered_to_address' => ['nullable', 'string', 'max:500'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
-            'items.*.products_qty_id' => ['required', 'integer', 'exists:products_qty,id'],
-            'items.*.quantity_deducted' => ['required', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
-            'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
-            'items.*.pieces_per_box' => ['nullable', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
-        ]);
-
         // Items are checked against the stock-out's own branch, which is
         // fixed once recorded — never against the editor's session branch.
         $branchId = (int) $stockOut->branch_id;
+        $input = $this->normaliseInput($request->all());
 
-        $this->assertItemsBelongToBranch($validated['items'], $branchId, checkBatches: true);
+        // Only pending deliveries are editable, so delivered_to is required.
+        $validator = Validator::make($input, [
+            ...$this->headerRules(deliveredToRequired: true),
+            ...$this->itemRules(),
+        ], $this->validationMessages());
+
+        $validator->after(function ($validator) use ($input, $branchId) {
+            $this->addBasketErrors($validator, $input['items'] ?? [], $branchId);
+        });
+
+        $validated = $validator->validate();
 
         try {
             DB::transaction(function () use ($validated, $stockOut, $branchId) {
+                // Nothing has been deducted yet for an editable stock-out, so
+                // the lot's full current quantity is what is available.
+                [$errors, $lines] = $this->resolveBasket($validated['items'], $branchId, lockLots: true);
+
+                if ($errors !== []) {
+                    throw ValidationException::withMessages($errors);
+                }
+
                 $stockOut->update([
                     'patient_reference' => $validated['patient_reference'] ?? null,
                     'issued_by' => $validated['issued_by'],
                     'remarks' => $validated['remarks'] ?? null,
                     'delivered_to' => $validated['delivered_to'] ?? null,
+                    'delivered_to_tin' => $validated['delivered_to_tin'] ?? null,
                     'delivered_to_address' => $validated['delivered_to_address'] ?? null,
                 ]);
 
-                // Nothing has been deducted yet for an editable stock-out, so
-                // there's no inventory to reverse — just replace the pending
-                // line items with what was submitted.
+                // No inventory to reverse — just replace the pending lines.
                 StockOutItem::where('stock_out_id', $stockOut->stock_out_id)->delete();
 
-                foreach ($validated['items'] as $item) {
-                    $medicine = MedicineProduct::query()
-                        ->active()
-                        ->forBranch($branchId)
-                        ->findOrFail($item['pd_id']);
-
-                    $unitType = UnitType::fromInput($item['unit_type']);
-                    $batch = $this->resolveBatchOrFail((int) $item['products_qty_id'], $medicine);
-
-                    $quantity = (int) $item['quantity_deducted'];
-
-                    if ($unitType->isBox()) {
-                        $piecesPerBox = (int) ($item['pieces_per_box'] ?? 0);
-
-                        if ($piecesPerBox < 1) {
-                            throw new \RuntimeException(
-                                "Enter how many pieces are in one box for {$medicine->med_name}."
-                            );
-                        }
-
-                        $piecesToDeduct = $quantity * $piecesPerBox;
-                    } else {
-                        $piecesPerBox = null;
-                        $piecesToDeduct = $quantity;
-                    }
-
-                    if ($piecesToDeduct > $batch->quantity) {
-                        throw new InsufficientStockException(
-                            "Not enough stock in lot {$batch->lot_number} for {$medicine->med_name}."
-                        );
-                    }
-
-                    StockOutItem::create([
-                        'stock_out_id' => $stockOut->stock_out_id,
-                        'pd_id' => $medicine->id,
-                        'products_qty_id' => $batch->id,
-                        'lot_number' => $batch->lot_number,
-                        'quantity_deducted' => $quantity,
-                        'pieces_deducted' => $piecesToDeduct,
-                        'expiry' => $batch->expiry,
-                        'unit_type' => $unitType->value,
-                        'pieces_per_box' => $piecesPerBox,
-                        'unit_price' => $unitType->isBox()
-                            ? $medicine->wholesale_price
-                            : $medicine->retail_price,
-                    ]);
+                foreach ($lines as $line) {
+                    $this->createItem($stockOut, $line);
                 }
             });
-        } catch (InvalidPackSizeException|InsufficientStockException|\RuntimeException $exception) {
+        } catch (ValidationException $exception) {
+            throw $exception;
+        } catch (InsufficientStockException|\RuntimeException $exception) {
             return redirect()->back()->withInput()->with('error', $exception->getMessage());
         } catch (Throwable $exception) {
             report($exception);
@@ -526,6 +478,295 @@ class StockOutController extends Controller
         }
 
         return redirect()->back()->with('success', 'Stock-out transaction updated successfully.');
+    }
+
+    private function alreadySaved(): RedirectResponse
+    {
+        return redirect()->route('medicine-inventory.index')
+            ->with('success', 'This stock-out was already saved.');
+    }
+
+    /**
+     * Header field rules shared by store and update.
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    private function headerRules(bool $deliveredToRequired): array
+    {
+        return [
+            'patient_reference' => ['nullable', 'string', 'max:255'],
+            'issued_by' => ['required', 'string', 'max:255'],
+            'remarks' => ['nullable', 'string', 'max:2000'],
+            'delivered_to' => [$deliveredToRequired ? 'required' : 'nullable', 'string', 'max:255'],
+            'delivered_to_tin' => ['nullable', 'string', 'max:50', 'regex:'.self::TIN_PATTERN],
+            'delivered_to_address' => ['nullable', 'string', 'max:500'],
+        ];
+    }
+
+    /**
+     * Per-line field rules shared by store and update. Branch ownership,
+     * expiry and lot totals are added afterwards by addBasketErrors().
+     *
+     * @return array<string, array<int, mixed>>
+     */
+    private function itemRules(): array
+    {
+        return [
+            'items' => ['required', 'array', 'min:1'],
+            'items.*' => ['required', 'array'],
+            'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
+            'items.*.products_qty_id' => ['required', 'integer', 'exists:products_qty,id'],
+            'items.*.quantity_deducted' => ['required', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
+            'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
+            // normaliseInput() nulls this on Piece lines, so it is only
+            // ever checked on Box lines.
+            'items.*.pieces_per_box' => ['nullable', 'required_if:items.*.unit_type,'.UnitType::Box->value, 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    private function validationMessages(): array
+    {
+        $max = number_format(self::MAX_QUANTITY);
+        $subtype = 'Choose a transaction type: Delivery to Customer or Returned to supplier.';
+        $branch = 'The selected source branch does not exist or has been removed.';
+        $basket = 'Add at least one medicine to the basket.';
+        $medicine = 'Line :position: the selected medicine does not exist.';
+        $lot = 'Line :position: the selected lot does not exist.';
+        $unit = 'Line :position: choose Piece or Box.';
+        $piecesPerBox = "Line :position: pieces per box must be a whole number from 1 to {$max}.";
+
+        return [
+            'transaction_subtype.required' => $subtype,
+            'transaction_subtype.string' => $subtype,
+            'transaction_subtype.in' => $subtype,
+            'branch_id.required' => 'Choose the source branch.',
+            'branch_id.integer' => $branch,
+            'branch_id.exists' => $branch,
+            'issued_by.required' => 'Enter who issued this stock-out.',
+            'issued_by.max' => 'Issued by may not be longer than 255 characters.',
+            'delivered_to.required' => 'Enter who the delivery is for. It is printed on the Delivery Receipt.',
+            'delivered_to.max' => 'Delivered to may not be longer than 255 characters.',
+            'delivered_to_address.max' => 'The delivery address may not be longer than 500 characters.',
+            'delivered_to_tin.max' => 'The TIN may not be longer than 50 characters.',
+            'delivered_to_tin.regex' => 'Enter the TIN as 9 digits with an optional 3-5 digit branch code, e.g. 123-456-789 or 123-456-789-00000.',
+            'patient_reference.max' => 'Patient reference may not be longer than 255 characters.',
+            'remarks.max' => 'Remarks may not be longer than 2000 characters.',
+            'items.required' => $basket,
+            'items.array' => $basket,
+            'items.min' => $basket,
+            'items.*.required' => 'Line :position: is not a valid basket line.',
+            'items.*.array' => 'Line :position: is not a valid basket line.',
+            'items.*.pd_id.required' => 'Line :position: choose a medicine.',
+            'items.*.pd_id.integer' => $medicine,
+            'items.*.pd_id.exists' => $medicine,
+            'items.*.products_qty_id.required' => 'Line :position: choose a lot.',
+            'items.*.products_qty_id.integer' => $lot,
+            'items.*.products_qty_id.exists' => $lot,
+            'items.*.quantity_deducted.required' => 'Line :position: enter a quantity.',
+            'items.*.quantity_deducted.integer' => 'Line :position: quantity must be a whole number.',
+            'items.*.quantity_deducted.min' => 'Line :position: quantity must be at least 1.',
+            'items.*.quantity_deducted.max' => "Line :position: quantity may not be more than {$max}.",
+            'items.*.unit_type.required' => $unit,
+            'items.*.unit_type.string' => $unit,
+            'items.*.unit_type.in' => $unit,
+            'items.*.pieces_per_box.required_if' => 'Line :position: enter how many pieces are in one box.',
+            'items.*.pieces_per_box.integer' => $piecesPerBox,
+            'items.*.pieces_per_box.min' => $piecesPerBox,
+            'items.*.pieces_per_box.max' => $piecesPerBox,
+        ];
+    }
+
+    /**
+     * Canonicalise unit types (legacy rows used lowercase) and drop
+     * pieces_per_box from anything that is not a Box line.
+     *
+     * @param  array<string, mixed>  $input
+     * @return array<string, mixed>
+     */
+    private function normaliseInput(array $input): array
+    {
+        if (! isset($input['items']) || ! is_array($input['items'])) {
+            return $input;
+        }
+
+        foreach ($input['items'] as $index => $item) {
+            if (! is_array($item)) {
+                continue;
+            }
+
+            $unitType = is_string($item['unit_type'] ?? null)
+                ? UnitType::tryFromInput($item['unit_type'])
+                : null;
+
+            if ($unitType) {
+                $item['unit_type'] = $unitType->value;
+            }
+
+            if ($unitType !== UnitType::Box) {
+                $item['pieces_per_box'] = null;
+            }
+
+            $input['items'][$index] = $item;
+        }
+
+        return $input;
+    }
+
+    /**
+     * Adds branch-ownership, expiry and lot-sufficiency errors for every
+     * line whose own fields already passed, so one round trip reports all
+     * problems.
+     */
+    private function addBasketErrors(\Illuminate\Validation\Validator $validator, mixed $items, int $branchId): void
+    {
+        if (! is_array($items)) {
+            return;
+        }
+
+        $errors = $validator->errors();
+
+        $checkable = array_filter($items, function ($item, $index) use ($errors) {
+            if (! is_array($item)) {
+                return false;
+            }
+
+            foreach (['', '.pd_id', '.products_qty_id', '.quantity_deducted', '.unit_type', '.pieces_per_box'] as $field) {
+                if ($errors->has("items.{$index}{$field}")) {
+                    return false;
+                }
+            }
+
+            return true;
+        }, ARRAY_FILTER_USE_BOTH);
+
+        if ($checkable === []) {
+            return;
+        }
+
+        [$basketErrors] = $this->resolveBasket($checkable, $branchId);
+
+        foreach ($basketErrors as $key => $message) {
+            $errors->add($key, $message);
+        }
+    }
+
+    /**
+     * Resolves each basket line to its medicine, lot and pieces, and checks
+     * branch ownership, lot status/expiry and that the pieces taken from
+     * each lot (summed over every line using it) fit the lot.
+     *
+     * @param  array<int|string, array<string, mixed>>  $items  already field-validated lines, keyed by basket index
+     * @return array{0: array<string, string>, 1: list<array{medicine: MedicineProduct, batch: ProductQty, unit_type: UnitType, quantity: int, pieces_per_box: ?int, pieces: int}>}
+     */
+    private function resolveBasket(array $items, int $branchId, bool $lockLots = false): array
+    {
+        $errors = $this->itemBranchErrors($items, $branchId, checkBatches: true, lineNumbers: true);
+
+        $medicines = MedicineProduct::query()
+            ->whereKey(collect($items)->pluck('pd_id')->map(fn ($id) => (int) $id)->unique()->all())
+            ->get()
+            ->keyBy('id');
+
+        $batches = ProductQty::query()
+            ->whereKey(collect($items)->pluck('products_qty_id')->map(fn ($id) => (int) $id)->unique()->all())
+            ->when($lockLots, fn ($query) => $query->lockForUpdate())
+            ->get()
+            ->keyBy('id');
+
+        $piecesPerLot = [];
+        $linesPerLot = [];
+        $reportedLots = [];
+        $lines = [];
+
+        foreach ($items as $index => $item) {
+            if (isset($errors["items.{$index}.pd_id"]) || isset($errors["items.{$index}.products_qty_id"])) {
+                continue;
+            }
+
+            $medicine = $medicines->get((int) $item['pd_id']);
+            $batch = $batches->get((int) $item['products_qty_id']);
+            $lineNumber = (int) $index + 1;
+
+            // The locked read may differ from the unlocked ownership check.
+            if (! $medicine || ! $batch || (int) $batch->product_id !== (int) $medicine->id || $batch->isDeleted()) {
+                $errors["items.{$index}.products_qty_id"] = "Line {$lineNumber}: the selected lot is no longer available.";
+
+                continue;
+            }
+
+            if ($batch->status === ProductQty::STATUS_EXPIRED || $batch->isExpired()) {
+                $expiry = $batch->expiry?->format('d M Y') ?? 'an earlier date';
+                $errors["items.{$index}.products_qty_id"] = "Line {$lineNumber}: lot {$batch->lot_number} of {$medicine->med_name} expired on {$expiry} and cannot be dispensed.";
+
+                continue;
+            }
+
+            $unitType = UnitType::fromInput($item['unit_type']);
+            $quantity = (int) $item['quantity_deducted'];
+
+            // Pieces-per-box comes from what the operator typed for THIS
+            // stock-out, not the product's stored pack size — a shipment's
+            // actual box count doesn't always match the master data.
+            $piecesPerBox = $unitType->isBox() ? (int) $item['pieces_per_box'] : null;
+            $pieces = $unitType->isBox() ? $quantity * $piecesPerBox : $quantity;
+
+            $piecesPerLot[$batch->id] = ($piecesPerLot[$batch->id] ?? 0) + $pieces;
+            $linesPerLot[$batch->id][] = $lineNumber;
+            $available = (int) $batch->quantity;
+
+            if ($piecesPerLot[$batch->id] > $available && ! isset($reportedLots[$batch->id])) {
+                $reportedLots[$batch->id] = true;
+                $errors["items.{$index}.quantity_deducted"] = count($linesPerLot[$batch->id]) === 1
+                    ? "Line {$lineNumber}: {$pieces} pieces of {$medicine->med_name} exceed the {$available} pieces available in lot {$batch->lot_number}."
+                    : "Line {$lineNumber}: lines ".$this->joinLineNumbers($linesPerLot[$batch->id])
+                        ." together take {$piecesPerLot[$batch->id]} pieces of {$medicine->med_name} from lot {$batch->lot_number}, but only {$available} pieces are available.";
+            }
+
+            $lines[] = [
+                'medicine' => $medicine,
+                'batch' => $batch,
+                'unit_type' => $unitType,
+                'quantity' => $quantity,
+                'pieces_per_box' => $piecesPerBox,
+                'pieces' => $pieces,
+            ];
+        }
+
+        return [$errors, $lines];
+    }
+
+    /**
+     * @param  list<int>  $lineNumbers
+     */
+    private function joinLineNumbers(array $lineNumbers): string
+    {
+        $last = array_pop($lineNumbers);
+
+        return $lineNumbers === [] ? (string) $last : implode(', ', $lineNumbers)." and {$last}";
+    }
+
+    /**
+     * @param  array{medicine: MedicineProduct, batch: ProductQty, unit_type: UnitType, quantity: int, pieces_per_box: ?int, pieces: int}  $line
+     */
+    private function createItem(StockOut $stockOut, array $line): void
+    {
+        StockOutItem::create([
+            'stock_out_id' => $stockOut->stock_out_id,
+            'pd_id' => $line['medicine']->id,
+            'products_qty_id' => $line['batch']->id,
+            'lot_number' => $line['batch']->lot_number,
+            'quantity_deducted' => $line['quantity'],
+            'pieces_deducted' => $line['pieces'],
+            'expiry' => $line['batch']->expiry,
+            'unit_type' => $line['unit_type']->value,
+            'pieces_per_box' => $line['pieces_per_box'],
+            'unit_price' => $line['unit_type']->isBox()
+                ? $line['medicine']->wholesale_price
+                : $line['medicine']->retail_price,
+        ]);
     }
 
     /**
@@ -611,33 +852,5 @@ class StockOutController extends Controller
     private function generateDispenseInvoiceNumber(int $stockOutId): string
     {
         return 'DISP-'.date('Ymd').'-'.str_pad((string) $stockOutId, 5, '0', STR_PAD_LEFT);
-    }
-
-    /**
-     * Confirm the submitted batch belongs to the submitted product and is fit
-     * to dispense. Validating ownership here rather than trusting the id
-     * keeps a crafted payload from reaching stock in another branch.
-     */
-    private function resolveBatchOrFail(int $batchId, MedicineProduct $medicine): ProductQty
-    {
-        $batch = ProductQty::query()
-            ->whereKey($batchId)
-            ->where('product_id', $medicine->id)
-            ->first();
-
-        if (! $batch || $batch->isDeleted()) {
-            throw new \RuntimeException(
-                "The selected lot is no longer available for {$medicine->med_name}. Refresh and try again."
-            );
-        }
-
-        if ($batch->isExpired()) {
-            throw new \RuntimeException(
-                "Lot {$batch->lot_number} of {$medicine->med_name} expired on "
-                .$batch->expiry->format('d M Y').' and cannot be dispensed.'
-            );
-        }
-
-        return $batch;
     }
 }
