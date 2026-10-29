@@ -348,6 +348,10 @@ class StockOutController extends Controller
                         'products_qty_id' => $item->products_qty_id,
                         'unit_type' => $unitType->value,
                         'quantity_sold' => $item->quantity_deducted,
+                        // The pieces actually deducted (pieces-per-box as
+                        // entered on the stock-out), so a void restocks and
+                        // reports count exactly these, not today's pack size.
+                        'pieces_sold' => (int) $item->pieces_deducted,
                         'price_used' => $priceUsed,
                         'total_price' => round($priceUsed * $item->quantity_deducted, 2),
                     ];
@@ -943,6 +947,7 @@ class StockOutController extends Controller
      *     products_qty_id: ?int,
      *     unit_type: string,
      *     quantity_sold: int,
+     *     pieces_sold: int,
      *     price_used: float,
      *     total_price: float
      * }>  $saleLineItems
@@ -977,6 +982,7 @@ class StockOutController extends Controller
                 'products_qty_id' => $lineItem['products_qty_id'],
                 'unit_type' => $lineItem['unit_type'],
                 'quantity_sold' => $lineItem['quantity_sold'],
+                'pieces_sold' => $lineItem['pieces_sold'],
                 'price_used' => $lineItem['price_used'],
                 'total_price' => $lineItem['total_price'],
             ]);
