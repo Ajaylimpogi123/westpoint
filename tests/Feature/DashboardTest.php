@@ -336,7 +336,11 @@ class DashboardTest extends TestCase
 
     public function test_staff_without_branch_is_forbidden(): void
     {
-        $this->actingAs($this->staff)
+        // The session is re-synced from the users row on every request, so a
+        // "staff without branch" is a user whose branch_id is null.
+        $this->staff->update(['branch_id' => null]);
+
+        $this->actingAs($this->staff->fresh())
             ->withSession(['role_id' => 1])
             ->get('/dashboard')
             ->assertForbidden();

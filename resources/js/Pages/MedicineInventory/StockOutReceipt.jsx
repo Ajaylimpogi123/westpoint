@@ -271,17 +271,17 @@ export default function StockOutReceipt({ stockOut }) {
                                     <HeaderCell label="TIN">
                                         {stockOut.delivered_to_tin}
                                     </HeaderCell>
-                                    <HeaderCell label="Terms" borderedLeft blank />
+                                    <HeaderCell label="Terms" borderedLeft>
+                                        {stockOut.terms}
+                                    </HeaderCell>
                                 </div>
                                 <div className="grid grid-cols-[1fr_140px]">
                                     <HeaderCell label="Address">
                                         {stockOut.delivered_to_address}
                                     </HeaderCell>
-                                    <HeaderCell
-                                        label="Invoice #"
-                                        borderedLeft
-                                        blank
-                                    />
+                                    <HeaderCell label="Invoice #" borderedLeft>
+                                        {stockOut.invoice_number}
+                                    </HeaderCell>
                                 </div>
                             </div>
 

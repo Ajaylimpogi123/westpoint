@@ -16,11 +16,32 @@ const emptyForm = () => ({
     remarks: "",
     delivered_to: "",
     delivered_to_tin: "",
+    terms: "",
+    invoice_number: "",
     delivered_to_address: "",
     items: [],
 });
 
 const RELOAD_PROPS = ["stockOuts", "medicines", "products", "movementLogs", "flash"];
+
+/** Adds the pieces a saved stock-out holds back onto its lots' quantities. */
+function withHeldPieces(products, items) {
+    const held = {};
+
+    items.forEach((item) => {
+        const lotId = String(item.products_qty_id);
+        held[lotId] = (held[lotId] ?? 0) + (Number(item.pieces_deducted) || 0);
+    });
+
+    return products.map((product) => ({
+        ...product,
+        batches: (product.batches ?? []).map((lot) =>
+            held[String(lot.id)]
+                ? { ...lot, quantity: (Number(lot.quantity) || 0) + held[String(lot.id)] }
+                : lot,
+        ),
+    }));
+}
 
 export default function useStockOutEdit({ stockOutId, open }) {
     const [products, setProducts] = useState([]);
@@ -37,9 +58,9 @@ export default function useStockOutEdit({ stockOutId, open }) {
 
     // Load the stock-out plus its branch's current products/lots whenever
     // the modal opens. Live lot quantities come from fetchBranchProducts,
-    // the same source the create modal uses — nothing has been deducted
-    // yet for an editable stock-out, so those quantities are already
-    // accurate without any "reserved" adjustment.
+    // the same source the create modal uses. A pending delivery has taken
+    // nothing yet; a return to supplier already took its pieces, so they
+    // are added back to their lots here (the server counts them the same).
     useEffect(() => {
         if (!open || !stockOutId) {
             return;
@@ -70,6 +91,8 @@ export default function useStockOutEdit({ stockOutId, open }) {
                     delivered_to: stock_out.delivered_to ?? "",
                     delivered_to_tin: stock_out.delivered_to_tin ?? "",
                     delivered_to_address: stock_out.delivered_to_address ?? "",
+                    terms: stock_out.terms ?? "",
+                    invoice_number: stock_out.invoice_number ?? "",
                     items: items.map((item) => ({
                         pd_id: String(item.pd_id),
                         products_qty_id: String(item.products_qty_id),
@@ -89,7 +112,11 @@ export default function useStockOutEdit({ stockOutId, open }) {
                         stock_out.branch_id,
                     );
                     if (!cancelled) {
-                        setProducts(branchProducts.products ?? []);
+                        setProducts(
+                            stock_out.transaction_subtype === DELIVERY_TO_CUSTOMER
+                                ? branchProducts.products ?? []
+                                : withHeldPieces(branchProducts.products ?? [], items),
+                        );
                     }
                 } catch {
                     if (!cancelled) {
@@ -138,10 +165,8 @@ export default function useStockOutEdit({ stockOutId, open }) {
         clearErrors,
     });
 
-    // Only pending deliveries are editable, so the recipient is always
-    // required here (contract: delivered_to required on update).
     const headerErrors = validateStockOutHeader(data, {
-        subtype: DELIVERY_TO_CUSTOMER,
+        subtype: transactionSubtype,
         checkSubtype: false,
         checkBranch: false,
     });

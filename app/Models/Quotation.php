@@ -12,6 +12,7 @@ class Quotation extends Model
 
     protected $fillable = [
         'customer_id',
+        'branch_id',
         'qt_no',
         'sid_no',
         'qt_date',
@@ -29,8 +30,8 @@ class Quotation extends Model
     ];
 
     protected $casts = [
-        'qt_date'      => 'date',
-        'date_signed'  => 'date',
+        'qt_date' => 'date',
+        'date_signed' => 'date',
         'total_amount' => 'decimal:2',
     ];
 
@@ -41,10 +42,15 @@ class Quotation extends Model
         return $this->belongsTo(BranchCustomer::class, 'customer_id', 'customer_id');
     }
 
+    public function branch(): BelongsTo
+    {
+        return $this->belongsTo(Branch::class, 'branch_id');
+    }
+
     public function items(): HasMany
     {
         return $this->hasMany(QuotationItem::class, 'quotation_id')
-                    ->orderBy('sort_order');
+            ->orderBy('sort_order');
     }
 
     // ── Helpers ───────────────────────────────────────────
@@ -74,10 +80,21 @@ class Quotation extends Model
             ? (intval(substr($last->qt_no, -5)) + 1)
             : 1;
 
-        return 'QF-' . $year . '-' . str_pad($sequence, 5, '0', STR_PAD_LEFT);
+        return 'QF-'.$year.'-'.str_pad($sequence, 5, '0', STR_PAD_LEFT);
     }
 
-    public function isDraft(): bool    { return $this->status === 'draft';     }
-    public function isSent(): bool     { return $this->status === 'sent';      }
-    public function isApproved(): bool { return $this->status === 'approved';  }
+    public function isDraft(): bool
+    {
+        return $this->status === 'draft';
+    }
+
+    public function isSent(): bool
+    {
+        return $this->status === 'sent';
+    }
+
+    public function isApproved(): bool
+    {
+        return $this->status === 'approved';
+    }
 }

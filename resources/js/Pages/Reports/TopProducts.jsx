@@ -27,7 +27,7 @@ export default function TopProducts({ filters, products, branches }) {
                         columns={[
                             { key: "med_name", label: "Product" },
                             { key: "brand_name", label: "Brand" },
-                            { key: "units_sold", label: "Units Sold" },
+                            { key: "units_sold", label: "Pieces Sold" },
                             {
                                 key: "revenue",
                                 label: "Revenue",

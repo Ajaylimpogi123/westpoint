@@ -26,6 +26,7 @@ Route::middleware('auth')->group(function () {
         ->middleware('role:2,3')
         ->name('medicine-inventory.update');
     Route::delete('/medicine-inventory/{id}', [MedicineInventoryController::class, 'destroy'])
+        ->middleware('role:2,3')
         ->name('medicine-inventory.destroy');
     Route::patch('/medicine-inventory/{id}/restore', [MedicineInventoryController::class, 'restore'])
         ->middleware('role:2,3')
@@ -33,7 +34,9 @@ Route::middleware('auth')->group(function () {
     Route::post('/medicine-inventory/stock', [MedicineInventoryController::class, 'storeStock'])
         ->name('medicine-inventory.store-stock');
     Route::patch('/medicine-inventory/batch/{id}', [MedicineInventoryController::class, 'updateBatch'])
+        ->middleware('role:2,3')
         ->name('medicine-inventory.update-batch');
     Route::delete('/medicine-inventory/batch/{id}', [MedicineInventoryController::class, 'destroyBatch'])
+        ->middleware('role:2,3')
         ->name('medicine-inventory.destroy-batch');
 });

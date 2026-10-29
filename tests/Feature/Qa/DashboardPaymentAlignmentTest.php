@@ -460,7 +460,11 @@ class DashboardPaymentAlignmentTest extends TestCase
     /** AC-17 */
     public function test_staff_without_session_branch_is_forbidden(): void
     {
-        $this->actingAs($this->staff)
+        // Since qa-fix-batch-1 the session branch is re-synced from users.branch_id
+        // on every request, so "no session branch" means a staff row with no branch.
+        $this->staff->update(['branch_id' => null]);
+
+        $this->actingAs($this->staff->fresh())
             ->withSession(['role_id' => 1])
             ->get(route('dashboard'))
             ->assertForbidden();

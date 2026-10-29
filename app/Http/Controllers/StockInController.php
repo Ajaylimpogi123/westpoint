@@ -140,7 +140,7 @@ class StockInController extends Controller
 
             return redirect()->back()
                 ->withInput()
-                ->with('error', $exception->getMessage());
+                ->with('error', $this->userMessage($exception, 'Stock-in could not be saved. Please verify your entries and try again.'));
         } catch (Throwable $exception) {
             report($exception);
             IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_IN, $idempotencyKey);

@@ -510,7 +510,10 @@ class StockBranchCorrectnessTest extends TestCase
     /** AC-15 */
     public function test_staff_without_session_branch_is_forbidden_on_store_routes(): void
     {
-        $as = fn () => $this->actingAs($this->staff)->withSession(['role_id' => 1, 'branch_id' => null]);
+        // Since qa-fix-batch-1 the session branch is re-synced from users.branch_id
+        // on every request, so "no session branch" means a staff row with no branch.
+        $this->staff->update(['branch_id' => null]);
+        $as = fn () => $this->actingAs($this->staff->fresh())->withSession(['role_id' => 1, 'branch_id' => null]);
 
         $as()->post(route('stock-in.store'), $this->stockInPayload($this->branchA->id, $this->product->id))->assertForbidden();
         $as()->post(route('stock-out.store'), $this->stockOutPayload($this->branchA->id, $this->product->id, $this->batch->id))->assertForbidden();

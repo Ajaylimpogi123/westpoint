@@ -3,9 +3,9 @@
 namespace App\Http\Controllers\Auth;
 
 use App\Http\Controllers\Controller;
-use App\Models\User;
 use App\Models\Branch;
 use App\Models\Role;
+use App\Models\User;
 use Illuminate\Auth\Events\Registered;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -17,13 +17,18 @@ use Inertia\Response;
 
 class RegisteredUserController extends Controller
 {
+    private const SUPERADMIN_ROLE_ID = 3;
+
     /**
      * Display the registration view.
      */
     public function create(): Response
     {
         $branches = Branch::all(['id', 'branch_name']);
-        $roles = Role::all(['id', 'role_name']);
+        // Only a superadmin may create another superadmin.
+        $roles = Role::query()
+            ->when((int) auth()->user()?->role_id !== self::SUPERADMIN_ROLE_ID, fn ($query) => $query->where('id', '!=', self::SUPERADMIN_ROLE_ID))
+            ->get(['id', 'role_name']);
 
         return Inertia::render('Auth/Register', [
             'branches' => $branches,
@@ -43,7 +48,16 @@ class RegisteredUserController extends Controller
             'email' => 'required|string|lowercase|email|max:255|unique:'.User::class,
             'password' => ['required', 'confirmed', Rules\Password::defaults()],
             'branch_id' => 'required|exists:branches,id',
-            'role_id' => 'required|exists:roles,id',
+            'role_id' => [
+                'required',
+                'exists:roles,id',
+                function (string $attribute, mixed $value, \Closure $fail) {
+                    if ((int) $value === self::SUPERADMIN_ROLE_ID
+                        && (int) auth()->user()?->role_id !== self::SUPERADMIN_ROLE_ID) {
+                        $fail('Only a superadmin can create superadmin accounts.');
+                    }
+                },
+            ],
         ]);
 
         $user = User::create([

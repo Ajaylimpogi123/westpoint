@@ -188,7 +188,7 @@ class StockTransferController extends Controller
                 $resolved[] = $line;
             }
         } catch (InsufficientStockException|\RuntimeException $exception) {
-            return back()->withInput()->withErrors(['items' => $exception->getMessage()]);
+            return back()->withInput()->withErrors(['items' => $this->userMessage($exception, 'The transfer request could not be checked. Please try again.')]);
         }
 
         DB::transaction(function () use ($validated, $fromBranchId, $resolved) {
@@ -319,7 +319,7 @@ class StockTransferController extends Controller
                 $this->moveStock($transfer);
             });
         } catch (InsufficientStockException|\RuntimeException $exception) {
-            return back()->withErrors(['status' => $exception->getMessage()]);
+            return back()->withErrors(['status' => $this->userMessage($exception, 'The transfer could not be approved. Please try again.')]);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -363,7 +363,7 @@ class StockTransferController extends Controller
                 ]);
             });
         } catch (\RuntimeException $exception) {
-            return back()->withErrors(['status' => $exception->getMessage()]);
+            return back()->withErrors(['status' => $this->userMessage($exception, 'The transfer could not be rejected. Please try again.')]);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -398,7 +398,7 @@ class StockTransferController extends Controller
                 ]);
             });
         } catch (\RuntimeException $exception) {
-            return back()->withErrors(['status' => $exception->getMessage()]);
+            return back()->withErrors(['status' => $this->userMessage($exception, 'The transfer could not be cancelled. Please try again.')]);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -612,6 +612,18 @@ class StockTransferController extends Controller
     {
         $lot = ProductQty::query()->whereKey($item->products_qty_id)->lockForUpdate()->first();
 
+        // A medicine deactivated while the request was pending has its lots
+        // parked as Inactive. Shipping it would also flip the lot back to
+        // Active (deductFromBatch normalises status), resurrecting stock an
+        // admin withdrew, so refuse instead.
+        if ($sourceProduct->status !== 'Active') {
+            $branchName = $sourceProduct->branch?->branch_name ?? 'the source branch';
+
+            throw new \RuntimeException(
+                "{$sourceProduct->med_name} has been deactivated in {$branchName}, so lot {$item->lot_number} cannot be transferred. Reject this request."
+            );
+        }
+
         if (! $lot || $lot->isDeleted() || (int) $lot->product_id !== (int) $sourceProduct->id) {
             throw new \RuntimeException(
                 "Lot {$item->lot_number} of {$sourceProduct->med_name} is no longer available. Reject this request and ask for a new one."
@@ -622,6 +634,14 @@ class StockTransferController extends Controller
             throw new \RuntimeException(
                 "Lot {$lot->lot_number} of {$sourceProduct->med_name} expired on {$lot->expiry->format('d M Y')} "
                 .'and cannot be transferred. Reject this request and ask for another lot.'
+            );
+        }
+
+        // Only Active lots ship. An Inactive lot is either empty or parked by
+        // a medicine deactivation; approving must never bring it back.
+        if ($lot->status !== ProductQty::STATUS_ACTIVE) {
+            throw new \RuntimeException(
+                "Lot {$item->lot_number} of {$sourceProduct->med_name} is no longer available. Reject this request and ask for a new one."
             );
         }
     }

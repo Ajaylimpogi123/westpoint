@@ -17,6 +17,7 @@ import StockOutItemPicker from "./StockOutItemPicker";
 import StockOutBasketTable from "./StockOutBasketTable";
 import StockOutFormAlerts from "./StockOutFormAlerts";
 import StockOutRecipientFields from "./StockOutRecipientFields";
+import { DELIVERY_TO_CUSTOMER } from "../lib/stockOutValidation";
 
 function SectionTitle({ children, aside }) {
     return (
@@ -60,6 +61,8 @@ export default function StockOutEditModal({ stockOutId, children }) {
         resetLocal,
     } = edit;
 
+    const isDelivery = transactionSubtype === DELIVERY_TO_CUSTOMER;
+
     const openModal = () => setOpen(true);
     const closeModal = () => {
         if (processing) {
@@ -86,9 +89,10 @@ export default function StockOutEditModal({ stockOutId, children }) {
                     <DialogHeader>
                         <DialogTitle>Edit Stock Out #{stockOutId}</DialogTitle>
                         <DialogDescription>
-                            Nothing has been deducted from inventory yet — this
-                            just updates what will be deducted once delivery is
-                            confirmed. Fields marked{" "}
+                            {isDelivery
+                                ? "Nothing has been deducted from inventory yet — this just updates what will be deducted once delivery is confirmed."
+                                : "This stock already left the branch. Saving puts back what you remove and takes out what you add."}{" "}
+                            Fields marked{" "}
                             <span className="text-red-600">*</span> are required.
                         </DialogDescription>
                     </DialogHeader>
@@ -153,9 +157,7 @@ export default function StockOutEditModal({ stockOutId, children }) {
                                         data={data}
                                         setField={setField}
                                         errors={errors}
-                                        // Only pending deliveries can be edited, so the
-                                        // recipient is always required here.
-                                        recipientRequired
+                                        recipientRequired={isDelivery}
                                         idPrefix="edit_"
                                         disabled={processing}
                                     />

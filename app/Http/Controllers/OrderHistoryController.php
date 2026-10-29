@@ -2,12 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\InventoryMovementLog;
 use App\Models\ProductQty;
 use App\Models\Sale;
 use App\Models\SaleItem;
-use App\Models\SaleItemAllocation;
 use App\Models\SaleReturn;
 use App\Models\SaleReturnItem;
+use App\Services\IdempotencyGuard;
+use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
@@ -107,33 +109,34 @@ class OrderHistoryController extends Controller
         ]);
     }
 
-   public function print(Sale $sale): Response
-{
-    $this->assertBranchAccess($sale);
+    public function print(Sale $sale): Response
+    {
+        $this->assertBranchAccess($sale);
 
-    $sale->load([
-        'items' => function ($query) {
-            $query->select([
-                'id',
-                'sale_id',
-                'product_id',
-                'unit_type',
-                'quantity_sold',
-                'returned_quantity',
-                'price_used',
-                'total_price',
-                'discount_amount',
-                'vat_exempt',
-            ]);
-        },
-        'items.product:id,med_name,dose,form,brand_name,vat_status',
-        'user:id,name',
-    ]);
+        $sale->load([
+            'items' => function ($query) {
+                $query->select([
+                    'id',
+                    'sale_id',
+                    'product_id',
+                    'unit_type',
+                    'quantity_sold',
+                    'returned_quantity',
+                    'price_used',
+                    'total_price',
+                    'discount_amount',
+                    'vat_exempt',
+                ]);
+            },
+            'items.product:id,med_name,dose,form,brand_name,vat_status',
+            'user:id,name',
+        ]);
 
-    return Inertia::render('History/Partials/ReceiptPrint', [
-        'sale' => $sale,
-    ]);
-}
+        return Inertia::render('History/Partials/ReceiptPrint', [
+            'sale' => $sale,
+        ]);
+    }
+
     /**
      * What can still be voided/returned for this sale, with the remaining
      * quantity per line already computed (quantity_sold minus what's
@@ -179,7 +182,18 @@ class OrderHistoryController extends Controller
     {
         $this->assertBranchAccess($sale);
 
+        // D1: a double-click or network retry of the same void must not
+        // restock and refund twice. Recognised before validation, because the
+        // first request already consumed the quantities being re-validated.
+        $idempotencyKey = $request->input('idempotency_key');
+        $idempotencyKey = is_string($idempotencyKey) ? $idempotencyKey : null;
+
+        if (IdempotencyGuard::isClaimed(IdempotencyGuard::SCOPE_SALE_VOID, $idempotencyKey)) {
+            return $this->alreadyProcessedResponse($sale);
+        }
+
         $validated = $request->validate([
+            'idempotency_key' => ['nullable', 'string', 'max:255'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.sale_item_id' => [
                 'required',
@@ -192,6 +206,10 @@ class OrderHistoryController extends Controller
         ]);
 
         $branchId = (int) $sale->branch_id;
+
+        if (! IdempotencyGuard::claim(IdempotencyGuard::SCOPE_SALE_VOID, $idempotencyKey)) {
+            return $this->alreadyProcessedResponse($sale);
+        }
 
         try {
             DB::beginTransaction();
@@ -224,8 +242,6 @@ class OrderHistoryController extends Controller
                     );
                 }
 
-                $product = $saleItem->product;
-
                 // Net per-unit price actually charged (post per-line discount,
                 // whatever VAT treatment was applied at sale time), so the
                 // refund matches what the customer actually paid per unit.
@@ -238,9 +254,22 @@ class OrderHistoryController extends Controller
                     : 0.0;
                 $refundAmount = round($unitNetPrice * $quantityReturned, 2);
 
-                $piecesToRestock = $product->toPieces($quantityReturned, $saleItem->unit_type);
+                // Pieces come from what the line actually deducted at
+                // checkout (pieces_sold), not from today's pack_size.
+                $alreadyReturned = (int) $saleItem->returned_quantity;
+                $piecesBefore = intdiv(
+                    $saleItem->piecesSold() * $alreadyReturned,
+                    max((int) $saleItem->quantity_sold, 1)
+                );
+                $piecesToRestock = $saleItem->piecesForReturn($quantityReturned, $alreadyReturned);
 
-                $restockedBatches = $this->restockPieces($saleItem, $piecesToRestock, $branchId);
+                $restockedBatches = $this->restockPieces(
+                    $sale,
+                    $saleItem,
+                    $piecesBefore,
+                    $piecesToRestock,
+                    $branchId
+                );
 
                 SaleReturnItem::create([
                     'return_id' => $saleReturn->return_id,
@@ -279,10 +308,12 @@ class OrderHistoryController extends Controller
             DB::commit();
         } catch (\RuntimeException $e) {
             DB::rollBack();
+            IdempotencyGuard::release(IdempotencyGuard::SCOPE_SALE_VOID, $idempotencyKey);
 
-            return response()->json(['message' => $e->getMessage()], 422);
+            return response()->json(['message' => $this->userMessage($e, 'Failed to process the void/return. Please try again.')], 422);
         } catch (\Throwable $e) {
             DB::rollBack();
+            IdempotencyGuard::release(IdempotencyGuard::SCOPE_SALE_VOID, $idempotencyKey);
             report($e);
 
             return response()->json([
@@ -301,104 +332,129 @@ class OrderHistoryController extends Controller
     }
 
     /**
-     * Restock pieces back into the exact batch(es) they were deducted from.
-     * Single-batch lines restock directly; split-batch lines (tracked via
-     * SaleItemAllocation) restock proportionally across each batch in the
-     * same ratio they were originally deducted, so partial returns don't
-     * over- or under-credit any one lot.
+     * Restock a return of $piecesToRestock pieces, the line having already
+     * had $piecesBefore pieces restocked by earlier returns.
      *
-     * @return array<int, array{products_qty_id: int, pieces: int}>
+     * Single-batch lines go back to their batch. Split-batch lines are
+     * filled back lot by lot in the order they were deducted (earliest
+     * expiry first), cumulatively, so returning a line in several parts puts
+     * every lot back to exactly what it gave. Where the pieces land when a
+     * lot is Expired/Deleted is decided by InventoryStockService::restockReturn().
+     *
+     * @return array<int, array{products_qty_id: int, pieces: int, rule: string}>
      */
-    private function restockPieces(SaleItem $saleItem, int $piecesToRestock, int $branchId): array
-    {
-        $allocations = $saleItem->allocations;
-
-        if ($allocations->isEmpty()) {
-            $batchId = $this->restockIntoBatch(
-                $saleItem->products_qty_id,
-                $piecesToRestock,
-                $saleItem->product_id,
-                $branchId,
-                $saleItem->product?->med_name ?? 'Returned item'
-            );
-
-            return [['products_qty_id' => $batchId, 'pieces' => $piecesToRestock]];
+    private function restockPieces(
+        Sale $sale,
+        SaleItem $saleItem,
+        int $piecesBefore,
+        int $piecesToRestock,
+        int $branchId
+    ): array {
+        if ($piecesToRestock < 1) {
+            return [];
         }
 
-        $totalAllocatedPieces = (int) $allocations->sum('pieces');
+        $allocations = $saleItem->allocations()->orderBy('id')->get();
+
+        if ($allocations->isEmpty()) {
+            return [$this->restockIntoBatch($sale, $saleItem, $saleItem->products_qty_id, $piecesToRestock, $branchId)];
+        }
+
+        $piecesAfter = $piecesBefore + $piecesToRestock;
         $restocked = [];
-        $piecesLeft = $piecesToRestock;
-        $allocationCount = $allocations->count();
+        $filledBefore = 0;
 
-        foreach ($allocations as $index => $allocation) {
-            $isLast = $index === $allocationCount - 1;
+        foreach ($allocations as $allocation) {
+            $capacity = (int) $allocation->pieces;
+            $beforeHere = min(max($piecesBefore - $filledBefore, 0), $capacity);
+            $afterHere = min(max($piecesAfter - $filledBefore, 0), $capacity);
+            $filledBefore += $capacity;
 
-            $share = $isLast
-                ? $piecesLeft
-                : (int) floor($piecesToRestock * ($allocation->pieces / max($totalAllocatedPieces, 1)));
+            $share = $afterHere - $beforeHere;
 
-            $share = min($share, $piecesLeft);
-            $piecesLeft -= $share;
-
-            if ($share <= 0) {
-                continue;
+            if ($share > 0) {
+                $restocked[] = $this->restockIntoBatch($sale, $saleItem, $allocation->products_qty_id, $share, $branchId);
             }
+        }
 
-            $batchId = $this->restockIntoBatch(
-                $allocation->products_qty_id,
-                $share,
-                $saleItem->product_id,
-                $branchId,
-                $saleItem->product?->med_name ?? 'Returned item'
+        // Legacy split lines whose allocations sum to less than pieces_sold:
+        // never lose returned pieces, put the overflow back on the last lot.
+        $overflow = $piecesToRestock - array_sum(array_column($restocked, 'pieces'));
+
+        if ($overflow > 0) {
+            $restocked[] = $this->restockIntoBatch(
+                $sale,
+                $saleItem,
+                $allocations->last()->products_qty_id,
+                $overflow,
+                $branchId
             );
-
-            $restocked[] = ['products_qty_id' => $batchId, 'pieces' => $share];
         }
 
         return $restocked;
     }
 
     /**
-     * Increment the original batch if it still exists; otherwise create a
-     * fresh lot so a return is never silently lost because the source batch
-     * was later deleted.
+     * @return array{products_qty_id: int, pieces: int, rule: string}
      */
     private function restockIntoBatch(
+        Sale $sale,
+        SaleItem $saleItem,
         ?int $originalBatchId,
         int $pieces,
-        int $productId,
-        int $branchId,
-        string $productName
-    ): int {
-        $batch = $originalBatchId
-            ? ProductQty::query()->where('id', $originalBatchId)->lockForUpdate()->first()
-            : null;
-
-        if ($batch) {
-            $batch->increment('quantity', $pieces);
-
-            // Restocking can bring a batch that was zeroed out (and
-            // auto-marked Inactive) back above zero — reactivate it so it's
-            // dispensable again, mirroring the batch-edit flow.
-            if ($batch->status !== 'Active') {
-                $batch->update(['status' => 'Active']);
-            }
-
-            InventoryStockService::afterBatchQuantityChange($batch);
-
-            return $batch->id;
-        }
-
-        $newBatch = InventoryStockService::addStock(
-            productId: $productId,
+        int $branchId
+    ): array {
+        $result = InventoryStockService::restockReturn(
+            productId: (int) $saleItem->product_id,
             branchId: $branchId,
+            originalBatchId: $originalBatchId,
             quantityInPieces: $pieces,
-            lotNumber: 'RETURN-' . now()->format('Ymd-His'),
-            expiry: null,
-            shelfNumber: null,
         );
 
-        return $newBatch->id ?? $newBatch;
+        /** @var ProductQty $batch */
+        $batch = $result['batch'];
+
+        $remarks = match ($result['rule']) {
+            InventoryStockService::RESTOCK_RULE_EXPIRED => 'Sale void/return: restocked into its expired lot (stays Expired, not sellable).',
+            InventoryStockService::RESTOCK_RULE_REPLACEMENT => 'Sale void/return: original lot was removed, restocked into a lot with the same lot number and expiry.',
+            InventoryStockService::RESTOCK_RULE_NEW_RETURN_LOT => 'Sale void/return: original lot not found, restocked into a new return lot.',
+            default => 'Sale void/return: restocked into the original lot.',
+        };
+
+        InventoryMovementLogger::log(
+            branchId: $branchId,
+            movementType: InventoryMovementLog::TYPE_SALE_VOID,
+            referenceLabel: "Sale {$sale->invoice_number}",
+            referenceId: $sale->id,
+            pdId: (int) $saleItem->product_id,
+            medicineName: $saleItem->product?->med_name ?? 'Returned item',
+            lotNumber: $batch->lot_number,
+            quantity: $pieces,
+            remarks: $remarks,
+            metadata: [
+                'sale_item_id' => $saleItem->id,
+                'original_batch_id' => $originalBatchId,
+                'restocked_batch_id' => $batch->id,
+                'rule' => $result['rule'],
+            ],
+        );
+
+        return ['products_qty_id' => (int) $batch->id, 'pieces' => $pieces, 'rule' => $result['rule']];
+    }
+
+    private function alreadyProcessedResponse(Sale $sale): JsonResponse
+    {
+        $sale->refresh();
+
+        return response()->json([
+            'message' => 'This void/return was already processed.',
+            'already_processed' => true,
+            'sale' => [
+                'id' => $sale->id,
+                'status' => $sale->status,
+                'refunded_amount' => $sale->refunded_amount,
+            ],
+        ]);
     }
 
     private function assertBranchAccess(Sale $sale): void

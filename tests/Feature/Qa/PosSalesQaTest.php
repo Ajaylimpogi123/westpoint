@@ -414,11 +414,11 @@ class PosSalesQaTest extends TestCase
     // ------------------------------------------------------------------
 
     /**
-     * POS-1: a retry of an already-committed checkout (same idempotency_key)
+     * POS-1 (fixed in qa-fix-batch-1): a retry of an already-committed checkout (same idempotency_key)
      * is rejected by validation because the cart was deleted by the first
      * request, so the cashier is told the sale failed although it went through.
      */
-    public function test_bug_pos1_duplicate_checkout_after_commit_is_reported_as_failure(): void
+    public function test_pos1_checkout_retry_after_commit_is_reported_as_success(): void
     {
         $cart = $this->cartFor($this->staff);
         $payload = [
@@ -458,11 +458,11 @@ class PosSalesQaTest extends TestCase
     }
 
     /**
-     * POS-3: voiding a sale whose batch was later deleted flips the Deleted
+     * POS-3 (fixed in qa-fix-batch-1): voiding a sale whose batch was later deleted flips the Deleted
      * batch back to Active, resurrecting its whole remaining quantity as
      * sellable stock (bypasses InventoryStockService's locked statuses).
      */
-    public function test_bug_pos3_void_resurrects_deleted_batch(): void
+    public function test_pos3_void_does_not_resurrect_deleted_batch(): void
     {
         $this->checkout($this->staff, [$this->line(5)])->assertSessionHas('success');
         $sale = $this->onlySale();
@@ -483,11 +483,11 @@ class PosSalesQaTest extends TestCase
     }
 
     /**
-     * POS-4: void converts returned boxes with the product's CURRENT pack_size,
+     * POS-4 (fixed in qa-fix-batch-1): void converts returned boxes with the product's CURRENT pack_size,
      * not the one the sale deducted with. pack_size is editable (min:1), so
      * after a 10 -> 12 change, returning 1 box restocks 12 pieces for 10 sold.
      */
-    public function test_bug_pos4_box_void_after_pack_size_change_restocks_wrong_pieces(): void
+    public function test_pos4_box_void_after_pack_size_change_restocks_pieces_sold(): void
     {
         $this->checkout($this->staff, [$this->line(1, 'Box')])->assertSessionHas('success');
         $sale = $this->onlySale();
@@ -503,11 +503,11 @@ class PosSalesQaTest extends TestCase
     }
 
     /**
-     * POS-5: partial returns of a split-batch line are distributed with floor()
+     * POS-5 (fixed as a side effect of qa-fix-batch-1): partial returns of a split-batch line are distributed with floor()
      * per return, so after returning a line piece by piece the last lot is
      * over-credited and the earlier-expiry lot never gets its stock back.
      */
-    public function test_bug_pos5_piecewise_void_of_split_line_misallocates_lots(): void
+    public function test_pos5_piecewise_void_of_split_line_restores_each_lot_exactly(): void
     {
         $this->batch->update(['quantity' => 1, 'expiry' => now()->addDays(10)->toDateString()]);
         $second = ProductQty::create([

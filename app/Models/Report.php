@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 
 /**
  * Report is not backed by its own table. Every report here reads across
@@ -19,14 +19,14 @@ class Report
     protected static function dateRange(array $filters): array
     {
         $from = $filters['date_from'] ?? Carbon::today()->toDateString();
-        $to   = $filters['date_to'] ?? Carbon::today()->toDateString();
+        $to = $filters['date_to'] ?? Carbon::today()->toDateString();
 
         return [$from, Carbon::parse($to)->endOfDay()];
     }
 
     protected static function applyBranch($query, array $filters, string $column = 'branch_id')
     {
-        if (!empty($filters['branch_id'])) {
+        if (! empty($filters['branch_id'])) {
             $query->where($column, $filters['branch_id']);
         }
 
@@ -43,6 +43,10 @@ class Report
             ->whereBetween('created_at', [$from, $to]);
 
         static::applyBranch($query, $filters);
+
+        if (! empty($filters['payment_method'])) {
+            $query->where('payment_method', $filters['payment_method']);
+        }
 
         // net_amount is what was charged at checkout and never changes
         // after the fact — a void/return is tracked separately in
@@ -104,11 +108,11 @@ class Report
 
         static::applyBranch($query, $filters, 's.branch_id');
 
-        if (!empty($filters['user_id'])) {
+        if (! empty($filters['user_id'])) {
             $query->where('s.user_id', $filters['user_id']);
         }
 
-        if (!empty($filters['payment_method'])) {
+        if (! empty($filters['payment_method'])) {
             $query->where('s.payment_method', $filters['payment_method']);
         }
 
@@ -124,11 +128,11 @@ class Report
 
         static::applyBranch($query, $filters, 's.branch_id');
 
-        if (!empty($filters['user_id'])) {
+        if (! empty($filters['user_id'])) {
             $query->where('s.user_id', $filters['user_id']);
         }
 
-        if (!empty($filters['payment_method'])) {
+        if (! empty($filters['payment_method'])) {
             $query->where('s.payment_method', $filters['payment_method']);
         }
 
@@ -149,11 +153,11 @@ class Report
 
         static::applyBranch($query, $filters, 's.branch_id');
 
-        if (!empty($filters['user_id'])) {
+        if (! empty($filters['user_id'])) {
             $query->where('s.user_id', $filters['user_id']);
         }
 
-        if (!empty($filters['payment_method'])) {
+        if (! empty($filters['payment_method'])) {
             $query->where('s.payment_method', $filters['payment_method']);
         }
 
@@ -183,7 +187,16 @@ class Report
                 'p.id as product_id',
                 'p.med_name',
                 'p.brand_name',
-                DB::raw('SUM(si.quantity_sold - si.returned_quantity) as units_sold'),
+                // Pieces kept by the customer: the pieces the line actually
+                // deducted (pieces_sold) pro rata to the units not returned.
+                // Lines without pieces_sold fall back to the Dashboard rule
+                // (Box x pack_size).
+                DB::raw("CAST(SUM(CASE
+                    WHEN si.pieces_sold IS NOT NULL
+                        THEN si.pieces_sold * (si.quantity_sold - si.returned_quantity) / NULLIF(si.quantity_sold, 0)
+                    ELSE (CAST(si.quantity_sold AS SIGNED) - CAST(si.returned_quantity AS SIGNED))
+                        * CASE WHEN LOWER(si.unit_type) = 'box' THEN GREATEST(COALESCE(p.pack_size, 1), 1) ELSE 1 END
+                END) AS SIGNED) as units_sold"),
                 DB::raw('SUM(si.total_price - si.discount_amount - si.refunded_amount) as revenue')
             )
             ->groupBy('p.id', 'p.med_name', 'p.brand_name')
@@ -216,8 +229,7 @@ class Report
         return $query->get();
     }
 
-
-        public static function voidReturns(array $filters)
+    public static function voidReturns(array $filters)
     {
         [$from, $to] = static::dateRange($filters);
 
@@ -291,31 +303,31 @@ class Report
 
         static::applyBranch($query, $filters, 'p.branch_id');
 
-        if (!empty($filters['product_id'])) {
+        if (! empty($filters['product_id'])) {
             $query->where('p.id', $filters['product_id']);
         }
 
-        if (!empty($filters['product_name'])) {
-            $query->where('p.med_name', 'like', '%' . $filters['product_name'] . '%');
+        if (! empty($filters['product_name'])) {
+            $query->where('p.med_name', 'like', '%'.$filters['product_name'].'%');
         }
 
-        if (!empty($filters['brand_name'])) {
-            $query->where('p.brand_name', 'like', '%' . $filters['brand_name'] . '%');
+        if (! empty($filters['brand_name'])) {
+            $query->where('p.brand_name', 'like', '%'.$filters['brand_name'].'%');
         }
 
-        if (!empty($filters['lot_number'])) {
-            $query->where('pq.lot_number', 'like', '%' . $filters['lot_number'] . '%');
+        if (! empty($filters['lot_number'])) {
+            $query->where('pq.lot_number', 'like', '%'.$filters['lot_number'].'%');
         }
 
-        if (!empty($filters['shelf_number'])) {
-            $query->where('pq.shelf_number', 'like', '%' . $filters['shelf_number'] . '%');
+        if (! empty($filters['shelf_number'])) {
+            $query->where('pq.shelf_number', 'like', '%'.$filters['shelf_number'].'%');
         }
 
-        if (!empty($filters['expiry_from'])) {
+        if (! empty($filters['expiry_from'])) {
             $query->where('pq.expiry', '>=', $filters['expiry_from']);
         }
 
-        if (!empty($filters['expiry_to'])) {
+        if (! empty($filters['expiry_to'])) {
             $query->where('pq.expiry', '<=', $filters['expiry_to']);
         }
 
@@ -364,7 +376,9 @@ class Report
                 'pq.expiry',
                 'pq.quantity',
                 'p.branch_id',
-                DB::raw('DATEDIFF(pq.expiry, CURDATE()) as days_to_expiry')
+                // App today (APP_TIMEZONE), not the MySQL server's CURDATE(),
+                // so this matches the cutoff computed above.
+                DB::raw('DATEDIFF(pq.expiry, '.DB::getPdo()->quote(Carbon::today()->toDateString()).') as days_to_expiry')
             )
             ->orderBy('pq.expiry');
 
@@ -407,8 +421,8 @@ class Report
             ->orderByDesc('si.stock_in_id');
 
         static::applyBranch($query, $filters, 'si.branch_id');
-        if (!empty($filters['supplier_name'])) {
-            $query->where('si.supplier_name', 'like', '%' . $filters['supplier_name'] . '%');
+        if (! empty($filters['supplier_name'])) {
+            $query->where('si.supplier_name', 'like', '%'.$filters['supplier_name'].'%');
         }
 
         return $query->get()->map(function ($row) {
@@ -459,7 +473,7 @@ class Report
 
         static::applyBranch($query, $filters, 'so.branch_id');
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('so.transaction_subtype', $filters['status']);
         }
 
@@ -538,14 +552,14 @@ class Report
             ->orderByDesc('t.id')
             ->orderBy('i.id');
 
-        if (!empty($filters['status'])) {
+        if (! empty($filters['status'])) {
             $query->where('t.status', $filters['status']);
         }
 
-        if (!empty($filters['branch_id'])) {
+        if (! empty($filters['branch_id'])) {
             $query->where(function ($q) use ($filters) {
                 $q->where('t.from_branch_id', $filters['branch_id'])
-                  ->orWhere('t.to_branch_id', $filters['branch_id']);
+                    ->orWhere('t.to_branch_id', $filters['branch_id']);
             });
         }
 
@@ -587,7 +601,7 @@ class Report
 
         static::applyBranch($query, $filters, 'l.branch_id');
 
-        if (!empty($filters['movement_type'])) {
+        if (! empty($filters['movement_type'])) {
             $query->where('l.movement_type', $filters['movement_type']);
         }
 
@@ -626,15 +640,15 @@ class Report
                 'u.name as performed_by_name'
             )
             // Older entries have no batch_id: match the lot by product + lot number.
-            ->selectRaw("COALESCE(pq.expiry, (SELECT f.expiry FROM products_qty f WHERE f.product_id = l.pd_id AND f.lot_number <=> l.lot_number ORDER BY f.id LIMIT 1)) as batch_expiry")
-            ->selectRaw("COALESCE(pq.shelf_number, (SELECT f.shelf_number FROM products_qty f WHERE f.product_id = l.pd_id AND f.lot_number <=> l.lot_number ORDER BY f.id LIMIT 1)) as batch_shelf_number")
+            ->selectRaw('COALESCE(pq.expiry, (SELECT f.expiry FROM products_qty f WHERE f.product_id = l.pd_id AND f.lot_number <=> l.lot_number ORDER BY f.id LIMIT 1)) as batch_expiry')
+            ->selectRaw('COALESCE(pq.shelf_number, (SELECT f.shelf_number FROM products_qty f WHERE f.product_id = l.pd_id AND f.lot_number <=> l.lot_number ORDER BY f.id LIMIT 1)) as batch_shelf_number')
             ->orderByDesc('l.created_at')
             ->orderByDesc('l.log_id');
 
         static::applyBranch($query, $filters, 'l.branch_id');
 
-        if (!empty($filters['search'])) {
-            $like = '%' . addcslashes($filters['search'], '%_\\') . '%';
+        if (! empty($filters['search'])) {
+            $like = '%'.addcslashes($filters['search'], '%_\\').'%';
             $query->where(function ($q) use ($like) {
                 $q->where('l.medicine_name', 'like', $like)
                     ->orWhere('l.lot_number', 'like', $like)

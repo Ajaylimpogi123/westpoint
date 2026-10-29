@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { router } from "@inertiajs/react";
@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Undo2 } from "lucide-react";
+import { newIdempotencyKey } from "@/lib/idempotency";
 
 const formatCurrency = (amount) =>
     `₱${Number(amount || 0).toLocaleString("en-PH", {
@@ -35,6 +36,12 @@ export default function VoidReturnModal({ saleId, children }) {
     const [quantities, setQuantities] = useState({});
     const [reason, setReason] = useState("");
     const [receivedBy, setReceivedBy] = useState("");
+    // One key per opening of the modal: generated on open, reused for every
+    // retry of that submission, so a double submit or a retry after a lost
+    // response is collapsed by the server instead of restocking twice.
+    const idempotencyKey = useRef(null);
+    // Synchronous guard: two clicks in the same tick both see submitting=false.
+    const inFlight = useRef(false);
 
     const openModal = async () => {
         if (!saleId) {
@@ -42,6 +49,7 @@ export default function VoidReturnModal({ saleId, children }) {
             return;
         }
 
+        idempotencyKey.current = newIdempotencyKey();
         setOpen(true);
         setLoading(true);
         setQuantities({});
@@ -84,12 +92,18 @@ export default function VoidReturnModal({ saleId, children }) {
         selectedLines.length > 0 && reason.trim() !== "" && !submitting;
 
     const handleSubmit = async () => {
-        if (!canSubmit) return;
+        if (!canSubmit || inFlight.current) return;
 
+        inFlight.current = true;
         setSubmitting(true);
 
+        if (!idempotencyKey.current) {
+            idempotencyKey.current = newIdempotencyKey();
+        }
+
         try {
-            await axios.post(route("history.void", saleId), {
+            const response = await axios.post(route("history.void", saleId), {
+                idempotency_key: idempotencyKey.current,
                 items: selectedLines.map((line) => ({
                     sale_item_id: line.item.sale_item_id,
                     quantity_returned: line.quantity,
@@ -98,7 +112,17 @@ export default function VoidReturnModal({ saleId, children }) {
                 received_by: receivedBy.trim() || undefined,
             });
 
-            toast.success("Return processed and stock restocked.");
+            // A replay of an already-saved submission (same key) comes back
+            // as 200 with already_processed: true. The return happened once,
+            // so it is shown as success, not as an error.
+            toast.success(
+                response?.data?.message ||
+                    (response?.data?.already_processed
+                        ? "This void/return was already processed."
+                        : "Return processed and stock restocked."),
+            );
+            // Done: the next opening of the modal is a new submission.
+            idempotencyKey.current = null;
             setOpen(false);
             router.reload({ only: ["sales"] });
         } catch (error) {
@@ -107,6 +131,7 @@ export default function VoidReturnModal({ saleId, children }) {
                 "Failed to process the return. Please try again.";
             toast.error(message);
         } finally {
+            inFlight.current = false;
             setSubmitting(false);
         }
     };
@@ -115,7 +140,14 @@ export default function VoidReturnModal({ saleId, children }) {
         <>
             <div onClick={openModal}>{children}</div>
 
-            <Dialog open={open} onOpenChange={setOpen}>
+            <Dialog
+                open={open}
+                onOpenChange={(next) => {
+                    // Keep the modal (and its key) while a submit is in flight.
+                    if (!next && inFlight.current) return;
+                    setOpen(next);
+                }}
+            >
                 <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle>Void / Return Items</DialogTitle>

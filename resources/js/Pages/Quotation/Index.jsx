@@ -10,26 +10,52 @@ import { Plus } from "lucide-react";
 
 const SEARCH_DEBOUNCE_MS = 400;
 
-export default function Index({ quotations, filters }) {
+export default function Index({
+    quotations,
+    filters = {},
+    branches = [],
+    canFilterBranch = false,
+}) {
     const [search, setSearch] = useState(filters.search ?? "");
     const [status, setStatus] = useState(filters.status ?? "all");
+    // Admin/superadmin only; staff are always scoped to their branch by
+    // the server, so the param is never sent for them.
+    const [branchId, setBranchId] = useState(
+        filters.branch_id ? String(filters.branch_id) : "all",
+    );
 
     // Tracks whether the current `search` value came from the user typing
     // (and therefore needs to be debounced) vs. programmatic sync.
     const isFirstRender = useRef(true);
     const debounceTimer = useRef(null);
 
-    const runFilterRequest = useCallback((params) => {
-        router.get(route("quotations.index"), params, {
-            preserveState: true,
-            replace: true,
-        });
-    }, []);
+    const runFilterRequest = useCallback(
+        (params) => {
+            const query = { ...params };
+            if (canFilterBranch && query.branch_id && query.branch_id !== "all") {
+                query.branch_id = String(query.branch_id);
+            } else {
+                delete query.branch_id;
+            }
+
+            router.get(route("quotations.index"), query, {
+                preserveState: true,
+                replace: true,
+            });
+        },
+        [canFilterBranch],
+    );
 
     function changeStatus(value) {
         setStatus(value);
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
-        runFilterRequest({ search, status: value });
+        runFilterRequest({ search, status: value, branch_id: branchId });
+    }
+
+    function changeBranch(value) {
+        setBranchId(value);
+        if (debounceTimer.current) clearTimeout(debounceTimer.current);
+        runFilterRequest({ search, status, branch_id: value });
     }
 
     // Debounce search-as-you-type so we don't hit the server on every
@@ -43,7 +69,7 @@ export default function Index({ quotations, filters }) {
         if (debounceTimer.current) clearTimeout(debounceTimer.current);
 
         debounceTimer.current = setTimeout(() => {
-            runFilterRequest({ search, status });
+            runFilterRequest({ search, status, branch_id: branchId });
         }, SEARCH_DEBOUNCE_MS);
 
         return () => {
@@ -73,6 +99,11 @@ export default function Index({ quotations, filters }) {
                 <td className="px-4 py-3 text-slate-600">
                     {formatCustomerName(q.customer) || "—"}
                 </td>
+                {canFilterBranch && (
+                    <td className="px-4 py-3 text-slate-600">
+                        {q.branch?.branch_name ?? "—"}
+                    </td>
+                )}
                 <td className="px-4 py-3 text-slate-600">
                     {formatDate(q.qt_date, "")}
                 </td>
@@ -111,7 +142,7 @@ export default function Index({ quotations, filters }) {
                 </td>
             </tr>
         ));
-    }, [quotations.data]);
+    }, [quotations.data, canFilterBranch]);
 
     const paginationLinks = useMemo(() => {
         if (!quotations.links || quotations.links.length <= 3) return null;
@@ -169,6 +200,24 @@ export default function Index({ quotations, filters }) {
                             placeholder="Search Q.F. No. or customer..."
                             className="w-64 rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
                         />
+                        {canFilterBranch && (
+                            <select
+                                value={branchId}
+                                onChange={(e) => changeBranch(e.target.value)}
+                                aria-label="Filter by branch"
+                                className="rounded-lg border border-slate-300 px-3 py-2 text-sm focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                            >
+                                <option value="all">All branches</option>
+                                {branches.map((branch) => (
+                                    <option
+                                        key={branch.id}
+                                        value={String(branch.id)}
+                                    >
+                                        {branch.branch_name}
+                                    </option>
+                                ))}
+                            </select>
+                        )}
                         {/* <select
                         value={status}
                         onChange={(e) => changeStatus(e.target.value)}
@@ -188,6 +237,9 @@ export default function Index({ quotations, filters }) {
                                 <tr>
                                     <th className="px-4 py-3">Q.F. No.</th>
                                     <th className="px-4 py-3">Customer</th>
+                                    {canFilterBranch && (
+                                        <th className="px-4 py-3">Branch</th>
+                                    )}
                                     <th className="px-4 py-3">Date</th>
                                     <th className="px-4 py-3">Items</th>
                                     <th className="px-4 py-3 text-right">

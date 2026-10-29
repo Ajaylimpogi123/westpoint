@@ -166,7 +166,7 @@ export default function StockOutProductPanel({
                                             </TableCell>
                                             <TableCell className="whitespace-nowrap font-medium">
                                                 <label htmlFor={inputId} className={canPick ? "cursor-pointer" : undefined}>
-                                                    {row.lot.lot_number}
+                                                    {row.lot.lot_number ?? "No lot #"}
                                                 </label>
                                                 {String(fefoId) === id && (
                                                     <span className="ml-1.5 text-[10px] font-semibold uppercase text-primary">

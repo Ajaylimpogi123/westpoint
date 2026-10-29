@@ -5,6 +5,8 @@
         "build": "vite build",
         "dev": "vite",
         "serve": "concurrently \"npm run dev\" \"php artisan serve\"",
+        "start": "node -e \"require('fs').rmSync('public/hot',{force:true})\" && php artisan serve",
+        "start:fresh": "npm run build && npm run start",
         "serve:ngrok": "npm run build && node scripts/ngrok-dev.mjs"
     },
     "devDependencies": {

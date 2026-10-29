@@ -9,6 +9,7 @@ const MOVEMENT_TYPE_LABELS = {
     add_stock: "Add Stock",
     batch_updated: "Batch Updated",
     batch_deleted: "Batch Deleted",
+    sale_void: "Sale Void / Return",
 };
 
 export function getMovementTypeLabel(type) {

@@ -1,4 +1,5 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { formatLocaleDateTime } from "@/lib/dates";
 import ReportFilterBar from "./Partials/ReportFilterBar";
 import DataTable from "./Partials/DataTable";
 
@@ -57,13 +58,19 @@ export default function Expiry({ filters, batches, branches }) {
                                 key: "expiry",
                                 label: "Expiry",
                                 render: (r) => {
-                                    if (!r.expiry) return "-";
-                                    const d = new Date(r.expiry);
-                                    return d.toLocaleDateString("en-US", {
-                                        month: "long",
-                                        day: "numeric",
-                                        year: "numeric",
-                                    });
+                                    // Date-only values parse as a local
+                                    // day; new Date("YYYY-MM-DD") is UTC
+                                    // midnight and can drift a day.
+                                    return formatLocaleDateTime(
+                                        r.expiry,
+                                        {
+                                            month: "long",
+                                            day: "numeric",
+                                            year: "numeric",
+                                        },
+                                        "-",
+                                        "en-US",
+                                    );
                                 },
                             },
                             {

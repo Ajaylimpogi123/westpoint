@@ -148,7 +148,7 @@ class CustomerReturnController extends Controller
 
             return redirect()->back()
                 ->withInput()
-                ->with('error', $exception->getMessage());
+                ->with('error', $this->userMessage($exception, 'Return could not be saved. Please verify your entries and try again.'));
         } catch (Throwable $exception) {
             report($exception);
             IdempotencyGuard::release(IdempotencyGuard::SCOPE_CUSTOMER_RETURN, $idempotencyKey);

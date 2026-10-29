@@ -2,8 +2,8 @@
 
 namespace App\Models;
 
-use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InventoryMovementLog extends Model
@@ -11,21 +11,37 @@ class InventoryMovementLog extends Model
     use HasFactory;
 
     public const TYPE_MEDICINE_ADDED = 'medicine_added';
+
     public const TYPE_MEDICINE_UPDATED = 'medicine_updated';
+
     public const TYPE_MEDICINE_DELETED = 'medicine_deleted';
+
     public const TYPE_STOCK_IN = 'stock_in';
+
     public const TYPE_STOCK_OUT = 'stock_out';
+
     public const TYPE_ADD_STOCK = 'add_stock';
+
     public const TYPE_BATCH_UPDATED = 'batch_updated';
+
     public const TYPE_BATCH_DELETED = 'batch_deleted';
+
     public const TYPE_BATCH_EXPIRED = 'batch_expired';
+
     public const TYPE_MEDICINE_AUTO_DELETED = 'medicine_auto_deleted';
+
     public const TYPE_MEDICINE_REACTIVATED = 'medicine_reactivated';
+
     public const TYPE_TRANSFER_OUT = 'transfer_out';
+
     public const TYPE_TRANSFER_IN = 'transfer_in';
+
     public const TYPE_CUSTOMER_RETURN = 'customer_return';
 
+    public const TYPE_SALE_VOID = 'sale_void';
+
     protected $table = 'tbl_inventory_movement_logs';
+
     protected $primaryKey = 'log_id';
 
     protected $fillable = [

@@ -33,6 +33,8 @@ const MAX_LENGTHS = {
     delivered_to: [255, "Delivered to may not be longer than 255 characters."],
     delivered_to_address: [500, "The delivery address may not be longer than 500 characters."],
     delivered_to_tin: [50, "The TIN may not be longer than 50 characters."],
+    terms: [100, "Terms may not be longer than 100 characters."],
+    invoice_number: [100, "The invoice # may not be longer than 100 characters."],
     patient_reference: [255, "Patient reference may not be longer than 255 characters."],
     remarks: [2000, "Remarks may not be longer than 2000 characters."],
 };
@@ -45,6 +47,8 @@ export const HEADER_FIELD_ORDER = [
     "delivered_to",
     "delivered_to_tin",
     "delivered_to_address",
+    "terms",
+    "invoice_number",
     "issued_by",
     "remarks",
     "items",
@@ -263,14 +267,14 @@ export function validateStockOutItems(items, { lotForItem, productForItem } = {}
 
         if (expiryInfo(lot).expired) {
             errors[key("products_qty_id")] =
-                `${line}: lot ${lot.lot_number} of ${medName} expired on ${formatExpiry(lot.expiry)} and cannot be dispensed.`;
+                `${line}: lot ${lot.lot_number ?? "(no lot #)"} of ${medName} expired on ${formatExpiry(lot.expiry)} and cannot be dispensed.`;
 
             return;
         }
 
         if ((lot.status ?? "Active") !== "Active") {
             errors[key("products_qty_id")] =
-                `${line}: lot ${lot.lot_number} of ${medName} is ${String(lot.status).toLowerCase()} and cannot be dispensed.`;
+                `${line}: lot ${lot.lot_number ?? "(no lot #)"} of ${medName} is ${String(lot.status).toLowerCase()} and cannot be dispensed.`;
 
             return;
         }
@@ -292,8 +296,8 @@ export function validateStockOutItems(items, { lotForItem, productForItem } = {}
 
         errors[key("quantity_deducted")] =
             lines.length === 1
-                ? `${line}: ${pieces} pieces of ${medName} exceed the ${available} pieces available in lot ${lot.lot_number}.`
-                : `${line}: lines ${lines.slice(0, -1).join(", ")} and ${lines[lines.length - 1]} together take ${runningPieces[lotKey]} pieces of ${medName} from lot ${lot.lot_number}, but only ${available} pieces are available.`;
+                ? `${line}: ${pieces} pieces of ${medName} exceed the ${available} pieces available in lot ${lot.lot_number ?? "(no lot #)"}.`
+                : `${line}: lines ${lines.slice(0, -1).join(", ")} and ${lines[lines.length - 1]} together take ${runningPieces[lotKey]} pieces of ${medName} from lot ${lot.lot_number ?? "(no lot #)"}, but only ${available} pieces are available.`;
     });
 
     return errors;

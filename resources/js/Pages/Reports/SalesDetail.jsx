@@ -1,5 +1,6 @@
 import { Link } from "@inertiajs/react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { formatLocaleDateTime } from "@/lib/dates";
 import ReportFilterBar from "./Partials/ReportFilterBar";
 import DataTable from "./Partials/DataTable";
 import SalesSummaryCards from "./Partials/SalesSummaryCards";
@@ -73,8 +74,8 @@ export default function SalesDetail({
                                 key: "created_at",
                                 label: "Date",
                                 render: (r) =>
-                                    new Date(r.created_at).toLocaleDateString(
-                                        undefined,
+                                    formatLocaleDateTime(
+                                        r.created_at,
                                         {
                                             year: "numeric",
                                             month: "long",

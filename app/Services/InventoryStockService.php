@@ -48,7 +48,7 @@ class InventoryStockService
         if ($quantityInPieces > self::MAX_TRANSACTION_PIECES) {
             throw new \RuntimeException(
                 'That quantity is larger than this system supports on a single line ('
-                . number_format(self::MAX_TRANSACTION_PIECES) . ' pieces). Split it across multiple lines.'
+                .number_format(self::MAX_TRANSACTION_PIECES).' pieces). Split it across multiple lines.'
             );
         }
     }
@@ -250,9 +250,13 @@ class InventoryStockService
     }
 
     public const STOCK_IN_INTENT_INCOMPLETE = 'incomplete';
+
     public const STOCK_IN_INTENT_NEW = 'new';
+
     public const STOCK_IN_INTENT_MERGE = 'merge';
+
     public const STOCK_IN_INTENT_CONFLICT = 'conflict';
+
     public const STOCK_IN_INTENT_SHELF_SPLIT = 'shelf_split';
 
     /**
@@ -335,7 +339,7 @@ class InventoryStockService
 
         throw new \RuntimeException(
             "Lot {$lotNumber} already exists with expiry {$onFileExpiry}. "
-            . 'Confirm that you intend to create a separate batch, or match the expiry on file.'
+            .'Confirm that you intend to create a separate batch, or match the expiry on file.'
         );
     }
 
@@ -438,6 +442,135 @@ class InventoryStockService
         if ((int) $batch->quantity > 0 && $batch->status !== ProductQty::STATUS_ACTIVE) {
             $batch->update(['status' => ProductQty::STATUS_ACTIVE]);
         }
+    }
+
+    public const RESTOCK_RULE_ORIGINAL = 'original_lot';
+
+    public const RESTOCK_RULE_EXPIRED = 'expired_lot';
+
+    public const RESTOCK_RULE_REPLACEMENT = 'replacement_lot';
+
+    public const RESTOCK_RULE_NEW_RETURN_LOT = 'new_return_lot';
+
+    /**
+     * Put pieces from a POS void/return back on hand.
+     *
+     * - Original lot Active/Inactive: added back to it. It turns Active only
+     *   while the medicine itself is Active.
+     * - Original lot Expired: added back to it and it stays Expired, so
+     *   returned expired stock is never sellable (D5: removed via batch
+     *   edit/delete).
+     * - Original lot Deleted (an operator decision) or gone: the lot stays as
+     *   it is; the pieces go to a lot with the same lot number, expiry and
+     *   shelf (merged with an identical non-locked lot, else created). With no
+     *   original row at all, a RETURN-<timestamp> lot without expiry is used.
+     *
+     * Locked statuses are never flipped. A replacement lot of a deactivated
+     * medicine is left Inactive so restoring the medicine stays the only way
+     * back to sale.
+     *
+     * @return array{batch: ProductQty, rule: string}
+     */
+    public static function restockReturn(
+        int $productId,
+        int $branchId,
+        ?int $originalBatchId,
+        int $quantityInPieces,
+    ): array {
+        if ($quantityInPieces < 1) {
+            throw new \RuntimeException('Quantity to restock must be at least 1 piece.');
+        }
+
+        self::assertPiecesWithinLimit($quantityInPieces);
+
+        $medicineActive = \App\Models\MedicineProduct::query()
+            ->whereKey($productId)
+            ->where('status', 'Active')
+            ->exists();
+
+        $original = $originalBatchId
+            ? ProductQty::query()->whereKey($originalBatchId)->lockForUpdate()->first()
+            : null;
+
+        if ($original && (int) $original->product_id === $productId && ! $original->isDeleted()) {
+            $original->increment('quantity', $quantityInPieces);
+            $original->refresh();
+
+            if ($original->status === ProductQty::STATUS_EXPIRED) {
+                return ['batch' => $original, 'rule' => self::RESTOCK_RULE_EXPIRED];
+            }
+
+            if ($medicineActive) {
+                self::afterStockAdded($original);
+            }
+
+            return ['batch' => $original->fresh(), 'rule' => self::RESTOCK_RULE_ORIGINAL];
+        }
+
+        $batch = $original
+            ? self::addStock(
+                productId: $productId,
+                branchId: $branchId,
+                quantityInPieces: $quantityInPieces,
+                lotNumber: $original->lot_number,
+                expiry: $original->expiry?->format('Y-m-d'),
+                shelfNumber: $original->shelf_number,
+            )
+            : self::addStock(
+                productId: $productId,
+                branchId: $branchId,
+                quantityInPieces: $quantityInPieces,
+                lotNumber: 'RETURN-'.now()->format('Ymd-His'),
+                expiry: null,
+                shelfNumber: null,
+            );
+
+        if (! $medicineActive && $batch->status === ProductQty::STATUS_ACTIVE) {
+            $batch->update(['status' => ProductQty::STATUS_INACTIVE]);
+        }
+
+        return [
+            'batch' => $batch->fresh(),
+            'rule' => $original ? self::RESTOCK_RULE_REPLACEMENT : self::RESTOCK_RULE_NEW_RETURN_LOT,
+        ];
+    }
+
+    /**
+     * Bring a restored medicine's stock back to sale: every Inactive lot that
+     * still holds pieces and has not passed its expiry date turns Active.
+     * Locked lots (Expired/Deleted) are left alone. Quantities do not change.
+     *
+     * @return \Illuminate\Support\Collection<int, ProductQty> the lots reactivated
+     */
+    public static function reactivateStockedBatches(int $productId): \Illuminate\Support\Collection
+    {
+        $batches = ProductQty::query()
+            ->where('product_id', $productId)
+            ->where('status', ProductQty::STATUS_INACTIVE)
+            ->where('quantity', '>', 0)
+            ->notExpired()
+            ->lockForUpdate()
+            ->get();
+
+        foreach ($batches as $batch) {
+            $batch->update(['status' => ProductQty::STATUS_ACTIVE]);
+        }
+
+        return $batches;
+    }
+
+    /**
+     * Pieces a deactivated medicine could return to sale on restore: lots that
+     * are Active or Inactive, hold stock and have not expired.
+     */
+    public static function restorableStock(int $productId): int
+    {
+        return (int) ProductQty::query()
+            ->where('product_id', $productId)
+            ->whereIn('status', [ProductQty::STATUS_ACTIVE, ProductQty::STATUS_INACTIVE])
+            ->where('quantity', '>', 0)
+            ->notExpired()
+            ->sum('quantity');
     }
 
     /**

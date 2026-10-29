@@ -1,5 +1,6 @@
 import { Link } from "@inertiajs/react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
+import { formatLocaleDateTime } from "@/lib/dates";
 import ReportFilterBar from "./Partials/ReportFilterBar";
 import DataTable from "./Partials/DataTable";
 
@@ -108,8 +109,8 @@ export default function VoidReturns({ filters, items, totals, branches }) {
                                 key: "created_at",
                                 label: "Date",
                                 render: (r) =>
-                                    new Date(r.created_at).toLocaleString(
-                                        undefined,
+                                    formatLocaleDateTime(
+                                        r.created_at,
                                         {
                                             year: "numeric",
                                             month: "long",

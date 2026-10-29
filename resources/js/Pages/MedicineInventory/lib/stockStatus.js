@@ -1,3 +1,5 @@
+import { toDate } from "@/lib/dates";
+
 const TONE_CLASSES = {
     danger: "bg-red-100 text-red-800",
     warning: "bg-orange-100 text-orange-800",
@@ -10,7 +12,9 @@ export function isPastExpiry(expiry) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const expiryDate = new Date(expiry);
+    const parsed = toDate(expiry);
+    if (!parsed) return false;
+    const expiryDate = new Date(parsed.getTime());
     expiryDate.setHours(0, 0, 0, 0);
 
     return expiryDate < today;

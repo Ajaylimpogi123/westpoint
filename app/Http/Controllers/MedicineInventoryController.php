@@ -638,22 +638,37 @@ class MedicineInventoryController extends Controller
                 ->with('error', 'Only deactivated medicines can be restored.');
         }
 
-        if (InventoryStockService::totalAvailableStock($medicine->id) <= 0) {
+        // Deactivating a medicine parks its stocked lots as Inactive, and Add
+        // Stock / Stock In refuse a deactivated medicine, so the stock that
+        // counts here is the parked lots, not only Active ones.
+        if (InventoryStockService::restorableStock($medicine->id) <= 0) {
             return redirect()->route('medicine-inventory.index')
-                ->with('error', 'Add stock before restoring this medicine.');
+                ->with('error', 'This medicine has no unexpired stock left, so it cannot be restored. Record new stock under an active medicine instead.');
         }
 
-        $medicine->reactivate();
+        DB::transaction(function () use ($medicine, $branchId) {
+            $medicine->reactivate();
 
-        InventoryMovementLogger::log(
-            branchId: $branchId,
-            movementType: InventoryMovementLog::TYPE_MEDICINE_REACTIVATED,
-            referenceLabel: "Medicine #{$medicine->id}",
-            referenceId: $medicine->id,
-            pdId: $medicine->id,
-            medicineName: $medicine->med_name,
-            remarks: 'Medicine manually restored.',
-        );
+            $reactivated = InventoryStockService::reactivateStockedBatches($medicine->id);
+            $pieces = (int) $reactivated->sum('quantity');
+
+            InventoryMovementLogger::log(
+                branchId: $branchId,
+                movementType: InventoryMovementLog::TYPE_MEDICINE_REACTIVATED,
+                referenceLabel: "Medicine #{$medicine->id}",
+                referenceId: $medicine->id,
+                pdId: $medicine->id,
+                medicineName: $medicine->med_name,
+                remarks: "Medicine restored; {$reactivated->count()} lot(s) with {$pieces} piece(s) reactivated.",
+                metadata: [
+                    'batches' => $reactivated->map(fn (ProductQty $batch) => [
+                        'id' => $batch->id,
+                        'lot_number' => $batch->lot_number,
+                        'quantity' => (int) $batch->quantity,
+                    ])->values()->all(),
+                ],
+            );
+        });
 
         return redirect()->route('medicine-inventory.index')
             ->with('success', 'Medicine has been restored.');

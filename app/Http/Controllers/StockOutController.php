@@ -36,7 +36,9 @@ class StockOutController extends Controller
 
     private const SUBTYPE_DELIVERY = 'Delivery to Customer';
 
-    private const SUBTYPES = [self::SUBTYPE_DELIVERY, 'Returned to supplier'];
+    private const SUBTYPE_RETURNED_TO_SUPPLIER = 'Returned to supplier';
+
+    private const SUBTYPES = [self::SUBTYPE_DELIVERY, self::SUBTYPE_RETURNED_TO_SUPPLIER];
 
     /**
      * Philippine TIN: 9 digits (dashes optional) plus an optional 3-5 digit
@@ -119,6 +121,8 @@ class StockOutController extends Controller
                     'delivered_to' => $validated['delivered_to'] ?? null,
                     'delivered_to_tin' => $validated['delivered_to_tin'] ?? null,
                     'delivered_to_address' => $validated['delivered_to_address'] ?? null,
+                    'terms' => $validated['terms'] ?? null,
+                    'invoice_number' => $validated['invoice_number'] ?? null,
                 ]);
 
                 foreach ($lines as $line) {
@@ -157,7 +161,7 @@ class StockOutController extends Controller
 
             return redirect()->back()
                 ->withInput()
-                ->with('error', $exception->getMessage());
+                ->with('error', $this->userMessage($exception, 'Stock-out could not be saved. Please verify your entries and try again.'));
         } catch (Throwable $exception) {
             IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey);
             report($exception);
@@ -205,6 +209,8 @@ class StockOutController extends Controller
                 'delivered_to' => $stockOut->delivered_to,
                 'delivered_to_tin' => $stockOut->delivered_to_tin,
                 'delivered_to_address' => $stockOut->delivered_to_address,
+                'terms' => $stockOut->terms,
+                'invoice_number' => $stockOut->invoice_number,
                 'delivery_confirmed' => (bool) $stockOut->delivery_confirmed,
                 'created_at' => $stockOut->created_at,
                 'branch_id' => (int) $stockOut->branch_id,
@@ -357,7 +363,7 @@ class StockOutController extends Controller
             });
         } catch (InsufficientStockException|\RuntimeException $exception) {
             return redirect()->back()
-                ->with('error', $exception->getMessage());
+                ->with('error', $this->userMessage($exception, 'Could not add this stock-out to sales. Please try again.'));
         } catch (Throwable $exception) {
             report($exception);
 
@@ -400,6 +406,8 @@ class StockOutController extends Controller
                 'delivered_to' => $stockOut->delivered_to,
                 'delivered_to_tin' => $stockOut->delivered_to_tin,
                 'delivered_to_address' => $stockOut->delivered_to_address,
+                'terms' => $stockOut->terms,
+                'invoice_number' => $stockOut->invoice_number,
             ],
             'items' => $stockOut->items->map(fn (StockOutItem $item) => [
                 'pd_id' => $item->pd_id,
@@ -428,26 +436,47 @@ class StockOutController extends Controller
         $branchId = (int) $stockOut->branch_id;
         $input = $this->normaliseInput($request->all());
 
-        // Only pending deliveries are editable, so delivered_to is required.
+        // A pending delivery has taken no stock yet. A return to supplier
+        // took its stock when saved, so those pieces count as available
+        // again for its own lots while it is edited.
+        $isDelivery = $stockOut->transaction_subtype === self::SUBTYPE_DELIVERY;
+        $held = $isDelivery ? [] : $this->piecesHeldPerLot($stockOut->items()->get());
+
         $validator = Validator::make($input, [
-            ...$this->headerRules(deliveredToRequired: true),
+            ...$this->headerRules(deliveredToRequired: $isDelivery),
             ...$this->itemRules(),
         ], $this->validationMessages());
 
-        $validator->after(function ($validator) use ($input, $branchId) {
-            $this->addBasketErrors($validator, $input['items'] ?? [], $branchId);
+        $validator->after(function ($validator) use ($input, $branchId, $held) {
+            $this->addBasketErrors($validator, $input['items'] ?? [], $branchId, $held);
         });
 
         $validated = $validator->validate();
 
         try {
-            DB::transaction(function () use ($validated, $stockOut, $branchId) {
-                // Nothing has been deducted yet for an editable stock-out, so
-                // the lot's full current quantity is what is available.
-                [$errors, $lines] = $this->resolveBasket($validated['items'], $branchId, lockLots: true);
+            DB::transaction(function () use ($validated, $stockOut, $branchId, $isDelivery) {
+                // Serialise edits of the same stock-out and re-check it was
+                // not confirmed since the form was loaded.
+                $stockOut = StockOut::query()->whereKey($stockOut->getKey())->lockForUpdate()->firstOrFail();
+
+                if (! $this->isEditable($stockOut)) {
+                    throw new \RuntimeException('This stock-out can no longer be edited.');
+                }
+
+                $oldItems = StockOutItem::query()
+                    ->where('stock_out_id', $stockOut->stock_out_id)
+                    ->with('product:id,med_name')
+                    ->get();
+                $held = $isDelivery ? [] : $this->piecesHeldPerLot($oldItems);
+
+                [$errors, $lines] = $this->resolveBasket($validated['items'], $branchId, lockLots: true, held: $held);
 
                 if ($errors !== []) {
                     throw ValidationException::withMessages($errors);
+                }
+
+                if (! $isDelivery) {
+                    $this->applyReturnEdit($stockOut, $branchId, $oldItems, $lines);
                 }
 
                 $stockOut->update([
@@ -457,9 +486,10 @@ class StockOutController extends Controller
                     'delivered_to' => $validated['delivered_to'] ?? null,
                     'delivered_to_tin' => $validated['delivered_to_tin'] ?? null,
                     'delivered_to_address' => $validated['delivered_to_address'] ?? null,
+                    'terms' => $validated['terms'] ?? null,
+                    'invoice_number' => $validated['invoice_number'] ?? null,
                 ]);
 
-                // No inventory to reverse — just replace the pending lines.
                 StockOutItem::where('stock_out_id', $stockOut->stock_out_id)->delete();
 
                 foreach ($lines as $line) {
@@ -469,7 +499,7 @@ class StockOutController extends Controller
         } catch (ValidationException $exception) {
             throw $exception;
         } catch (InsufficientStockException|\RuntimeException $exception) {
-            return redirect()->back()->withInput()->with('error', $exception->getMessage());
+            return redirect()->back()->withInput()->with('error', $this->userMessage($exception, 'Stock-out could not be updated. Please verify your entries and try again.'));
         } catch (Throwable $exception) {
             report($exception);
 
@@ -478,6 +508,96 @@ class StockOutController extends Controller
         }
 
         return redirect()->back()->with('success', 'Stock-out transaction updated successfully.');
+    }
+
+    /**
+     * Pieces this stock-out currently holds, per lot.
+     *
+     * @param  \Illuminate\Support\Collection<int, StockOutItem>  $items
+     * @return array<int, int>
+     */
+    private function piecesHeldPerLot($items): array
+    {
+        $held = [];
+
+        foreach ($items as $item) {
+            $lotId = (int) $item->products_qty_id;
+            $held[$lotId] = ($held[$lotId] ?? 0) + (int) $item->pieces_deducted;
+        }
+
+        return $held;
+    }
+
+    /**
+     * Moves stock for an edited return to supplier by the net change per
+     * lot: more pieces are taken from a lot, fewer are put back into it.
+     * Unchanged lots are not touched or logged.
+     *
+     * @param  \Illuminate\Support\Collection<int, StockOutItem>  $oldItems
+     * @param  list<array{medicine: MedicineProduct, batch: ProductQty, unit_type: UnitType, quantity: int, pieces_per_box: ?int, pieces: int}>  $lines
+     */
+    private function applyReturnEdit(StockOut $stockOut, int $branchId, $oldItems, array $lines): void
+    {
+        $lots = [];
+
+        foreach ($oldItems as $item) {
+            $lotId = (int) $item->products_qty_id;
+            $lots[$lotId] ??= [
+                'pd_id' => (int) $item->pd_id,
+                'med_name' => $item->product?->med_name ?? 'the selected medicine',
+                'lot_number' => $item->lot_number,
+                'old' => 0,
+                'new' => 0,
+            ];
+            $lots[$lotId]['old'] += (int) $item->pieces_deducted;
+        }
+
+        foreach ($lines as $line) {
+            $lotId = (int) $line['batch']->id;
+            $lots[$lotId] ??= [
+                'pd_id' => (int) $line['medicine']->id,
+                'med_name' => $line['medicine']->med_name,
+                'lot_number' => $line['batch']->lot_number,
+                'old' => 0,
+                'new' => 0,
+            ];
+            $lots[$lotId]['new'] += $line['pieces'];
+        }
+
+        foreach ($lots as $lotId => $lot) {
+            $change = $lot['new'] - $lot['old'];
+
+            if ($change === 0) {
+                continue;
+            }
+
+            if ($change > 0) {
+                InventoryStockService::deductFromBatch(
+                    batchId: $lotId,
+                    quantityInPieces: $change,
+                    medicineName: $lot['med_name'],
+                );
+            } else {
+                InventoryStockService::restockReturn(
+                    productId: $lot['pd_id'],
+                    branchId: $branchId,
+                    originalBatchId: $lotId,
+                    quantityInPieces: -$change,
+                );
+            }
+
+            InventoryMovementLogger::log(
+                branchId: $branchId,
+                movementType: InventoryMovementLog::TYPE_STOCK_OUT,
+                referenceLabel: "Stock Out #{$stockOut->stock_out_id}",
+                referenceId: $stockOut->stock_out_id,
+                pdId: $lot['pd_id'],
+                medicineName: $lot['med_name'],
+                lotNumber: $lot['lot_number'],
+                quantity: -$change,
+                remarks: 'Stock-out edited',
+            );
+        }
     }
 
     private function alreadySaved(): RedirectResponse
@@ -500,6 +620,8 @@ class StockOutController extends Controller
             'delivered_to' => [$deliveredToRequired ? 'required' : 'nullable', 'string', 'max:255'],
             'delivered_to_tin' => ['nullable', 'string', 'max:50', 'regex:'.self::TIN_PATTERN],
             'delivered_to_address' => ['nullable', 'string', 'max:500'],
+            'terms' => ['nullable', 'string', 'max:100'],
+            'invoice_number' => ['nullable', 'string', 'max:100'],
         ];
     }
 
@@ -551,6 +673,8 @@ class StockOutController extends Controller
             'delivered_to.max' => 'Delivered to may not be longer than 255 characters.',
             'delivered_to_address.max' => 'The delivery address may not be longer than 500 characters.',
             'delivered_to_tin.max' => 'The TIN may not be longer than 50 characters.',
+            'terms.max' => 'Terms may not be longer than 100 characters.',
+            'invoice_number.max' => 'The invoice # may not be longer than 100 characters.',
             'delivered_to_tin.regex' => 'Enter the TIN as 9 digits with an optional 3-5 digit branch code, e.g. 123-456-789 or 123-456-789-00000.',
             'patient_reference.max' => 'Patient reference may not be longer than 255 characters.',
             'remarks.max' => 'Remarks may not be longer than 2000 characters.',
@@ -620,7 +744,7 @@ class StockOutController extends Controller
      * line whose own fields already passed, so one round trip reports all
      * problems.
      */
-    private function addBasketErrors(\Illuminate\Validation\Validator $validator, mixed $items, int $branchId): void
+    private function addBasketErrors(\Illuminate\Validation\Validator $validator, mixed $items, int $branchId, array $held = []): void
     {
         if (! is_array($items)) {
             return;
@@ -646,7 +770,7 @@ class StockOutController extends Controller
             return;
         }
 
-        [$basketErrors] = $this->resolveBasket($checkable, $branchId);
+        [$basketErrors] = $this->resolveBasket($checkable, $branchId, held: $held);
 
         foreach ($basketErrors as $key => $message) {
             $errors->add($key, $message);
@@ -659,9 +783,10 @@ class StockOutController extends Controller
      * each lot (summed over every line using it) fit the lot.
      *
      * @param  array<int|string, array<string, mixed>>  $items  already field-validated lines, keyed by basket index
+     * @param  array<int, int>  $held  pieces per lot this stock-out already took (an edited return), counted as available
      * @return array{0: array<string, string>, 1: list<array{medicine: MedicineProduct, batch: ProductQty, unit_type: UnitType, quantity: int, pieces_per_box: ?int, pieces: int}>}
      */
-    private function resolveBasket(array $items, int $branchId, bool $lockLots = false): array
+    private function resolveBasket(array $items, int $branchId, bool $lockLots = false, array $held = []): array
     {
         $errors = $this->itemBranchErrors($items, $branchId, checkBatches: true, lineNumbers: true);
 
@@ -715,7 +840,7 @@ class StockOutController extends Controller
 
             $piecesPerLot[$batch->id] = ($piecesPerLot[$batch->id] ?? 0) + $pieces;
             $linesPerLot[$batch->id][] = $lineNumber;
-            $available = (int) $batch->quantity;
+            $available = (int) $batch->quantity + ($held[$batch->id] ?? 0);
 
             if ($piecesPerLot[$batch->id] > $available && ! isset($reportedLots[$batch->id])) {
                 $reportedLots[$batch->id] = true;
@@ -797,10 +922,19 @@ class StockOutController extends Controller
         }
     }
 
+    /**
+     * Pending deliveries (no stock taken yet) and returns to supplier (stock
+     * is moved by the net change on edit). A delivery added to sales is
+     * locked to its sale; legacy "Dispensed to patient" rows took stock at
+     * creation under the old flow and are locked too.
+     */
     private function isEditable(StockOut $stockOut): bool
     {
-        return $stockOut->transaction_subtype === 'Delivery to Customer'
-            && ! $stockOut->delivery_confirmed;
+        return match ($stockOut->transaction_subtype) {
+            self::SUBTYPE_DELIVERY => ! $stockOut->delivery_confirmed,
+            self::SUBTYPE_RETURNED_TO_SUPPLIER => true,
+            default => false,
+        };
     }
 
     /**

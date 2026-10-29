@@ -185,7 +185,7 @@ export default function StockOutItemPicker({
                         {lotPicked && (
                             <div className="flex flex-wrap justify-between gap-x-4 gap-y-0.5 text-xs text-muted-foreground">
                                 <span>
-                                    Lot {selectedLot.lot_number}: {selectedLotRow.remaining.toLocaleString()} pcs free · max{" "}
+                                    Lot {selectedLot.lot_number ?? "No lot #"}: {selectedLotRow.remaining.toLocaleString()} pcs free · max{" "}
                                     {maxQuantity.toLocaleString()} {box ? "box(es)" : "pc(s)"}
                                 </span>
                                 <span className="font-medium text-foreground">Deducts {piecesLabel}</span>

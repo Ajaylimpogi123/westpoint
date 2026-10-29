@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\BranchCustomer;
 use App\Models\Branch;
+use App\Models\BranchCustomer;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\Quotation;
@@ -27,14 +27,19 @@ class QuotationController extends Controller
     {
         $search = $request->get('search');
         $status = $request->get('status', 'all');
+        $branchFilter = $this->canViewAllBranches() ? (string) $request->get('branch_id', 'all') : null;
+        $branchFilter = ($branchFilter === '' || $branchFilter === null) ? ($this->canViewAllBranches() ? 'all' : null) : $branchFilter;
 
-        $quotations = Quotation::with(['customer', 'items'])
+        $quotations = $this->scopedQuotations()
+            ->with(['customer', 'items', 'branch:id,branch_name'])
+            ->when($branchFilter !== null && $branchFilter !== 'all', fn ($q) => $q->where('branch_id', (int) $branchFilter))
             ->when($search, function ($q) use ($search) {
-                $q->where('qt_no', 'like', "%{$search}%")
-                  ->orWhereHas('customer', fn ($c) =>
-                        $c->where('first_name', 'like', "%{$search}%")
-                          ->orWhere('last_name', 'like', "%{$search}%")
-                  );
+                $q->where(function ($inner) use ($search) {
+                    $inner->where('qt_no', 'like', "%{$search}%")
+                        ->orWhereHas('customer', fn ($c) => $c->where('first_name', 'like', "%{$search}%")
+                            ->orWhere('last_name', 'like', "%{$search}%")
+                        );
+                });
             })
             ->when($status !== 'all', fn ($q) => $q->where('status', $status))
             ->orderBy('created_at', 'desc')
@@ -43,7 +48,11 @@ class QuotationController extends Controller
 
         return Inertia::render('Quotation/Index', [
             'quotations' => $quotations,
-            'filters'    => ['search' => $search, 'status' => $status],
+            'filters' => ['search' => $search, 'status' => $status, 'branch_id' => $branchFilter],
+            'branches' => $this->canViewAllBranches()
+                ? Branch::orderBy('branch_name')->get(['id', 'branch_name'])
+                : [],
+            'canFilterBranch' => $this->canViewAllBranches(),
         ]);
     }
 
@@ -64,23 +73,24 @@ class QuotationController extends Controller
     // STORE — save new quotation + items
     // ──────────────────────────────────────────────────────
 
-       public function store(Request $request): RedirectResponse
+    public function store(Request $request): RedirectResponse
     {
         $validated = $request->validate($this->quotationRules(), $this->quotationMessages());
 
         DB::transaction(function () use ($validated) {
             $quotation = Quotation::create([
-                'customer_id'   => $validated['customer_id'],
-                'qt_no'         => Quotation::generateQtNo(),
-                'sid_no'        => $validated['sid_no'] ?? null,
-                'qt_date'       => $validated['qt_date'],
-                'address'       => $validated['address'] ?? null,
+                'customer_id' => $validated['customer_id'],
+                'branch_id' => $this->quotationBranchId((int) $validated['customer_id']),
+                'qt_no' => Quotation::generateQtNo(),
+                'sid_no' => $validated['sid_no'] ?? null,
+                'qt_date' => $validated['qt_date'],
+                'address' => $validated['address'] ?? null,
                 'delivery_type' => $validated['delivery_type'],
-                'qt_remarks'    => $validated['qt_remarks'] ?? null,
-                'checked_by'    => $validated['checked_by'] ?? null,
-                'prepared_by'   => $validated['prepared_by'] ?? null,
-                'status'        => 'draft',
-                'total_amount'  => 0,
+                'qt_remarks' => $validated['qt_remarks'] ?? null,
+                'checked_by' => $validated['checked_by'] ?? null,
+                'prepared_by' => $validated['prepared_by'] ?? null,
+                'status' => 'draft',
+                'total_amount' => 0,
             ]);
 
             foreach ($validated['items'] as $index => $item) {
@@ -98,7 +108,9 @@ class QuotationController extends Controller
 
     public function show(Quotation $quotation): Response
     {
-        $quotation->load(['customer', 'items']);
+        $this->assertQuotationAccess($quotation);
+
+        $quotation->load(['customer', 'items', 'branch:id,branch_name']);
 
         return Inertia::render('Quotation/Show', [
             'quotation' => $quotation,
@@ -111,7 +123,9 @@ class QuotationController extends Controller
 
     public function edit(Quotation $quotation): Response
     {
-        $quotation->load(['customer', 'items']);
+        $this->assertQuotationAccess($quotation);
+
+        $quotation->load(['customer', 'items', 'branch:id,branch_name']);
 
         return Inertia::render('Quotation/Edit', [
             'quotation' => $quotation,
@@ -124,8 +138,10 @@ class QuotationController extends Controller
     // UPDATE — replace header + items
     // ──────────────────────────────────────────────────────
 
-     public function update(Request $request, Quotation $quotation): RedirectResponse
+    public function update(Request $request, Quotation $quotation): RedirectResponse
     {
+        $this->assertQuotationAccess($quotation);
+
         if (! $quotation->isDraft()) {
             return back()->withErrors(['status' => 'Only draft quotations can be edited.']);
         }
@@ -134,14 +150,15 @@ class QuotationController extends Controller
 
         DB::transaction(function () use ($validated, $quotation) {
             $quotation->update([
-                'customer_id'   => $validated['customer_id'],
-                'sid_no'        => $validated['sid_no'] ?? null,
-                'qt_date'       => $validated['qt_date'],
-                'address'       => $validated['address'] ?? null,
+                'customer_id' => $validated['customer_id'],
+                'branch_id' => $this->quotationBranchId((int) $validated['customer_id']),
+                'sid_no' => $validated['sid_no'] ?? null,
+                'qt_date' => $validated['qt_date'],
+                'address' => $validated['address'] ?? null,
                 'delivery_type' => $validated['delivery_type'],
-                'qt_remarks'    => $validated['qt_remarks'] ?? null,
-                'checked_by'    => $validated['checked_by'] ?? null,
-                'prepared_by'   => $validated['prepared_by'] ?? null,
+                'qt_remarks' => $validated['qt_remarks'] ?? null,
+                'checked_by' => $validated['checked_by'] ?? null,
+                'prepared_by' => $validated['prepared_by'] ?? null,
             ]);
 
             $quotation->items()->delete();
@@ -161,6 +178,8 @@ class QuotationController extends Controller
 
     public function destroy(Quotation $quotation): RedirectResponse
     {
+        $this->assertQuotationAccess($quotation);
+
         if (! $quotation->isDraft()) {
             return back()->withErrors(['status' => 'Only draft quotations can be deleted.']);
         }
@@ -177,10 +196,12 @@ class QuotationController extends Controller
 
     public function print(Quotation $quotation): Response
     {
-        $quotation->load(['customer', 'items']);
+        $this->assertQuotationAccess($quotation);
+
+        $quotation->load(['customer', 'items', 'branch:id,branch_name']);
 
         $quotation->update([
-            'printed_by'   => auth()->user()->name,
+            'printed_by' => auth()->user()->name,
             'time_printed' => now()->format('d/m/Y h:i A'),
         ]);
 
@@ -193,7 +214,7 @@ class QuotationController extends Controller
     // MEDICINE SEARCH — branch-scoped product lookup for item rows
     // ──────────────────────────────────────────────────────
 
-       public function searchMedicines(Request $request): JsonResponse
+    public function searchMedicines(Request $request): JsonResponse
     {
         $branchId = $this->branchIdOrFail();
 
@@ -226,23 +247,24 @@ class QuotationController extends Controller
 
         return response()->json(['products' => $products]);
     }
- public function showMedicine(MedicineProduct $product): JsonResponse
-{
-    $branchId = $this->branchIdOrFail();
 
-    if ((int) $product->branch_id !== $branchId || $product->status !== 'Active') {
-        abort(404);
+    public function showMedicine(MedicineProduct $product): JsonResponse
+    {
+        $branchId = $this->branchIdOrFail();
+
+        if ((int) $product->branch_id !== $branchId || $product->status !== 'Active') {
+            abort(404);
+        }
+
+        $product->load(['batches' => function ($query) {
+            $query->available()
+                ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
+                ->orderBy('expiry')
+                ->select(['id', 'product_id', 'lot_number', 'expiry', 'quantity']);
+        }]);
+
+        return response()->json($this->serializeMedicineForQuotation($product));
     }
-
-    $product->load(['batches' => function ($query) {
-        $query->available()
-            ->orderByRaw('CASE WHEN expiry IS NULL THEN 1 ELSE 0 END')
-            ->orderBy('expiry')
-            ->select(['id', 'product_id', 'lot_number', 'expiry', 'quantity']);
-    }]);
-
-    return response()->json($this->serializeMedicineForQuotation($product));
-}
 
     // ──────────────────────────────────────────────────────
     // UPDATE STATUS — send / approve / cancel
@@ -250,6 +272,8 @@ class QuotationController extends Controller
 
     public function updateStatus(Request $request, Quotation $quotation): RedirectResponse
     {
+        $this->assertQuotationAccess($quotation);
+
         $validated = $request->validate([
             'status' => 'required|in:sent,approved,cancelled',
         ]);
@@ -264,6 +288,56 @@ class QuotationController extends Controller
     private function roleId(): int
     {
         return (int) session('role_id');
+    }
+
+    private function canViewAllBranches(): bool
+    {
+        return in_array($this->roleId(), [2, 3], true);
+    }
+
+    /**
+     * QUO-1: staff only ever see their own branch's quotations; admins and
+     * superadmins see every branch.
+     */
+    private function scopedQuotations()
+    {
+        $query = Quotation::query();
+
+        if (! $this->canViewAllBranches()) {
+            $query->where('branch_id', $this->branchIdOrFail());
+        }
+
+        return $query;
+    }
+
+    /**
+     * 404 rather than 403, so another branch's quotation numbers are not
+     * confirmed to exist.
+     */
+    private function assertQuotationAccess(Quotation $quotation): void
+    {
+        if ($this->canViewAllBranches()) {
+            return;
+        }
+
+        $branchId = $this->branchIdOrFail();
+
+        if ($quotation->branch_id === null || (int) $quotation->branch_id !== $branchId) {
+            abort(404);
+        }
+    }
+
+    /**
+     * A quotation belongs to its customer's branch; the session branch is
+     * the fallback.
+     */
+    private function quotationBranchId(int $customerId): ?int
+    {
+        $branchId = BranchCustomer::query()
+            ->where('customer_id', $customerId)
+            ->value('branch_id');
+
+        return $branchId !== null ? (int) $branchId : $this->branchId();
     }
 
     private function canAssignBranch(): bool
@@ -301,27 +375,27 @@ class QuotationController extends Controller
         return $rule;
     }
 
-        private function quotationRules(): array
+    private function quotationRules(): array
     {
         return [
-            'customer_id'            => ['required', 'integer', $this->customerExistsRule()],
-            'sid_no'                 => 'nullable|string|max:100',
-            'qt_date'                => 'required|date',
-            'address'                => 'nullable|string|max:255',
-            'delivery_type'          => 'required|in:pick-up,delivery',
-            'qt_remarks'             => 'nullable|string',
-            'checked_by'             => 'nullable|string|max:100',
-            'prepared_by'            => 'nullable|string|max:100',
+            'customer_id' => ['required', 'integer', $this->customerExistsRule()],
+            'sid_no' => 'nullable|string|max:100',
+            'qt_date' => 'required|date',
+            'address' => 'nullable|string|max:255',
+            'delivery_type' => 'required|in:pick-up,delivery',
+            'qt_remarks' => 'nullable|string',
+            'checked_by' => 'nullable|string|max:100',
+            'prepared_by' => 'nullable|string|max:100',
 
-            'items'                  => 'required|array|min:1',
-            'items.*.qt_qty'         => 'required|integer|min:1',
-            'items.*.qt_unit'        => 'nullable|string|max:50',
+            'items' => 'required|array|min:1',
+            'items.*.qt_qty' => 'required|integer|min:1',
+            'items.*.qt_unit' => 'nullable|string|max:50',
             // Required only when the line's unit is a box.
             'items.*.qt_pcs_per_box' => 'nullable|integer|min:1|max:100000|required_if:items.*.qt_unit,BXS,BOX,BX',
             'items.*.qt_description' => 'required|string',
-       
-            'items.*.expiry_date'    => 'nullable|date',
-            'items.*.qt_unit_price'  => 'required|numeric|min:0',
+
+            'items.*.expiry_date' => 'nullable|date',
+            'items.*.qt_unit_price' => 'required|numeric|min:0',
         ];
     }
 
@@ -342,26 +416,26 @@ class QuotationController extends Controller
         $isBox = $this->isBoxUnit($item['qt_unit'] ?? null);
 
         return [
-            'quotation_id'   => $quotationId,
-            'qt_qty'         => $item['qt_qty'],
-            'qt_unit'        => $item['qt_unit'] ?? null,
+            'quotation_id' => $quotationId,
+            'qt_qty' => $item['qt_qty'],
+            'qt_unit' => $item['qt_unit'] ?? null,
             // A pcs-per-box value only means something on box lines, so it's
             // dropped if the cashier switched back to Pcs.
             'qt_pcs_per_box' => $isBox ? ($item['qt_pcs_per_box'] ?? null) : null,
             'qt_description' => $item['qt_description'],
-            'lot_number'     => null,
-            'expiry_date'    => $item['expiry_date'] ?? null,
-            'qt_unit_price'  => $item['qt_unit_price'],
-            'sort_order'     => $index,
+            'lot_number' => null,
+            'expiry_date' => $item['expiry_date'] ?? null,
+            'qt_unit_price' => $item['qt_unit_price'],
+            'sort_order' => $index,
         ];
     }
 
-private function branchMedicinesQuery(int $branchId)
-{
-    return MedicineProduct::query()
-        ->active()
-        ->forBranch($branchId);
-}
+    private function branchMedicinesQuery(int $branchId)
+    {
+        return MedicineProduct::query()
+            ->active()
+            ->forBranch($branchId);
+    }
 
     private function serializeMedicineSummary(MedicineProduct $product): array
     {

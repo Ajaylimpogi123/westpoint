@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { router } from "@inertiajs/react";
 import { toast } from "sonner";
 import CheckoutReview from "./CheckoutReview";
@@ -49,6 +49,8 @@ export default function CheckoutDialog({
     const [reviewLoading, setReviewLoading] = useState(false);
     const [reviewError, setReviewError] = useState("");
     const [idempotencyKey, setIdempotencyKey] = useState(newIdempotencyKey);
+    // Synchronous guard: two clicks in the same tick both see processing=false.
+    const inFlight = useRef(false);
 
     useEffect(() => {
         if (!open || !cartId || cartItems.length === 0) {
@@ -119,6 +121,8 @@ export default function CheckoutDialog({
             return;
         }
 
+        if (inFlight.current) return;
+        inFlight.current = true;
         setProcessing(true);
 
         // Derived, not separately tracked: a 20% discount only maps to a
@@ -138,6 +142,11 @@ export default function CheckoutDialog({
         // Must open synchronously within the click handler so the browser
         // does not treat it as a blocked popup once the request resolves.
         const invoiceWindow = window.open("", "_blank");
+
+        // Set once the server has answered (success or validation error).
+        // Inertia marks a visit "completed" even after a network failure,
+        // so this is how onFinish tells an unanswered request apart.
+        let settled = false;
 
         router.post(
             route("pos.store"),
@@ -169,6 +178,25 @@ export default function CheckoutDialog({
                 preserveScroll: true,
                 preserveState: false,
                 onSuccess: (page) => {
+                    settled = true;
+
+                    // Inertia calls onSuccess for every non-validation
+                    // redirect, including a flash.error one, so a failed
+                    // sale must not run the success path. The page's
+                    // usePosAlerts already toasts the flash message; the
+                    // key is kept because the server released it, so a
+                    // retry of this same submission reuses it.
+                    if (page?.props?.flash?.error) {
+                        invoiceWindow?.close();
+                        return;
+                    }
+
+                    // From here the sale is committed. This includes the
+                    // server's "already completed" answer to a retried
+                    // checkout (same idempotency key): treat it as success,
+                    // never as an error, so the cashier doesn't ring it up
+                    // again. That answer may carry no sale_id, in which
+                    // case no invoice tab is opened.
                     setOpen(false);
                     setAmountReceived("");
                     setReferenceNumber("");
@@ -189,14 +217,27 @@ export default function CheckoutDialog({
                     }
                 },
                 onError: (errors) => {
+                    settled = true;
                     const message =
                         Object.values(errors)[0] ||
                         "Failed to complete sale. Please try again.";
                     toast.error(message);
                     invoiceWindow?.close();
                 },
-                onFinish: () => {
+                onFinish: (visit) => {
+                    inFlight.current = false;
                     setProcessing(false);
+
+                    // Network failure or timeout: the sale may or may not
+                    // have committed. The idempotency key is unchanged, so
+                    // pressing Confirm again is safe; the server answers
+                    // "already completed" if the first attempt went through.
+                    if (!settled && !visit?.cancelled && !visit?.interrupted) {
+                        invoiceWindow?.close();
+                        toast.error(
+                            "The sale could not be confirmed. Press Confirm Sale again; it will not be rung up twice.",
+                        );
+                    }
                 },
             },
         );

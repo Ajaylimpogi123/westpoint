@@ -2,8 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Report;
 use App\Models\Branch;
+use App\Models\Report;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
@@ -38,19 +38,20 @@ class ReportController extends Controller
             'paymentMethods' => DB::table('tbl_sales')->distinct()->pluck('payment_method')->filter()->values(),
         ]);
     }
-public function salesDetail(Request $request)
-{
-    $filters = $request->only(['date_from', 'date_to', 'branch_id', 'user_id', 'payment_method', 'per_page']);
 
-    return Inertia::render('Reports/SalesDetail', [
-        'filters' => $filters,
-        'sales' => Report::salesDetail($filters),
-        'totals' => Report::salesDetailTotals($filters),
-        'paymentBreakdown' => Report::salesDetailByPaymentMethod($filters),
-        'branches' => $this->branchOptions(),
-        'paymentMethods' => DB::table('tbl_sales')->distinct()->pluck('payment_method')->filter()->values(),
-    ]);
-}
+    public function salesDetail(Request $request)
+    {
+        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'user_id', 'payment_method', 'per_page']);
+
+        return Inertia::render('Reports/SalesDetail', [
+            'filters' => $filters,
+            'sales' => Report::salesDetail($filters),
+            'totals' => Report::salesDetailTotals($filters),
+            'paymentBreakdown' => Report::salesDetailByPaymentMethod($filters),
+            'branches' => $this->branchOptions(),
+            'paymentMethods' => DB::table('tbl_sales')->distinct()->pluck('payment_method')->filter()->values(),
+        ]);
+    }
 
     public function topProducts(Request $request)
     {
@@ -74,7 +75,7 @@ public function salesDetail(Request $request)
         ]);
     }
 
-        public function voidReturns(Request $request)
+    public function voidReturns(Request $request)
     {
         $filters = $request->only(['date_from', 'date_to', 'branch_id', 'per_page']);
 
@@ -87,17 +88,17 @@ public function salesDetail(Request $request)
     }
 
     public function stockOnHand(Request $request)
-{
-    $filters = $request->only([
-        'branch_id', 'product_id', 'product_name', 'brand_name', 'lot_number', 'shelf_number', 'expiry_from', 'expiry_to',
-    ]);
+    {
+        $filters = $request->only([
+            'branch_id', 'product_id', 'product_name', 'brand_name', 'lot_number', 'shelf_number', 'expiry_from', 'expiry_to',
+        ]);
 
-    return Inertia::render('Reports/StockOnHand', [
-        'filters' => $filters,
-        'stock' => Report::stockOnHand($filters),
-        'branches' => $this->branchOptions(),
-    ]);
-}
+        return Inertia::render('Reports/StockOnHand', [
+            'filters' => $filters,
+            'stock' => Report::stockOnHand($filters),
+            'branches' => $this->branchOptions(),
+        ]);
+    }
 
     public function lowStock(Request $request)
     {
@@ -123,7 +124,7 @@ public function salesDetail(Request $request)
 
     public function stockIn(Request $request)
     {
-        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'supplier_name',]);
+        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'supplier_name']);
 
         $items = Report::stockInReport($filters);
 
@@ -209,12 +210,12 @@ public function salesDetail(Request $request)
      */
     public function exportSalesDetail(Request $request): StreamedResponse
     {
-        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'user_id']);
+        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'user_id', 'payment_method']);
         $filters['per_page'] = 100000; // effectively "all" for export
 
         $sales = Report::salesDetail($filters);
 
-        $filename = 'sales-detail-' . now()->format('Y-m-d_His') . '.csv';
+        $filename = 'sales-detail-'.now()->format('Y-m-d_His').'.csv';
 
         return response()->streamDownload(function () use ($sales) {
             $handle = fopen('php://output', 'w');

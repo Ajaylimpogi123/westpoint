@@ -22,6 +22,8 @@ class IdempotencyGuard
 
     public const SCOPE_CUSTOMER_RETURN = 'customer_return';
 
+    public const SCOPE_SALE_VOID = 'sale_void';
+
     private const TABLE = 'tbl_idempotency_keys';
 
     /**

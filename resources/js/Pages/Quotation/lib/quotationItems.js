@@ -52,6 +52,7 @@ export function applyMedicineToItem(items, index, detail) {
                   _medicineMeta: {
                       retail_price: detail.retail_price,
                       wholesale_price: detail.wholesale_price,
+                      pack_size: detail.pack_size ?? null,
                       lots: detail.lots ?? [],
                   },
               }

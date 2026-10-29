@@ -129,11 +129,6 @@ export function AppSidebar({ ...props }) {
                       icon: ArrowUpCircleIcon,
                   },
                   {
-                      title: "Quotation",
-                      url: route("quotations.index"),
-                      icon: FolderIcon,
-                  },
-                  {
                       title: "Reports",
                       url: route("reports.index"),
                       icon: BarChartIcon,

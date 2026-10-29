@@ -93,6 +93,20 @@ export default function StockOutRecipientFields({
                 maxLength: 500,
             })}
 
+            <div className="grid gap-4 sm:grid-cols-2">
+                {textField("terms", "Terms", {
+                    placeholder: "e.g. 30 days, COD",
+                    optional: true,
+                    maxLength: 100,
+                })}
+
+                {textField("invoice_number", "Invoice #", {
+                    placeholder: "Invoice number",
+                    optional: true,
+                    maxLength: 100,
+                })}
+            </div>
+
             {textField("issued_by", "Issued By", {
                 placeholder: "Issuer name",
                 required: true,

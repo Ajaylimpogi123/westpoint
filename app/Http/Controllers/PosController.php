@@ -354,6 +354,15 @@ class PosController extends Controller
     {
         $branchId = $this->branchIdOrFail();
 
+        // A retry of a checkout that already committed must be recognised
+        // before validation: the first request deleted the cart, so
+        // validating again would report a failure for a sale that went
+        // through and prompt the cashier to ring it up twice.
+        if (IdempotencyGuard::isClaimed(IdempotencyGuard::SCOPE_POS_CHECKOUT, $request->input('idempotency_key'))) {
+            return redirect()->route('pos.index')
+                ->with('success', 'This sale was already completed.');
+        }
+
         $validated = $request->validate([
             'cart_id' => ['required', 'integer', 'exists:tbl_carts,id'],
             'items' => ['required', 'array', 'min:1'],
@@ -541,7 +550,7 @@ class PosController extends Controller
             IdempotencyGuard::release(IdempotencyGuard::SCOPE_POS_CHECKOUT, $idempotencyKey);
 
             return redirect()->back()
-                ->with('error', $e->getMessage());
+                ->with('error', $this->userMessage($e, 'Failed to process sale. Please try again.'));
         } catch (\Throwable $e) {
             DB::rollBack();
             report($e);
@@ -886,6 +895,7 @@ class PosController extends Controller
      *     product_id: int,
      *     unit_type: string,
      *     quantity_sold: int,
+     *     pieces_sold: int,
      *     price_used: float,
      *     total_price: float,
      *     deductions: array<int, array{batch_id: int, pieces: int}>
@@ -901,6 +911,9 @@ class PosController extends Controller
             'products_qty_id' => $deductions[0]['batch_id'] ?? null,
             'unit_type' => $lineItem['unit_type'],
             'quantity_sold' => $lineItem['quantity_sold'],
+            // Pieces actually deducted, so a later void restocks exactly
+            // this many even if the medicine's pack_size is edited.
+            'pieces_sold' => $lineItem['pieces_sold'],
             'price_used' => $lineItem['price_used'],
             'total_price' => $lineItem['total_price'],
             'discount_amount' => $lineItem['discount_amount'],

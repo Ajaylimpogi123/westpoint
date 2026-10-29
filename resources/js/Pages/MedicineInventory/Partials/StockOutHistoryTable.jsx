@@ -21,6 +21,11 @@ import Swal from "sweetalert2";
 import StockOutViewModal from "./StockOutViewModal";
 import { formatDate } from "@/lib/dates";
 import StockOutEditModal from "./StockOutEditModal";
+import {
+    DELIVERY_TO_CUSTOMER,
+    RETURNED_TO_SUPPLIER,
+} from "../lib/stockOutValidation";
+
 const PER_PAGE_OPTIONS = [10, 15, 25, 50];
 
 export default function StockOutHistoryTable({
@@ -87,7 +92,9 @@ export default function StockOutHistoryTable({
             {},
             {
                 preserveScroll: true,
-                only: ["stockOuts"],
+                // Confirming deducts stock, so refresh stock too; "flash"
+                // carries the success or refusal message.
+                only: ["stockOuts", "medicines", "products", "movementLogs", "flash"],
             },
         );
     };
@@ -192,9 +199,12 @@ export default function StockOutHistoryTable({
                                     <TableCell>{stockOut.issued_by}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
-                                            {stockOut.transaction_subtype ===
-                                                "Dispensed to patient" &&
-                                                !stockOut.delivery_confirmed && (
+                                            {/* Mirrors StockOutController::isEditable(). */}
+                                            {((stockOut.transaction_subtype ===
+                                                DELIVERY_TO_CUSTOMER &&
+                                                !stockOut.delivery_confirmed) ||
+                                                stockOut.transaction_subtype ===
+                                                    RETURNED_TO_SUPPLIER) && (
                                                     <StockOutEditModal
                                                         stockOutId={
                                                             stockOut.stock_out_id
@@ -245,14 +255,14 @@ export default function StockOutHistoryTable({
                                                 <Printer className="h-3.5 w-3.5" />
                                                 Receipt
                                             </Button>
-                                            {stockOut.transaction_subtype ===
-                                                "Dispensed to patient" &&
-                                                (stockOut.delivery_confirmed ? (
-                                                    <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
-                                                        <CheckCircle2 className="h-3.5 w-3.5" />
-                                                        Added to Sales
-                                                    </span>
-                                                ) : (
+                                            {stockOut.delivery_confirmed ? (
+                                                <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                                    Added to Sales
+                                                </span>
+                                            ) : (
+                                                stockOut.transaction_subtype ===
+                                                    DELIVERY_TO_CUSTOMER && (
                                                     <Button
                                                         type="button"
                                                         variant="default"
@@ -267,7 +277,8 @@ export default function StockOutHistoryTable({
                                                         <CheckCircle2 className="h-3.5 w-3.5" />
                                                         Add to Sales
                                                     </Button>
-                                                ))}
+                                                )
+                                            )}
                                         </div>
                                     </TableCell>
                                 </TableRow>

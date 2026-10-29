@@ -161,12 +161,12 @@ class TransferAccessQaTest extends TestCase
     }
 
     /**
-     * TRF-2. The medicine is deactivated (DELETE /medicine-inventory/{id},
+     * TRF-2 (fixed in qa-fix-batch-1). The medicine is deactivated (DELETE /medicine-inventory/{id},
      * which sets its batches to Inactive) while a request is pending. Approval
      * still ships the stock and deductFromBatch() flips the source batch from
      * Inactive back to Active.
      */
-    public function test_bug_trf2_approval_ships_and_reactivates_a_medicine_deactivated_after_the_request(): void
+    public function test_trf2_approval_refuses_a_medicine_deactivated_after_the_request(): void
     {
         $transfer = $this->requestTransfer(10);
 
@@ -177,14 +177,14 @@ class TransferAccessQaTest extends TestCase
         $this->assertSame('Deleted', $this->product->fresh()->status);
         $this->assertSame('Inactive', $this->batch->fresh()->status);
 
-        $this->actingAsWithSession($this->admin)
-            ->post("/stock-transfers/{$transfer->id}/approve")
-            ->assertSessionHasErrors('status');
+        $response = $this->actingAsWithSession($this->admin)
+            ->post("/stock-transfers/{$transfer->id}/approve");
 
-        $this->assertSame('pending', $transfer->fresh()->status);
+        $this->assertSame('Inactive', $this->batch->fresh()->status, 'Approval reactivated the deactivated source batch.');
         $this->assertSame(100, (int) $this->batch->fresh()->quantity);
-        $this->assertSame('Inactive', $this->batch->fresh()->status);
+        $this->assertSame('pending', $transfer->fresh()->status);
         $this->assertSame(0, $this->branchBStock());
+        $response->assertSessionHasErrors('status');
     }
 
     /**
@@ -708,11 +708,11 @@ class TransferAccessQaTest extends TestCase
     // =====================================================================
 
     /**
-     * ACL-1. /register is open to role:2,3 and RegisteredUserController::store
+     * ACL-1 (fixed in qa-fix-batch-1). /register is open to role:2,3 and RegisteredUserController::store
      * accepts any role_id, so an admin can create a superadmin account and
      * log in as it (UserController::update blocks the same thing).
      */
-    public function test_bug_acl1_admin_can_register_a_superadmin_account(): void
+    public function test_acl1_admin_cannot_register_a_superadmin_account(): void
     {
         $this->actingAsWithSession($this->admin)
             ->post('/register', [
@@ -728,11 +728,11 @@ class TransferAccessQaTest extends TestCase
     }
 
     /**
-     * ACL-2. Deactivation is only checked inside LoginRequest. A user who is
+     * ACL-2 (fixed in qa-fix-batch-1). Deactivation is only checked inside LoginRequest. A user who is
      * already logged in (or comes back through the remember-me cookie) keeps
      * full access after being deactivated.
      */
-    public function test_bug_acl2_deactivated_user_keeps_access_with_existing_session(): void
+    public function test_acl2_deactivated_user_loses_access_with_existing_session(): void
     {
         $this->actingAsWithSession($this->admin)
             ->patch("/user-management/{$this->staff->id}/toggle-status")
@@ -746,11 +746,11 @@ class TransferAccessQaTest extends TestCase
     }
 
     /**
-     * ACL-3a. Staff are shown no Delete button for medicines (canEditMedicine
+     * ACL-3a (fixed in qa-fix-batch-1). Staff are shown no Delete button for medicines (canEditMedicine
      * is admin-only, and update/restore are role:2,3), but DELETE
      * /medicine-inventory/{id} has no role gate.
      */
-    public function test_bug_acl3a_staff_can_deactivate_a_medicine_by_direct_request(): void
+    public function test_acl3a_staff_cannot_deactivate_a_medicine_by_direct_request(): void
     {
         $this->actingAsWithSession($this->staff)
             ->delete("/medicine-inventory/{$this->product->id}")
@@ -760,10 +760,10 @@ class TransferAccessQaTest extends TestCase
     }
 
     /**
-     * ACL-3b. Same gap for PATCH /medicine-inventory/batch/{id}: staff can
+     * ACL-3b (fixed in qa-fix-batch-1). Same gap for PATCH /medicine-inventory/batch/{id}: staff can
      * overwrite a batch's quantity and expiry, bypassing InventoryStockService.
      */
-    public function test_bug_acl3b_staff_can_rewrite_batch_quantity_by_direct_request(): void
+    public function test_acl3b_staff_cannot_rewrite_batch_quantity_by_direct_request(): void
     {
         $this->actingAsWithSession($this->staff)
             ->patch("/medicine-inventory/batch/{$this->batch->id}", [
@@ -777,8 +777,8 @@ class TransferAccessQaTest extends TestCase
         $this->assertSame(100, (int) $this->batch->fresh()->quantity);
     }
 
-    /** ACL-3c. Same gap for DELETE /medicine-inventory/batch/{id}. */
-    public function test_bug_acl3c_staff_can_delete_a_batch_by_direct_request(): void
+    /** ACL-3c (fixed in qa-fix-batch-1). Same gap for DELETE /medicine-inventory/batch/{id}. */
+    public function test_acl3c_staff_cannot_delete_a_batch_by_direct_request(): void
     {
         $this->actingAsWithSession($this->staff)
             ->delete("/medicine-inventory/batch/{$this->batch->id}")
@@ -788,12 +788,12 @@ class TransferAccessQaTest extends TestCase
     }
 
     /**
-     * ACL-4. A user re-authenticated by the remember-me cookie gets a session
+     * ACL-4 (fixed in qa-fix-batch-1). A user re-authenticated by the remember-me cookie gets a session
      * without role_id/branch_id (only AuthenticatedSessionController::store
      * sets them). DashboardController reads role 0, treats it as "not staff"
      * and shows every branch's sales to a staff member.
      */
-    public function test_bug_acl4_remember_me_staff_sees_all_branch_dashboard(): void
+    public function test_acl4_remember_me_staff_sees_only_own_branch_dashboard(): void
     {
         $login = $this->post('/login', [
             'email' => $this->staff->email,
@@ -815,24 +815,22 @@ class TransferAccessQaTest extends TestCase
 
         $this->assertAuthenticatedAs($this->staff);
 
-        if ($response->status() === 403) {
-            return;
-        }
-
+        // Fixed (qa-fix-batch-1): EnsureActiveUserSession re-syncs the session
+        // from the users row, so a remember-me login is scoped like a normal one.
         $response->assertOk()->assertInertia(fn (Assert $page) => $page
             ->where('filters.branch_id', (string) $this->branchA->id));
+        $this->assertSame(1, (int) session('role_id'));
+        $this->assertSame($this->branchA->id, (int) session('branch_id'));
     }
 
     /**
-     * ACL-5. Controllers trust session('role_id') captured at login, the role
+     * ACL-5 (fixed in qa-fix-batch-1). Controllers trust session('role_id') captured at login, the role
      * middleware trusts the DB. An admin demoted to staff keeps approving
      * transfers (and every other session-role check) until they log out.
      */
-    public function test_bug_acl5_demoted_admin_keeps_admin_powers_from_stale_session(): void
+    public function test_acl5_demoted_admin_loses_admin_powers_on_next_request(): void
     {
         $transfer = $this->requestTransfer(10);
-
-        $session = $this->actingAsWithSession($this->admin); // session role_id = 2
 
         $this->actingAsWithSession($this->superadmin)
             ->patch("/user-management/{$this->admin->id}", [
@@ -854,12 +852,15 @@ class TransferAccessQaTest extends TestCase
 
     /**
      * ACL-6. Leftover restaurant-POS routes (category/product/table/menu/order)
-     * are reachable and writable by any logged-in user, including staff.
+     * were reachable and writable by any logged-in user. Fixed by owner
+     * decision D6 (qa-fix-batch-1): the routes are removed and answer 404;
+     * the tables are kept.
      */
-    public function test_bug_acl6_legacy_restaurant_routes_are_writable_by_staff(): void
+    public function test_acl6_legacy_restaurant_routes_are_removed(): void
     {
         $this->actingAsWithSession($this->staff)
-            ->post('/category', ['cat_name' => 'Injected Category']);
+            ->post('/category', ['cat_name' => 'Injected Category'])
+            ->assertNotFound();
 
         $this->assertDatabaseMissing('tbl_category', ['cat_name' => 'Injected Category']);
     }

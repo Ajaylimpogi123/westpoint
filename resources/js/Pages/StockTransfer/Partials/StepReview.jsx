@@ -108,7 +108,7 @@ export default function StepReview({
                                 </div>
                                 <div className="text-xs text-gray-400 mt-0.5">
                                     <span className="font-mono">
-                                        Lot {item.lot_number}
+                                        Lot {item.lot_number ?? "—"}
                                     </span>
                                     {item.expiry && (
                                         <span>

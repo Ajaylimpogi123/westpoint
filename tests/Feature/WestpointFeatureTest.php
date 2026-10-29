@@ -225,6 +225,7 @@ class WestpointFeatureTest extends TestCase
                 'brand_name' => 'Advil',
                 'retail_price' => 8,
                 'wholesale_price' => 120,
+                'vat_status' => 'VAT',
             ])
             ->assertRedirect();
 
@@ -254,6 +255,7 @@ class WestpointFeatureTest extends TestCase
                 'brand_name' => 'Bioflu',
                 'retail_price' => 6,
                 'wholesale_price' => 50,
+                'vat_status' => 'Non-VAT',
             ])
             ->assertRedirect();
 

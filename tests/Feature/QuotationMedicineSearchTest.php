@@ -79,7 +79,8 @@ class QuotationMedicineSearchTest extends TestCase
         $this->assertNotContains('Paracetamol Extra', $names);
     }
 
-    public function test_search_excludes_products_without_active_stock(): void
+    /** D4: quoting out-of-stock medicines is intended; any Active medicine of the branch is offered. */
+    public function test_search_includes_active_products_without_stock(): void
     {
         $outOfStockProduct = MedicineProduct::create([
             'branch_id' => $this->branchA->id,
@@ -106,7 +107,8 @@ class QuotationMedicineSearchTest extends TestCase
             ->getJson('/quotations/medicines/search?search=Empty');
 
         $response->assertOk()
-            ->assertJsonCount(0, 'products');
+            ->assertJsonCount(1, 'products')
+            ->assertJsonPath('products.0.id', $outOfStockProduct->id);
     }
 
     public function test_show_returns_not_found_for_other_branch_product(): void

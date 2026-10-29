@@ -8,7 +8,7 @@ import {
     flexRender,
 } from "@tanstack/react-table";
 import { format, isWithinInterval, parseISO, startOfDay, endOfDay } from "date-fns";
-import { formatDate, formatDateTime } from "@/lib/dates";
+import { formatDate, formatDateTime, toManilaDate } from "@/lib/dates";
 import { CalendarIcon, Download, FileSpreadsheet, FileText, Filter } from "lucide-react";
 import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
@@ -79,7 +79,7 @@ export function DataTable({ columns, data }) {
                 const itemDate = item.created_at;
                 if (!itemDate) return false;
                 
-                const date = parseISO(itemDate);
+                const date = toManilaDate(itemDate);
                 return date >= startDate && date <= endDate;
             });
         }

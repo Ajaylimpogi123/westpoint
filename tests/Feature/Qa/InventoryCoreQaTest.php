@@ -103,11 +103,11 @@ class InventoryCoreQaTest extends TestCase
     // ==================================================================
 
     /**
-     * INV-1: batch edit (stock adjustment) has no role gate on the server.
+     * INV-1 (fixed in qa-fix-batch-1): batch edit (stock adjustment) has no role gate on the server.
      * The UI hides it from staff (canEditMedicine), but a staff user can
      * PATCH the route directly and rewrite a batch's quantity.
      */
-    public function test_bug_inv1_staff_cannot_adjust_batch_quantity_directly(): void
+    public function test_inv1_staff_cannot_adjust_batch_quantity_directly(): void
     {
         $response = $this->actingAsWithSession($this->staff)
             ->patch(route('medicine-inventory.update-batch', $this->batch->id), [
@@ -121,8 +121,8 @@ class InventoryCoreQaTest extends TestCase
         $this->assertSame(100, (int) $this->batch->fresh()->quantity);
     }
 
-    /** INV-1: batch delete has no role gate on the server. */
-    public function test_bug_inv1_staff_cannot_delete_batch_directly(): void
+    /** INV-1 (fixed in qa-fix-batch-1): batch delete has no role gate on the server. */
+    public function test_inv1_staff_cannot_delete_batch_directly(): void
     {
         $response = $this->actingAsWithSession($this->staff)
             ->delete(route('medicine-inventory.destroy-batch', $this->batch->id));
@@ -132,10 +132,10 @@ class InventoryCoreQaTest extends TestCase
     }
 
     /**
-     * INV-1: medicine deactivate has no role gate, while update/restore are
+     * INV-1 (fixed in qa-fix-batch-1): medicine deactivate has no role gate, while update/restore are
      * role:2,3 and the UI hides Delete from staff.
      */
-    public function test_bug_inv1_staff_cannot_deactivate_medicine_directly(): void
+    public function test_inv1_staff_cannot_deactivate_medicine_directly(): void
     {
         $response = $this->actingAsWithSession($this->staff)
             ->delete(route('medicine-inventory.destroy', $this->product->id));
@@ -145,12 +145,12 @@ class InventoryCoreQaTest extends TestCase
     }
 
     /**
-     * INV-2: destroy() flips every Active batch to Inactive, and restore()
+     * INV-2 (fixed in qa-fix-batch-1): destroy() flips every Active batch to Inactive, and restore()
      * requires Active stock > 0, while Add Stock / Stock In refuse a Deleted
      * medicine. So a deactivated medicine that still holds stock can never be
      * restored through the UI, and its stock is stranded.
      */
-    public function test_bug_inv2_deactivated_medicine_with_stock_can_be_restored(): void
+    public function test_inv2_deactivated_medicine_with_stock_can_be_restored(): void
     {
         $this->actingAsWithSession($this->admin)
             ->delete(route('medicine-inventory.destroy', $this->product->id))
@@ -165,43 +165,6 @@ class InventoryCoreQaTest extends TestCase
         $this->assertNull(session('error'), 'Restore refused: '.session('error'));
         $this->assertSame('Active', $this->product->fresh()->status);
         $this->assertSame(100, InventoryStockService::dispensableStock($this->product->id));
-    }
-
-    /**
-     * INV-3: a "Delivery to Customer" stock-out checks each line against the
-     * lot on its own. Two lines on the same 100-piece lot (60 + 60) are
-     * accepted, and the delivery can then never be confirmed.
-     */
-    public function test_bug_inv3_delivery_rejects_lines_that_exceed_the_lot_in_aggregate(): void
-    {
-        $response = $this->actingAsWithSession($this->staff)
-            ->post(route('stock-out.store'), $this->deliveryPayload([
-                $this->line(60),
-                $this->line(60),
-            ], ['idempotency_key' => 'inv3-key']));
-
-        $this->assertRejected($response);
-        $this->assertDatabaseCount('tbl_stock_outs', 0);
-    }
-
-    /** INV-3: the same gap exists on stock-out edit (update). */
-    public function test_bug_inv3_delivery_edit_rejects_lines_that_exceed_the_lot_in_aggregate(): void
-    {
-        $this->actingAsWithSession($this->staff)
-            ->post(route('stock-out.store'), $this->deliveryPayload([$this->line(10)]))
-            ->assertSessionHasNoErrors();
-
-        $stockOut = StockOut::firstOrFail();
-
-        $response = $this->actingAsWithSession($this->staff)
-            ->put(route('stock-out.update', $stockOut->stock_out_id), [
-                'issued_by' => 'QA Issuer',
-                'delivered_to' => 'QA Clinic',
-                'items' => [$this->line(70), $this->line(70)],
-            ]);
-
-        $this->assertRejected($response);
-        $this->assertSame(10, (int) StockOutItem::sum('pieces_deducted'));
     }
 
     /**
@@ -223,19 +186,59 @@ class InventoryCoreQaTest extends TestCase
         $this->assertLessThanOrEqual(0, (int) $log->quantity, 'Batch deletion was logged as +'.$log->quantity.' pieces.');
     }
 
+    // ==================================================================
+    // VERIFIED BEHAVIOUR
+    // ==================================================================
+
     /**
-     * INV-5: a pending Box delivery recorded before pieces_per_box existed
-     * (pieces_per_box NULL) cannot be edited: the edit modal resubmits the
-     * line unchanged (pieces_per_box: null) and update() throws
-     * "Enter how many pieces are in one box". Confirm still works, so only
-     * edit is blocked.
+     * Formerly INV-3 (fixed by stock-out-validation-basket): per-lot
+     * sufficiency is summed across basket lines for deliveries too.
      */
-    public function test_bug_inv5_legacy_box_delivery_without_pieces_per_box_can_be_edited(): void
+    public function test_delivery_rejects_lines_that_exceed_the_lot_in_aggregate(): void
+    {
+        $response = $this->actingAsWithSession($this->staff)
+            ->post(route('stock-out.store'), $this->deliveryPayload([
+                $this->line(60),
+                $this->line(60),
+            ], ['idempotency_key' => 'inv3-key']));
+
+        $response->assertSessionHasErrors('items.1.quantity_deducted');
+        $this->assertDatabaseCount('tbl_stock_outs', 0);
+        $this->assertDatabaseMissing('tbl_idempotency_keys', ['idempotency_key' => 'inv3-key']);
+    }
+
+    public function test_delivery_edit_rejects_lines_that_exceed_the_lot_in_aggregate(): void
+    {
+        $this->actingAsWithSession($this->staff)
+            ->post(route('stock-out.store'), $this->deliveryPayload([$this->line(10)]))
+            ->assertSessionHasNoErrors();
+
+        $stockOut = StockOut::firstOrFail();
+
+        $response = $this->actingAsWithSession($this->staff)
+            ->put(route('stock-out.update', $stockOut->stock_out_id), [
+                'issued_by' => 'QA Issuer',
+                'delivered_to' => 'QA Clinic',
+                'items' => [$this->line(70), $this->line(70)],
+            ]);
+
+        $response->assertSessionHasErrors('items.1.quantity_deducted');
+        $this->assertSame(10, (int) StockOutItem::sum('pieces_deducted'));
+    }
+
+    /**
+     * A pending Box delivery recorded before pieces_per_box existed (NULL)
+     * comes back from edit with pieces_per_box null; resubmitting it is a
+     * recoverable line error (the basket row has an editable pcs/box input),
+     * and supplying the value saves without touching stock.
+     */
+    public function test_legacy_box_delivery_without_pieces_per_box_is_a_fixable_line_error_on_edit(): void
     {
         $stockOut = StockOut::create([
             'transaction_subtype' => 'Delivery to Customer',
             'branch_id' => $this->branchA->id,
             'issued_by' => 'Legacy',
+            'delivered_to' => 'QA Clinic',
         ]);
 
         StockOutItem::create([
@@ -255,7 +258,6 @@ class InventoryCoreQaTest extends TestCase
             ->assertOk()
             ->json();
 
-        // Exactly what useStockOutEdit sends back for an untouched line.
         $items = collect($edit['items'])->map(fn ($item) => [
             'pd_id' => $item['pd_id'],
             'products_qty_id' => $item['products_qty_id'],
@@ -264,21 +266,21 @@ class InventoryCoreQaTest extends TestCase
             'pieces_per_box' => $item['pieces_per_box'],
         ])->all();
 
-        $response = $this->actingAsWithSession($this->staff)
-            ->put(route('stock-out.update', $stockOut->stock_out_id), [
-                'issued_by' => 'Legacy edited',
-                'delivered_to' => 'QA Clinic',
-                'items' => $items,
-            ]);
+        $payload = ['issued_by' => 'Legacy edited', 'delivered_to' => 'QA Clinic', 'items' => $items];
 
-        $this->assertSucceeded($response);
+        $this->actingAsWithSession($this->staff)
+            ->put(route('stock-out.update', $stockOut->stock_out_id), $payload)
+            ->assertSessionHasErrors('items.0.pieces_per_box');
+
+        $payload['items'][0]['pieces_per_box'] = 10;
+        $this->assertSucceeded($this->actingAsWithSession($this->staff)
+            ->put(route('stock-out.update', $stockOut->stock_out_id), $payload));
+
         $this->assertSame('Legacy edited', $stockOut->fresh()->issued_by);
         $this->assertSame(20, (int) StockOutItem::sum('pieces_deducted'));
+        $this->assertSame(100, (int) $this->batch->fresh()->quantity);
+        $this->assertSame(0, InventoryMovementLog::count());
     }
-
-    // ==================================================================
-    // VERIFIED BEHAVIOUR
-    // ==================================================================
 
     /**
      * Ledger invariant: across stock in (Box), add stock (Box), customer
@@ -670,7 +672,7 @@ class InventoryCoreQaTest extends TestCase
         $this->assertSame($this->branchA->id, (int) $log->branch_id);
         $this->assertSame(0, (int) $log->quantity);
 
-        // Stock in to the same product must not revive the expired batch.
+        // Only the batch expiring today remains dispensable.
         $this->assertSame(5, InventoryStockService::dispensableStock($this->product->id));
     }
 

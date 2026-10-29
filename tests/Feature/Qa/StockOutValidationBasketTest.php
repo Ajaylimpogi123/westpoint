@@ -277,7 +277,11 @@ class StockOutValidationBasketTest extends TestCase
 
     public function test_ac4_staff_without_session_branch_is_forbidden(): void
     {
-        $this->actingAs($this->staff)
+        // Since qa-fix-batch-1 the session branch is re-synced from users.branch_id
+        // on every request, so "no session branch" means a staff row with no branch.
+        $this->staff->update(['branch_id' => null]);
+
+        $this->actingAs($this->staff->fresh())
             ->withSession(['role_id' => 1, 'branch_id' => null])
             ->post(route('stock-out.store'), $this->payload('Delivery to Customer', [$this->piece(3)]))
             ->assertForbidden();
@@ -1048,13 +1052,18 @@ class StockOutValidationBasketTest extends TestCase
 
     public function test_ac22_non_editable_stock_outs_are_refused_with_a_reason(): void
     {
-        $this->store($this->admin, $this->payload('Returned to supplier', [$this->piece(5)]))->assertSessionHas('success');
-        $returned = StockOut::firstOrFail();
+        // Returns to supplier became editable (StockOutReturnEditTest). Legacy
+        // "Dispensed to patient" rows took stock under the old flow and stay locked.
+        $legacy = StockOut::create([
+            'transaction_subtype' => 'Dispensed to patient',
+            'branch_id' => $this->branchA->id,
+            'issued_by' => 'Legacy',
+        ]);
 
         $this->flushSession();
-        $response = $this->update($this->admin, $returned, $this->updatePayload([$this->piece(9)]));
-        $this->assertTrue(filled(session('error')), 'Editing a Returned-to-supplier stock-out must report a reason');
-        $this->assertSame(5, (int) StockOutItem::where('stock_out_id', $returned->stock_out_id)->sum('pieces_deducted'));
+        $this->update($this->admin, $legacy, $this->updatePayload([$this->piece(9)]));
+        $this->assertTrue(filled(session('error')), 'Editing a legacy dispense must report a reason');
+        $this->assertSame(0, (int) StockOutItem::where('stock_out_id', $legacy->stock_out_id)->count());
 
         $delivery = $this->pendingDelivery();
         $this->flushSession();

@@ -22,6 +22,7 @@ import {
 
 import { formatDateTime } from "@/lib/dates";
 import { isBoxUnit, unitLabel } from "@/lib/units";
+import { DELIVERY_TO_CUSTOMER } from "../lib/stockOutValidation";
 
 export default function StockOutViewModal({ stockOutId, children }) {
     const [open, setOpen] = useState(false);
@@ -73,8 +74,14 @@ export default function StockOutViewModal({ stockOutId, children }) {
             {},
             {
                 preserveScroll: true,
-                only: ["stockOuts"],
-                onSuccess: () => {
+                only: ["stockOuts", "medicines", "products", "movementLogs", "flash"],
+                onSuccess: (page) => {
+                    // A refusal (e.g. an expired lot) also redirects back,
+                    // carrying flash.error; leave the button in place then.
+                    if (page.props.flash?.error) {
+                        return;
+                    }
+
                     setDetails((current) =>
                         current
                             ? {
@@ -160,6 +167,22 @@ export default function StockOutViewModal({ stockOutId, children }) {
                                     </span>{" "}
                                     <span className="font-medium">
                                         {details.stock_out.delivered_to_tin || "—"}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">
+                                        Terms:
+                                    </span>{" "}
+                                    <span className="font-medium">
+                                        {details.stock_out.terms || "—"}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">
+                                        Invoice #:
+                                    </span>{" "}
+                                    <span className="font-medium">
+                                        {details.stock_out.invoice_number || "—"}
                                     </span>
                                 </div>
                                 <div>
@@ -267,14 +290,14 @@ export default function StockOutViewModal({ stockOutId, children }) {
                             </div>
 
                             <div className="flex flex-wrap items-center justify-end gap-2">
-                                {details.stock_out.transaction_subtype ===
-                                    "Dispensed to patient" &&
-                                    (details.stock_out.delivery_confirmed ? (
+                                {details.stock_out.delivery_confirmed ? (
                                         <span className="inline-flex items-center gap-1 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
                                             <CheckCircle2 className="h-3.5 w-3.5" />
                                             Added to Sales
                                         </span>
                                     ) : (
+                                    details.stock_out.transaction_subtype ===
+                                    DELIVERY_TO_CUSTOMER && (
                                         <Button
                                             variant="default"
                                             className="flex items-center gap-1"

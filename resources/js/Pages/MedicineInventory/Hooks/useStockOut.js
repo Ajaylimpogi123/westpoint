@@ -22,6 +22,8 @@ const emptyForm = (branchId) => ({
     remarks: "",
     delivered_to: "",
     delivered_to_tin: "",
+    terms: "",
+    invoice_number: "",
     delivered_to_address: "",
     items: [],
 });

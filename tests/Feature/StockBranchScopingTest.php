@@ -77,6 +77,11 @@ class StockBranchScopingTest extends TestCase
 
     private function actingWithoutSessionBranch(User $user)
     {
+        // The session is re-synced from users.branch_id on every request, so
+        // "no session branch" means the user row itself has no branch.
+        $user->update(['branch_id' => null]);
+        $user = $user->fresh();
+
         return $this->actingAs($user)->withSession([
             'role_id' => $user->role_id,
             'branch_id' => null,
