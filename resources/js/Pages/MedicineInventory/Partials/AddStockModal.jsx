@@ -64,7 +64,10 @@ export default function AddStockModal({ medicine, children }) {
                                 <span className="font-medium">
                                     {medicine?.med_name}
                                 </span>
-                                . Stock is assigned to your branch automatically
+
+                                . Stock is added to{" "}
+                                {medicine?.branch?.branch_name ??
+                                    "this medicine's branch"}{" "}
                                 and stored in pieces.
                             </DialogDescription>
                         </DialogHeader>

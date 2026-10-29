@@ -8,16 +8,26 @@ import { formatDate, PRIORITY_CONFIG } from "../lib/TransferHelpers";
  * One card-style row for the list view.
  * Props: transfer, isAdmin, onCancel, onView
  */
-export default function TransferRow({ transfer, isAdmin, onCancel, onView }) {
+export default function TransferRow({
+    transfer,
+    isAdmin,
+    currentUserId,
+    onCancel,
+    onView,
+}) {
     const priority =
         PRIORITY_CONFIG[transfer.priority] ?? PRIORITY_CONFIG.normal;
     const itemCount = transfer.items?.length ?? 0;
     const firstItem = transfer.items?.[0];
+    // Only the person who raised the request can cancel it (server rule).
+    const canCancel =
+        transfer.status === "pending" &&
+        Number(transfer.requested_by) === Number(currentUserId);
 
     return (
         <div className="bg-white border border-gray-200 rounded-xl p-4 hover:border-gray-300 transition">
             {/* Top row */}
-            <div className="flex items-start justify-between gap-3 mb-2">
+            <div className="flex flex-col gap-3 mb-2 sm:flex-row sm:items-start sm:justify-between">
                 <div className="min-w-0">
                     {/* Ref + status */}
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -37,7 +47,9 @@ export default function TransferRow({ transfer, isAdmin, onCancel, onView }) {
                     {/* Main description */}
                     <div className="text-sm font-semibold text-gray-800">
                         {itemCount === 1 && firstItem
-                            ? `${firstItem.product?.med_name} ${firstItem.product?.dose}`
+                            ? [firstItem.product?.med_name, firstItem.product?.dose]
+                                  .filter(Boolean)
+                                  .join(" ")
                             : `${itemCount} items`}
                         <span className="text-gray-400 font-normal ml-1 text-xs">
                             · {transfer.from_branch?.branch_name} →{" "}
@@ -51,9 +63,9 @@ export default function TransferRow({ transfer, isAdmin, onCancel, onView }) {
                             <span>By {transfer.requester.name} · </span>
                         )}
                         {formatDate(transfer.transfer_date)}
-                        {firstItem && (
+                        {itemCount === 1 && firstItem && (
                             <span className="ml-1 font-mono">
-                                · Lot {firstItem.lot_number}
+                                · Lot {firstItem.lot_number ?? "—"}
                             </span>
                         )}
                     </div>
@@ -71,8 +83,8 @@ export default function TransferRow({ transfer, isAdmin, onCancel, onView }) {
                         View
                     </button>
 
-                    {/* Cancel — staff only, pending only */}
-                    {!isAdmin && transfer.status === "pending" && (
+                    {/* Cancel — requester only, pending only */}
+                    {canCancel && (
                         <button
                             type="button"
                             onClick={() => onCancel(transfer.id)}

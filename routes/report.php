@@ -18,6 +18,7 @@ Route::middleware(['auth', 'role:2,3']) // swap for whatever guard you use on ot
         Route::get('/stock-on-hand', [ReportController::class, 'stockOnHand'])->name('stock-on-hand');
         Route::get('/low-stock', [ReportController::class, 'lowStock'])->name('low-stock');
         Route::get('/expiry', [ReportController::class, 'expiry'])->name('expiry');
+        Route::get('/add-stock-history', [ReportController::class, 'addStockHistory'])->name('add-stock-history');
 
         // Movements
         Route::get('/stock-in', [ReportController::class, 'stockIn'])->name('stock-in');

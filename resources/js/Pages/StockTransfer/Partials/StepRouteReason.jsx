@@ -14,6 +14,17 @@ export default function StepRouteReason({
     onBack,
 }) {
     const canProceed = !!data.to_branch_id;
+    const destinations = branches.filter(
+        (b) => String(b.id) !== String(data.from_branch_id),
+    );
+
+    // The server requires "needed by" to be after today.
+    const tomorrow = (() => {
+        const d = new Date();
+        d.setDate(d.getDate() + 1);
+        const pad = (n) => String(n).padStart(2, "0");
+        return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+    })();
 
     return (
         <div className="space-y-5">
@@ -41,7 +52,7 @@ export default function StepRouteReason({
                             ${errors.to_branch_id ? "border-red-400" : "border-gray-300"}`}
                     >
                         <option value="">— Select destination —</option>
-                        {branches.map((b) => (
+                        {destinations.map((b) => (
                             <option key={b.id} value={b.id}>
                                 {b.branch_name}
                             </option>
@@ -56,7 +67,7 @@ export default function StepRouteReason({
             </div>
 
             {/* Priority + Needed by */}
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
                     <label className="block text-xs uppercase tracking-wide text-gray-500 mb-1">
                         Priority
@@ -80,10 +91,17 @@ export default function StepRouteReason({
                     </label>
                     <input
                         type="date"
+                        min={tomorrow}
                         value={data.needed_by}
                         onChange={(e) => setData("needed_by", e.target.value)}
-                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        className={`w-full text-sm border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none
+                            ${errors.needed_by ? "border-red-400" : "border-gray-300"}`}
                     />
+                    {errors.needed_by && (
+                        <p className="text-xs text-red-500 mt-1">
+                            {errors.needed_by}
+                        </p>
+                    )}
                 </div>
             </div>
 

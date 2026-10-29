@@ -125,20 +125,38 @@ public function salesDetail(Request $request)
     {
         $filters = $request->only(['date_from', 'date_to', 'branch_id', 'supplier_name',]);
 
+        $items = Report::stockInReport($filters);
+
         return Inertia::render('Reports/StockIn', [
             'filters' => $filters,
-            'items' => Report::stockInReport($filters),
+            'items' => $items,
+            'totals' => [
+                'transactions' => $items->pluck('stock_in_id')->unique()->count(),
+                'lines' => $items->count(),
+                'pieces' => (int) $items->sum('pieces_received'),
+            ],
             'branches' => $this->branchOptions(),
         ]);
     }
 
     public function stockOut(Request $request)
     {
-        $filters = $request->only(['date_from', 'date_to', 'branch_id']);
+        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'status']);
+
+        $items = Report::stockOutReport($filters);
+        $deducted = $items->where('is_deducted', true);
 
         return Inertia::render('Reports/StockOut', [
             'filters' => $filters,
-            'items' => Report::stockOutReport($filters),
+            'items' => $items,
+            'totals' => [
+                'transactions' => $items->pluck('stock_out_id')->unique()->count(),
+                'lines' => $items->count(),
+                'pieces' => (int) $deducted->sum('pieces_deducted'),
+                'pending_pieces' => (int) ($items->sum('pieces_deducted') - $deducted->sum('pieces_deducted')),
+            ],
+            // Includes legacy subtypes (e.g. "Dispensed to patient") still on old rows.
+            'subtypes' => DB::table('tbl_stock_outs')->distinct()->orderBy('transaction_subtype')->pluck('transaction_subtype'),
             'branches' => $this->branchOptions(),
         ]);
     }
@@ -147,9 +165,28 @@ public function salesDetail(Request $request)
     {
         $filters = $request->only(['date_from', 'date_to', 'branch_id', 'status']);
 
+        $items = Report::stockTransferReport($filters);
+
         return Inertia::render('Reports/StockTransfers', [
             'filters' => $filters,
-            'transfers' => Report::stockTransferReport($filters),
+            'transfers' => $items,
+            'totals' => [
+                'transfers' => $items->pluck('id')->unique()->count(),
+                'lines' => $items->whereNotNull('item_id')->count(),
+                'pieces' => (int) $items->sum('moved_pieces'),
+                'pending_pieces' => (int) $items->sum('pending_pieces'),
+            ],
+            'branches' => $this->branchOptions(),
+        ]);
+    }
+
+    public function addStockHistory(Request $request)
+    {
+        $filters = $request->only(['date_from', 'date_to', 'branch_id', 'search', 'per_page']);
+
+        return Inertia::render('Reports/AddStockHistory', [
+            'filters' => $filters,
+            'logs' => Report::addStockHistory($filters),
             'branches' => $this->branchOptions(),
         ]);
     }

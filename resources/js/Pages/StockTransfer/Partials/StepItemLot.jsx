@@ -1,19 +1,28 @@
+import { useMemo } from "react";
 import LotPickerList from "./LotPickerList";
 import { useLotSelector } from "../Hooks/useLotSelector";
+import { describeProduct, piecesLabel } from "../lib/TransferHelpers";
 
 /**
  * StepItemLot — Wizard Step 1
- * Secretary picks a medicine, selects a lot (FEFO), enters quantity, then adds it.
- * Multiple items can be added before clicking Next.
- *
- * Props: products[], selectedItems[], onAddItem(product,lot,qty), onRemoveItem(key), onNext()
+ * Pick the source branch (admins), a medicine, a lot (FEFO) and a quantity in
+ * pieces, then add it. Multiple items can be added before clicking Next.
  */
 export default function StepItemLot({
     products,
+    productsLoading,
+    productsError,
+    onRetryProducts,
+    branches,
+    sourceBranchId,
+    sourceBranchName,
+    canChooseSource,
+    onChangeSource,
     selectedItems,
     onAddItem,
     onRemoveItem,
     onNext,
+    error,
 }) {
     const {
         selectedProduct,
@@ -27,55 +36,146 @@ export default function StepItemLot({
         reset,
     } = useLotSelector();
 
+    // Lot quantities minus what is already in the list, so the same lot
+    // can't be requested twice beyond what it holds.
+    const availableProducts = useMemo(() => {
+        const reserved = {};
+        selectedItems.forEach((item) => {
+            reserved[item.products_qty_id] =
+                (reserved[item.products_qty_id] ?? 0) + item.quantity_requested;
+        });
+
+        return products.map((product) => ({
+            ...product,
+            products_qty: (product.products_qty ?? []).map((lot) => ({
+                ...lot,
+                quantity: Math.max(0, lot.quantity - (reserved[lot.id] ?? 0)),
+            })),
+        }));
+    }, [products, selectedItems]);
+
     const handleAdd = () => {
         if (!isValid) return;
         onAddItem(selectedProduct, selectedLot, qty);
         reset();
     };
 
+    const qtyNumber = Number(qty);
+    const packSize = Number(selectedProduct?.pack_size) || 0;
+
     return (
         <div className="space-y-5">
+            {/* Source branch */}
+            <div>
+                <label className="block text-xs uppercase tracking-wide text-gray-500 mb-1">
+                    Transfer from
+                </label>
+                {canChooseSource ? (
+                    <select
+                        value={sourceBranchId ?? ""}
+                        onChange={(e) => {
+                            reset();
+                            onChangeSource(e.target.value);
+                        }}
+                        className="w-full sm:w-1/2 text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                    >
+                        {branches.map((b) => (
+                            <option key={b.id} value={b.id}>
+                                {b.branch_name}
+                            </option>
+                        ))}
+                    </select>
+                ) : (
+                    <div className="w-full sm:w-1/2 text-sm border border-gray-200 rounded-lg px-3 py-2 bg-gray-50 text-gray-600">
+                        {sourceBranchName || "Your branch"}
+                    </div>
+                )}
+            </div>
+
             {/* Product select + qty */}
-            <div className="grid grid-cols-3 gap-3">
-                <div className="col-span-2">
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <div className="sm:col-span-2">
                     <label className="block text-xs uppercase tracking-wide text-gray-500 mb-1">
                         Item to transfer
                     </label>
                     <select
                         value={selectedProduct?.id ?? ""}
+                        disabled={productsLoading}
                         onChange={(e) => {
-                            const p = products.find(
-                                (p) => p.id === parseInt(e.target.value),
+                            const p = availableProducts.find(
+                                (p) => p.id === parseInt(e.target.value, 10),
                             );
                             selectProduct(p || null);
                         }}
-                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none"
+                        className="w-full text-sm border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none disabled:bg-gray-50"
                     >
-                        <option value="">— Select a medicine —</option>
-                        {products.map((p) => (
-                            <option key={p.id} value={p.id}>
-                                {p.med_name} {p.dose} — {p.brand_name}
-                            </option>
-                        ))}
+                        <option value="">
+                            {productsLoading
+                                ? "Loading medicines…"
+                                : "— Select a medicine —"}
+                        </option>
+                        {availableProducts.map((p) => {
+                            const hasStock = p.products_qty.some(
+                                (lot) => lot.quantity > 0,
+                            );
+
+                            return (
+                                <option
+                                    key={p.id}
+                                    value={p.id}
+                                    disabled={!hasStock}
+                                >
+                                    {describeProduct(p)}
+                                    {!hasStock && " (no available stock)"}
+                                </option>
+                            );
+                        })}
                     </select>
+                    {productsError && (
+                        <p className="text-xs text-red-500 mt-1">
+                            {productsError}{" "}
+                            <button
+                                type="button"
+                                onClick={onRetryProducts}
+                                className="underline"
+                            >
+                                Retry
+                            </button>
+                        </p>
+                    )}
+                    {!productsLoading &&
+                        !productsError &&
+                        products.length === 0 && (
+                            <p className="text-xs text-gray-400 mt-1">
+                                This branch has no medicines to transfer.
+                            </p>
+                        )}
                 </div>
 
                 <div>
                     <label className="block text-xs uppercase tracking-wide text-gray-500 mb-1">
-                        Quantity
+                        Quantity (pieces)
                     </label>
                     <input
                         type="number"
                         min="1"
+                        step="1"
                         value={qty}
                         onChange={(e) => updateQty(e.target.value)}
                         placeholder="e.g. 50"
-                        disabled={!selectedProduct}
+                        disabled={!selectedLot}
                         className={`w-full text-sm border rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:outline-none
                             ${qtyError ? "border-red-400" : "border-gray-300"}`}
                     />
-                    {qtyError && (
+                    {qtyError ? (
                         <p className="text-xs text-red-500 mt-1">{qtyError}</p>
+                    ) : (
+                        packSize > 1 &&
+                        qtyNumber > 0 && (
+                            <p className="text-xs text-gray-400 mt-1">
+                                = {piecesLabel(qtyNumber, packSize)}
+                            </p>
+                        )
                     )}
                 </div>
             </div>
@@ -102,6 +202,12 @@ export default function StepItemLot({
                 </button>
             </div>
 
+            {error && (
+                <p className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                    {error}
+                </p>
+            )}
+
             {/* Items added so far */}
             {selectedItems.length > 0 && (
                 <div className="border border-gray-200 rounded-lg overflow-hidden">
@@ -117,13 +223,18 @@ export default function StepItemLot({
                                 <div>
                                     <div className="text-sm font-medium text-gray-800">
                                         {item._product_name}
-                                        <span className="text-gray-400 font-normal ml-1">
-                                            · {item._brand}
-                                        </span>
+                                        {item._brand && (
+                                            <span className="text-gray-400 font-normal ml-1">
+                                                · {item._brand}
+                                            </span>
+                                        )}
                                     </div>
                                     <div className="text-xs text-gray-400 font-mono mt-0.5">
-                                        Lot {item.lot_number} ·{" "}
-                                        {item.quantity_requested} units
+                                        Lot {item.lot_number ?? "—"} ·{" "}
+                                        {piecesLabel(
+                                            item.quantity_requested,
+                                            item._pack_size,
+                                        )}
                                     </div>
                                 </div>
                                 <button

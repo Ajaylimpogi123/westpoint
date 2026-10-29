@@ -9,14 +9,16 @@ import TransferRow from "./TransferRow";
 export default function TransfersTable({
     transfers,
     isAdmin,
+    currentUserId,
     onCancel,
     onView,
 }) {
-    const { data, links, meta } = transfers;
+    // Laravel's paginator puts from/to/total at the top level, not under meta.
+    const { data, links, from, to, total } = transfers;
 
     if (!data || data.length === 0) {
         return (
-            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-3">
+            <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-3 rounded-xl bg-white">
                 <svg
                     className="w-12 h-12"
                     fill="none"
@@ -43,6 +45,7 @@ export default function TransfersTable({
                     key={transfer.id}
                     transfer={transfer}
                     isAdmin={isAdmin}
+                    currentUserId={currentUserId}
                     onCancel={onCancel}
                     onView={onView}
                 />
@@ -71,9 +74,9 @@ export default function TransfersTable({
             )}
 
             {/* Count */}
-            {meta && (
+            {total > 0 && (
                 <p className="text-center text-xs text-gray-400">
-                    Showing {meta.from}–{meta.to} of {meta.total} requests
+                    Showing {from}–{to} of {total} requests
                 </p>
             )}
         </div>

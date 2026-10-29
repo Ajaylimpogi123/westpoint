@@ -382,14 +382,20 @@ class Report
         $query = DB::table('tbl_stock_in_items as sii')
             ->join('tbl_stock_ins as si', 'si.stock_in_id', '=', 'sii.stock_in_id')
             ->join('tbl_products as p', 'p.id', '=', 'sii.pd_id')
+            ->leftJoin('branches as b', 'b.id', '=', 'si.branch_id')
             ->whereBetween('si.delivery_date', [$from, $to])
             ->select(
+                'sii.item_id',
                 'si.stock_in_id',
                 'si.supplier_name',
                 'si.delivery_date',
                 'si.received_by',
                 'si.branch_id',
+                'b.branch_name',
                 'p.med_name',
+                'p.dose',
+                'p.form',
+                'p.brand_name',
                 'sii.batch_number',
                 'sii.expiry_date',
                 'sii.unit_type',
@@ -397,15 +403,26 @@ class Report
                 'sii.pieces_received',
                 'sii.unit_price'
             )
-            ->orderByDesc('si.delivery_date');
+            ->orderByDesc('si.delivery_date')
+            ->orderByDesc('si.stock_in_id');
 
         static::applyBranch($query, $filters, 'si.branch_id');
         if (!empty($filters['supplier_name'])) {
             $query->where('si.supplier_name', 'like', '%' . $filters['supplier_name'] . '%');
         }
-        return $query->get();
+
+        return $query->get()->map(function ($row) {
+            $row->unit_type = static::unitLabel($row->unit_type);
+
+            return $row;
+        });
     }
 
+    /**
+     * Stock-out lines. A "Delivery to Customer" takes no stock until it is
+     * confirmed, so each line carries a status and only deducted lines count
+     * towards total_pieces.
+     */
     public static function stockOutReport(array $filters)
     {
         [$from, $to] = static::dateRange($filters);
@@ -413,8 +430,10 @@ class Report
         $query = DB::table('tbl_stock_out_items as soi')
             ->join('tbl_stock_outs as so', 'so.stock_out_id', '=', 'soi.stock_out_id')
             ->join('tbl_products as p', 'p.id', '=', 'soi.pd_id')
+            ->leftJoin('branches as b', 'b.id', '=', 'so.branch_id')
             ->whereBetween('so.created_at', [$from, $to])
             ->select(
+                'soi.item_id',
                 'so.stock_out_id',
                 'so.transaction_subtype',
                 'so.patient_reference',
@@ -422,7 +441,11 @@ class Report
                 'so.delivered_to',
                 'so.delivery_confirmed',
                 'so.branch_id',
+                'b.branch_name',
                 'p.med_name',
+                'p.dose',
+                'p.form',
+                'p.brand_name',
                 'soi.lot_number',
                 'soi.expiry',
                 'soi.unit_type',
@@ -431,24 +454,65 @@ class Report
                 'soi.unit_price',
                 'so.created_at'
             )
-            ->orderByDesc('so.created_at');
+            ->orderByDesc('so.created_at')
+            ->orderByDesc('so.stock_out_id');
 
         static::applyBranch($query, $filters, 'so.branch_id');
 
-        return $query->get();
+        if (!empty($filters['status'])) {
+            $query->where('so.transaction_subtype', $filters['status']);
+        }
+
+        return $query->get()->map(function ($row) {
+            $isDelivery = $row->transaction_subtype === 'Delivery to Customer';
+
+            $row->unit_type = static::unitLabel($row->unit_type);
+            $row->status = $isDelivery && ! $row->delivery_confirmed
+                ? 'Pending delivery'
+                : ($isDelivery ? 'Delivered' : 'Deducted');
+            $row->is_deducted = $row->status !== 'Pending delivery';
+
+            return $row;
+        });
     }
 
+    /**
+     * Legacy rows store lowercase units ("box"); show them consistently.
+     */
+    protected static function unitLabel(?string $unit): ?string
+    {
+        return $unit === null ? null : ucfirst(strtolower($unit));
+    }
+
+    /**
+     * Stock transfer lines, one row per item like the Stock In / Stock Out
+     * reports. Only approved lines have moved stock; pending lines are
+     * reported separately and rejected/cancelled ones move nothing.
+     */
     public static function stockTransferReport(array $filters)
     {
         [$from, $to] = static::dateRange($filters);
 
+        // Rejections and cancellations don't set approved_by; the person who
+        // closed the request is on the transfer's activity log.
+        $closedBy = DB::table('tbl_stock_transfer_logs as cl')
+            ->join('users as cu', 'cu.id', '=', 'cl.performed_by')
+            ->whereColumn('cl.stock_transfer_id', 't.id')
+            ->whereColumn('cl.action', 't.status')
+            ->orderByDesc('cl.id')
+            ->limit(1)
+            ->select('cu.name');
+
         $query = DB::table('tbl_stock_transfers as t')
+            ->leftJoin('tbl_stock_transfer_items as i', 'i.stock_transfer_id', '=', 't.id')
+            ->leftJoin('tbl_products as p', 'p.id', '=', 'i.product_id')
             ->leftJoin('branches as fb', 'fb.id', '=', 't.from_branch_id')
             ->leftJoin('branches as tb', 'tb.id', '=', 't.to_branch_id')
             ->leftJoin('users as req', 'req.id', '=', 't.requested_by')
             ->leftJoin('users as app', 'app.id', '=', 't.approved_by')
             ->whereBetween('t.transfer_date', [$from, $to])
             ->select(
+                'i.id as item_id',
                 't.id',
                 't.transfer_no',
                 't.status',
@@ -459,9 +523,20 @@ class Report
                 'fb.branch_name as from_branch',
                 'tb.branch_name as to_branch',
                 'req.name as requested_by_name',
-                'app.name as approved_by_name'
+                'app.name as approved_by_name',
+                'p.med_name',
+                'p.dose',
+                'p.form',
+                'p.brand_name',
+                'i.lot_number',
+                'i.expiry',
+                'i.quantity_requested',
+                'i.quantity_approved'
             )
-            ->orderByDesc('t.transfer_date');
+            ->selectSub($closedBy, 'closed_by_name')
+            ->orderByDesc('t.transfer_date')
+            ->orderByDesc('t.id')
+            ->orderBy('i.id');
 
         if (!empty($filters['status'])) {
             $query->where('t.status', $filters['status']);
@@ -474,7 +549,19 @@ class Report
             });
         }
 
-        return $query->get();
+        return $query->get()->map(function ($row) {
+            $requested = (int) $row->quantity_requested;
+
+            $row->moved_pieces = $row->status === 'approved'
+                ? (int) ($row->quantity_approved ?? $requested)
+                : 0;
+            $row->pending_pieces = $row->status === 'pending' ? $requested : 0;
+            $row->actioned_by_name = $row->status === 'approved'
+                ? $row->approved_by_name
+                : $row->closed_by_name;
+
+            return $row;
+        });
     }
 
     public static function movementLedger(array $filters)
@@ -505,5 +592,69 @@ class Report
         }
 
         return $query->paginate($filters['per_page'] ?? 50)->withQueryString();
+    }
+
+    /**
+     * Manual "Add Stock" entries from Medicine Inventory (not Stock In
+     * deliveries), read from the movement log. Expiry, shelf and the unit
+     * entered come from the log's metadata; older entries without it fall
+     * back to the lot's current values and the log remarks.
+     */
+    public static function addStockHistory(array $filters)
+    {
+        [$from, $to] = static::dateRange($filters);
+
+        $query = DB::table('tbl_inventory_movement_logs as l')
+            ->leftJoin('users as u', 'u.id', '=', 'l.performed_by')
+            ->leftJoin('branches as b', 'b.id', '=', 'l.branch_id')
+            ->leftJoin('tbl_products as p', 'p.id', '=', 'l.pd_id')
+            ->leftJoin('products_qty as pq', 'pq.id', '=', DB::raw("JSON_UNQUOTE(JSON_EXTRACT(l.metadata, '$.batch_id'))"))
+            ->where('l.movement_type', InventoryMovementLog::TYPE_ADD_STOCK)
+            ->whereBetween('l.created_at', [$from, $to])
+            ->select(
+                'l.log_id',
+                'l.created_at',
+                'l.medicine_name',
+                'l.lot_number',
+                'l.quantity',
+                'l.remarks',
+                'l.metadata',
+                'b.branch_name',
+                'p.brand_name',
+                'p.dose',
+                'p.form',
+                'u.name as performed_by_name'
+            )
+            // Older entries have no batch_id: match the lot by product + lot number.
+            ->selectRaw("COALESCE(pq.expiry, (SELECT f.expiry FROM products_qty f WHERE f.product_id = l.pd_id AND f.lot_number <=> l.lot_number ORDER BY f.id LIMIT 1)) as batch_expiry")
+            ->selectRaw("COALESCE(pq.shelf_number, (SELECT f.shelf_number FROM products_qty f WHERE f.product_id = l.pd_id AND f.lot_number <=> l.lot_number ORDER BY f.id LIMIT 1)) as batch_shelf_number")
+            ->orderByDesc('l.created_at')
+            ->orderByDesc('l.log_id');
+
+        static::applyBranch($query, $filters, 'l.branch_id');
+
+        if (!empty($filters['search'])) {
+            $like = '%' . addcslashes($filters['search'], '%_\\') . '%';
+            $query->where(function ($q) use ($like) {
+                $q->where('l.medicine_name', 'like', $like)
+                    ->orWhere('l.lot_number', 'like', $like)
+                    ->orWhere('p.brand_name', 'like', $like);
+            });
+        }
+
+        return $query->paginate($filters['per_page'] ?? 50)
+            ->withQueryString()
+            ->through(function ($row) {
+                $meta = json_decode($row->metadata ?? '', true) ?: [];
+
+                $row->expiry = $meta['expiry'] ?? $row->batch_expiry;
+                $row->shelf_number = $meta['shelf_number'] ?? $row->batch_shelf_number;
+                $row->entered = isset($meta['quantity_entered'], $meta['unit_type'])
+                    ? "{$meta['quantity_entered']} {$meta['unit_type']}"
+                    : preg_replace('/\s*added manually\.?$/i', '', (string) $row->remarks);
+                unset($row->metadata, $row->batch_expiry, $row->batch_shelf_number);
+
+                return $row;
+            });
     }
 }

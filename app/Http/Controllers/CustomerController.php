@@ -7,7 +7,6 @@ use App\Models\BranchCustomer;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\Validation\Rule;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -177,8 +176,9 @@ class CustomerController extends Controller
      */
     public function quickStore(Request $request): JsonResponse
     {
-        $roleId = $this->roleId();
-        $canAssignBranch = $roleId === 2;
+        // Used inside the Return-from-customer flow, where admins and
+        // superadmins may record returns for any branch.
+        $canAssignBranch = $this->canAccessAllBranches();
 
         $validated = $request->validate([
             'first_name' => ['required', 'string', 'max:100'],
@@ -219,7 +219,7 @@ class CustomerController extends Controller
 
     private function assertCanAccessBranch(int $branchId): void
     {
-        if ($this->roleId() === 2) {
+        if ($this->canAccessAllBranches()) {
             return;
         }
 
@@ -233,6 +233,15 @@ class CustomerController extends Controller
     private function roleId(): int
     {
         return (int) session('role_id');
+    }
+
+    /**
+     * Admins and superadmins work across branches in the stock / return
+     * flows (forBranch, quickStore).
+     */
+    private function canAccessAllBranches(): bool
+    {
+        return in_array($this->roleId(), [2, 3], true);
     }
 
     private function branchId(): ?int

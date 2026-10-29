@@ -1,4 +1,4 @@
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogClose,
@@ -7,13 +7,14 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-} from "@/Components/ui/dialog";
-import { Input } from "@/Components/ui/input";
-import { Label } from "@/Components/ui/label";
-import InputError from "@/Components/InputError";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import InputError from "@/components/InputError";
 import { Plus, Trash2, UserPlus } from "lucide-react";
 import useCustomerReturn from "../Hooks/useCustomerReturn";
 import MedicineSearchSelect from "./MedicineSearchSelect";
+import BranchChangeConfirmDialog from "./BranchChangeConfirmDialog";
 import { isBoxUnit, unitLabel } from "@/lib/units";
 import NewCustomerModal from "./NewCustomerModal";
 import CustomerSearchSelect from "./CustomerSearchSelect";
@@ -21,7 +22,6 @@ import CustomerSearchSelect from "./CustomerSearchSelect";
 export default function CustomerReturnModal({
     branchId,
     branchName,
-    products,
     branches = [],
     canAssignBranch = false,
     children,
@@ -50,6 +50,10 @@ export default function CustomerReturnModal({
         canAssignBranch: canChangeBranch,
         branches: branchOptions,
         handleBranchChange,
+        pendingBranchId,
+        confirmBranchChange,
+        cancelBranchChange,
+        reloadProducts,
         addItemToBasket,
         removeItemFromBasket,
         piecesLabel,
@@ -59,7 +63,7 @@ export default function CustomerReturnModal({
         errors,
         processing,
         handleSubmit,
-    } = useCustomerReturn({ branchId, products, canAssignBranch, branches });
+    } = useCustomerReturn({ branchId, canAssignBranch, branches });
 
     return (
         <>
@@ -97,6 +101,7 @@ export default function CustomerReturnModal({
                                                 )
                                             }
                                             className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-2 text-sm shadow-sm focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+                                            disabled={processing}
                                         >
                                             <option value="">
                                                 Select branch
@@ -269,9 +274,17 @@ export default function CustomerReturnModal({
                                         }
                                     />
                                     {productsError && (
-                                        <p className="text-sm text-destructive">
-                                            {productsError}
-                                        </p>
+                                        <div className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                                            <span>{productsError}</span>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={reloadProducts}
+                                            >
+                                                Retry
+                                            </Button>
+                                        </div>
                                     )}
                                 </div>
 
@@ -577,6 +590,14 @@ export default function CustomerReturnModal({
                             </Button>
                         </DialogFooter>
                     </form>
+
+                    <BranchChangeConfirmDialog
+                        pendingBranchId={pendingBranchId}
+                        branches={branchOptions}
+                        itemCount={data.items.length}
+                        onConfirm={confirmBranchChange}
+                        onCancel={cancelBranchChange}
+                    />
                 </DialogContent>
             </Dialog>
         </>

@@ -265,6 +265,76 @@ class MedicineMultiBranchTest extends TestCase
             ->assertJsonCount(0, 'medicines');
     }
 
+    private function medicineInBranchB(): MedicineProduct
+    {
+        return MedicineProduct::create([
+            'branch_id' => $this->branchB->id,
+            'med_name' => 'Amlodipine',
+            'dose' => '5mg',
+            'form' => 'Tablet',
+            'pack_size' => 10,
+            'retail_price' => 2,
+            'wholesale_price' => 18,
+            'status' => 'Active',
+        ]);
+    }
+
+    public function test_admin_can_add_stock_to_another_branch_medicine(): void
+    {
+        $medicine = $this->medicineInBranchB();
+
+        foreach ([$this->admin, $this->superadmin] as $user) {
+            $this->actingAsWithSession($user)
+                ->post('/medicine-inventory/stock', [
+                    'product_id' => $medicine->id,
+                    'boxes_received' => 2,
+                    'unit_type' => 'Box',
+                    'lot_number' => "LOT-{$user->id}",
+                ])
+                ->assertSessionHasNoErrors()
+                ->assertRedirect();
+        }
+
+        $this->assertSame(40, (int) $medicine->batches()->sum('quantity'));
+        $this->assertDatabaseHas('tbl_inventory_movement_logs', [
+            'pd_id' => $medicine->id,
+            'branch_id' => $this->branchB->id,
+        ]);
+    }
+
+    public function test_staff_cannot_add_stock_to_another_branch_medicine(): void
+    {
+        $medicine = $this->medicineInBranchB();
+
+        $this->actingAsWithSession($this->staff)
+            ->post('/medicine-inventory/stock', [
+                'product_id' => $medicine->id,
+                'boxes_received' => 2,
+            ])
+            ->assertNotFound();
+
+        $this->assertSame(0, $medicine->batches()->count());
+    }
+
+    public function test_staff_can_still_add_stock_to_own_branch(): void
+    {
+        $this->actingAsWithSession($this->staff)
+            ->post('/medicine-inventory/stock', [
+                'product_id' => $this->product->id,
+                'boxes_received' => 1,
+                'unit_type' => 'Box',
+                'lot_number' => 'LOT-NEW',
+            ])
+            ->assertSessionHasNoErrors()
+            ->assertRedirect();
+
+        $this->assertDatabaseHas('products_qty', [
+            'product_id' => $this->product->id,
+            'lot_number' => 'LOT-NEW',
+            'quantity' => 10,
+        ]);
+    }
+
     public function test_update_cannot_rename_into_existing_medicine(): void
     {
         $other = MedicineProduct::create([

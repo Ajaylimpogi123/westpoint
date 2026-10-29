@@ -1,38 +1,26 @@
-import { router } from "@inertiajs/react";
-import { useState } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-
+import ReportFilterBar from "./Partials/ReportFilterBar";
 import DataTable from "./Partials/DataTable";
+import MovementTotals, { medicineColumn } from "./Partials/MovementTotals";
 
-export default function StockTransfers({ filters, transfers }) {
-    const [form, setForm] = useState({
-        date_from: filters?.date_from || "",
-        date_to: filters?.date_to || "",
-        status: filters?.status || "",
-    });
+const STATUS_OPTIONS = [
+    { value: "pending", label: "Pending" },
+    { value: "approved", label: "Approved" },
+    { value: "rejected", label: "Rejected" },
+    { value: "cancelled", label: "Cancelled" },
+];
 
-    const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
+const STATUS_STYLES = {
+    approved: "bg-emerald-50 text-emerald-700",
+    pending: "bg-amber-50 text-amber-700",
+    rejected: "bg-red-50 text-red-700",
+    cancelled: "bg-slate-100 text-slate-600",
+};
 
-    const submit = (e) => {
-        e.preventDefault();
-        const query = Object.fromEntries(
-            Object.entries(form).filter(([, v]) => v !== ""),
-        );
-        router.get(route("reports.stock-transfers"), query, {
-            preserveState: true,
-            replace: true,
-        });
-    };
+const capitalize = (value) =>
+    value ? value.charAt(0).toUpperCase() + value.slice(1) : "-";
 
-    const reset = () => {
-        setForm({ date_from: "", date_to: "", status: "" });
-        router.get(
-            route("reports.stock-transfers"),
-            {},
-            { preserveState: true, replace: true },
-        );
-    };
-
+export default function StockTransfers({ filters, transfers, totals, branches }) {
     return (
         <AuthenticatedLayout
             header={<h2 className="text-xl font-semibold">Stock Transfers</h2>}
@@ -44,108 +32,88 @@ export default function StockTransfers({ filters, transfers }) {
                             Stock Transfers Report
                         </h1>
                         <p className="mt-2 text-sm text-white">
-                            Overview of stock transfers, including transfer
-                            numbers, source and destination branches, statuses,
-                            and dates.
+                            Stock moved between branches, by transfer date.
+                            Stock moves only when a request is approved; the
+                            branch filter matches either side of a transfer.
                         </p>
                     </div>
-                    <form
-                        onSubmit={submit}
-                        className="flex flex-wrap items-end gap-3 mb-4 bg-white p-4 rounded-lg shadow-sm"
-                    >
-                        <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
-                                From
-                            </label>
-                            <input
-                                type="date"
-                                value={form.date_from}
-                                onChange={set("date_from")}
-                                className="border-gray-300 rounded-md text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
-                                To
-                            </label>
-                            <input
-                                type="date"
-                                value={form.date_to}
-                                onChange={set("date_to")}
-                                className="border-gray-300 rounded-md text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
-                                Status
-                            </label>
-                            <select
-                                value={form.status}
-                                onChange={set("status")}
-                                className="border-gray-300 rounded-md text-sm"
-                            >
-                                <option value="">All</option>
-                                <option value="pending">Pending</option>
-                                <option value="approved">Approved</option>
-                                <option value="rejected">Rejected</option>
-                                <option value="cancelled">Cancelled</option>
-                            </select>
-                        </div>
-                        <button
-                            type="submit"
-                            className="bg-slate-800 text-white text-sm px-4 py-2 rounded-md hover:bg-slate-700"
-                        >
-                            Apply
-                        </button>
-                        <button
-                            type="button"
-                            onClick={reset}
-                            className="text-sm text-slate-500 px-3 py-2 hover:text-slate-700"
-                        >
-                            Clear
-                        </button>
-                    </form>
-
+                    <ReportFilterBar
+                        routeName="reports.stock-transfers"
+                        filters={filters}
+                        branchOptions={branches}
+                        statusOptions={STATUS_OPTIONS}
+                    />
+                    <MovementTotals
+                        items={[
+                            { label: "Transfers", value: totals.transfers },
+                            { label: "Line items", value: totals.lines },
+                            {
+                                label: "Pieces moved",
+                                value: totals.pieces,
+                                hint: "Approved transfers",
+                            },
+                            {
+                                label: "Pending pieces",
+                                value: totals.pending_pieces,
+                                hint: "Awaiting approval",
+                            },
+                        ]}
+                    />
                     <DataTable
                         columns={[
-                            { key: "transfer_no", label: "Transfer #" },
-                            { key: "from_branch", label: "From" },
-                            { key: "to_branch", label: "To" },
+                            { key: "transfer_no", label: "Ref #" },
+                            { key: "transfer_date", label: "Date" },
+                            {
+                                key: "route",
+                                label: "From → To",
+                                render: (r) =>
+                                    `${r.from_branch ?? "-"} → ${r.to_branch ?? "-"}`,
+                            },
+                            medicineColumn,
+                            {
+                                key: "lot_number",
+                                label: "Lot #",
+                                render: (r) => r.lot_number || "-",
+                            },
+                            {
+                                key: "expiry",
+                                label: "Expiry",
+                                render: (r) => r.expiry || "-",
+                            },
+                            {
+                                key: "quantity_requested",
+                                label: "Requested",
+                                render: (r) =>
+                                    r.quantity_requested != null
+                                        ? `${r.quantity_requested} pcs`
+                                        : "-",
+                            },
+                            {
+                                key: "moved_pieces",
+                                label: "Moved",
+                                render: (r) => `${r.moved_pieces} pcs`,
+                            },
                             {
                                 key: "status",
                                 label: "Status",
                                 render: (r) => (
                                     <span
-                                        className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                            r.status === "approved"
-                                                ? "bg-green-100 text-green-800"
-                                                : r.status === "pending"
-                                                  ? "bg-yellow-100 text-yellow-800"
-                                                  : "bg-red-100 text-red-800"
-                                        }`}
+                                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[r.status] ?? ""}`}
                                     >
-                                        {r.status === "approved"
-                                            ? "Approved"
-                                            : r.status === "pending"
-                                              ? "Pending"
-                                              : "Rejected"}
+                                        {capitalize(r.status)}
                                     </span>
                                 ),
                             },
-                            { key: "priority", label: "Priority" },
-                            { key: "requested_by_name", label: "Requested By" },
-                            { key: "approved_by_name", label: "Approved By" },
                             {
-                                key: "transfer_date",
-                                label: "Date",
-                                render: (r) =>
-                                    new Date(
-                                        r.transfer_date,
-                                    ).toLocaleDateString("en-US", {
-                                        year: "numeric",
-                                        month: "long",
-                                        day: "numeric",
-                                    }),
+                                key: "priority",
+                                label: "Priority",
+                                render: (r) => capitalize(r.priority),
+                            },
+                            { key: "requested_by_name", label: "Requested By" },
+                            {
+                                key: "actioned_by_name",
+                                label: "Actioned By",
+                                render: (r) => r.actioned_by_name || "-",
                             },
                         ]}
                         rows={transfers}

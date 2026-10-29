@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { useForm } from "@inertiajs/react";
 import {
     UNIT_PIECE,
@@ -10,7 +10,8 @@ import {
     toWholeNumber,
 } from "@/lib/units";
 import { newIdempotencyKey } from "@/lib/idempotency";
-import { fetchBranchProducts } from "../lib/inventoryMedicinesApi";
+import useBranchProducts, { resolveDefaultBranchId } from "./useBranchProducts";
+import useBranchSwitch from "./useBranchSwitch";
 
 const TRANSACTION_SUBTYPES = ["Delivery to Customer", "Returned to supplier"];
 
@@ -40,57 +41,29 @@ const emptyForm = (branchId) => ({
 
 export default function useStockOut({
     branchId,
-    products: initialProducts = [],
     canAssignBranch = false,
     branches = [],
 }) {
-    const defaultBranchId = branchId ?? branches[0]?.id ?? null;
+    const defaultBranchId = resolveDefaultBranchId(
+        branchId,
+        branches,
+        canAssignBranch,
+    );
 
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(emptyDraft);
-    const [products, setProducts] = useState(initialProducts ?? []);
-    const [productsLoading, setProductsLoading] = useState(false);
-    const [productsError, setProductsError] = useState(null);
 
     const { data, setData, post, errors, processing, reset, clearErrors } =
         useForm(emptyForm(defaultBranchId));
 
-    const loadProductsForBranch = useCallback(async (targetBranchId) => {
-        if (!targetBranchId) {
-            setProducts([]);
-            return;
-        }
-
-        setProductsLoading(true);
-        setProductsError(null);
-
-        try {
-            const response = await fetchBranchProducts(targetBranchId);
-            setProducts(response.products ?? []);
-        } catch {
-            setProducts([]);
-            setProductsError(
-                "Could not load medicines for the selected branch.",
-            );
-        } finally {
-            setProductsLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!open || !canAssignBranch) {
-            return;
-        }
-
-        const selectedBranchId = Number(data.branch_id);
-
-        if (!selectedBranchId) {
-            setProducts([]);
-            return;
-        }
-
-        loadProductsForBranch(selectedBranchId);
-    }, [open, canAssignBranch, data.branch_id, loadProductsForBranch]);
+    // Medicines and lots always come from the source branch selected on the
+    // form — for staff that is their own branch, for admins whichever they pick.
+    const {
+        products,
+        loading: productsLoading,
+        error: productsError,
+        reload: reloadProducts,
+    } = useBranchProducts({ open, branchId: data.branch_id });
 
     const productMap = useMemo(() => {
         return Object.fromEntries(
@@ -173,11 +146,30 @@ export default function useStockOut({
             : `${piecesPreview} ${piecesPreview === 1 ? "piece" : "pieces"}`
         : "";
 
+    // Switching branch clears the basket and draft in one step so lots
+    // picked from the previous branch can never be posted to the new one.
+    const applyBranchChange = (value) => {
+        setData((current) => ({ ...current, branch_id: value, items: [] }));
+        setDraft(emptyDraft());
+        clearErrors();
+    };
+
+    const {
+        pendingBranchId,
+        requestBranchChange: handleBranchChange,
+        confirmBranchChange,
+        cancelBranchChange,
+        resetBranchSwitch,
+    } = useBranchSwitch({
+        currentBranchId: data.branch_id,
+        itemCount: data.items.length,
+        applyChange: applyBranchChange,
+    });
+
     const openModal = () => {
         clearErrors();
         setDraft(emptyDraft());
-        setProductsError(null);
-        setProducts(initialProducts ?? []);
+        resetBranchSwitch();
         setData(emptyForm(defaultBranchId));
         setOpen(true);
     };
@@ -185,16 +177,9 @@ export default function useStockOut({
     const closeModal = () => {
         setOpen(false);
         setDraft(emptyDraft());
-        setProducts(initialProducts ?? []);
-        setProductsError(null);
+        resetBranchSwitch();
         reset();
         clearErrors();
-    };
-
-    const handleBranchChange = (value) => {
-        setData("branch_id", value);
-        setDraft(emptyDraft());
-        setProductsError(null);
     };
 
     const updateDraft = (field, value) => {
@@ -367,12 +352,22 @@ export default function useStockOut({
             "items",
             data.items.filter((_, itemIndex) => itemIndex !== index),
         );
+
+        // Per-item server errors are keyed by position ("items.2.pd_id");
+        // once rows shift they would point at the wrong medicine.
+        const itemErrorKeys = Object.keys(errors).filter((key) =>
+            key.startsWith("items."),
+        );
+
+        if (itemErrorKeys.length > 0) {
+            clearErrors(...itemErrorKeys);
+        }
     };
 
     const handleSubmit = (event) => {
         event.preventDefault();
 
-        if (processing || data.items.length === 0) {
+        if (processing || !data.branch_id || data.items.length === 0) {
             return;
         }
 
@@ -407,9 +402,13 @@ export default function useStockOut({
         products,
         productsLoading,
         productsError,
+        reloadProducts,
         canAssignBranch,
         branches,
         handleBranchChange,
+        pendingBranchId,
+        confirmBranchChange,
+        cancelBranchChange,
         addItemToBasket,
         removeItemFromBasket,
         errors,

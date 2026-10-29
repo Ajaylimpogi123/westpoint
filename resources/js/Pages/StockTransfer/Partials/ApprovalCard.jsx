@@ -1,18 +1,29 @@
 import RejectForm from "./RejectForm";
 import TransferStatusBadge from "./TransferStatusBadge";
-import { formatDate, PRIORITY_CONFIG } from "../lib/TransferHelpers";
+import {
+    formatDate,
+    piecesLabel,
+    PRIORITY_CONFIG,
+} from "../lib/TransferHelpers";
 
 /**
  * ApprovalCard
- * Shown in admin's "Pending" tab. Each card has inline Approve / Reject actions.
+ * Shown in the "Pending" tab. Admins get inline Approve / Reject actions;
+ * superadmins see the same card read-only.
  *
- * Props: transfer, approval (from useApproval hook), onView(transfer)
+ * Props: transfer, approval (from useApproval hook), onView(transfer), canApprove
  */
-export default function ApprovalCard({ transfer, approval, onView }) {
+export default function ApprovalCard({
+    transfer,
+    approval,
+    onView,
+    canApprove = false,
+}) {
     const priority =
         PRIORITY_CONFIG[transfer.priority] ?? PRIORITY_CONFIG.normal;
     const isRejecting = approval.rejectingId === transfer.id;
-    const isApproving = approval.approveProcessing;
+    const isApproving = approval.approvingId === transfer.id;
+    const anyApproving = approval.approveProcessing;
 
     return (
         <div className="bg-white border border-gray-200 rounded-xl overflow-hidden">
@@ -85,20 +96,26 @@ export default function ApprovalCard({ transfer, approval, onView }) {
                         >
                             <div>
                                 <div className="text-sm font-medium text-gray-800">
-                                    {item.product?.med_name}{" "}
-                                    {item.product?.dose}
-                                    <span className="text-gray-400 font-normal ml-1 text-xs">
-                                        {item.product?.brand_name}
-                                    </span>
+                                    {[item.product?.med_name, item.product?.dose]
+                                        .filter(Boolean)
+                                        .join(" ")}
+                                    {item.product?.brand_name && (
+                                        <span className="text-gray-400 font-normal ml-1 text-xs">
+                                            {item.product.brand_name}
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="text-xs font-mono text-gray-400 mt-0.5">
-                                    Lot {item.lot_number}
+                                    Lot {item.lot_number ?? "—"}
                                     {item.expiry &&
                                         ` · exp. ${formatDate(item.expiry)}`}
                                 </div>
                             </div>
-                            <span className="text-sm font-semibold text-gray-700 ml-4">
-                                {item.quantity_requested} units
+                            <span className="text-sm font-semibold text-gray-700 ml-4 text-right">
+                                {piecesLabel(
+                                    item.quantity_requested,
+                                    item.product?.pack_size,
+                                )}
                             </span>
                         </div>
                     ))}
@@ -123,13 +140,19 @@ export default function ApprovalCard({ transfer, approval, onView }) {
                     />
                 )}
 
+                {!canApprove && (
+                    <p className="text-xs text-gray-400 pt-1">
+                        Awaiting approval by an admin.
+                    </p>
+                )}
+
                 {/* Action buttons */}
-                {!isRejecting && (
+                {canApprove && !isRejecting && (
                     <div className="flex items-center gap-2 pt-1">
                         <button
                             type="button"
-                            onClick={() => approval.approve(transfer.id)}
-                            disabled={isApproving}
+                            onClick={() => approval.approve(transfer)}
+                            disabled={anyApproving}
                             className="flex-1 text-sm py-2 rounded-lg bg-green-600 text-white
                                 hover:bg-green-700 disabled:opacity-40 transition font-medium"
                         >
@@ -140,6 +163,7 @@ export default function ApprovalCard({ transfer, approval, onView }) {
                         <button
                             type="button"
                             onClick={() => approval.openReject(transfer.id)}
+                            disabled={anyApproving}
                             className="flex-1 text-sm py-2 rounded-lg border border-red-300
                                 text-red-600 hover:bg-red-50 transition font-medium"
                         >

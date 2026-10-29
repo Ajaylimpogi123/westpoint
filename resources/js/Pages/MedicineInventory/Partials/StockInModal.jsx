@@ -14,6 +14,7 @@ import InputError from "@/components/InputError";
 import { Plus, Trash2 } from "lucide-react";
 import useStockIn from "../Hooks/useStockIn";
 import MedicineSearchSelect from "./MedicineSearchSelect";
+import BranchChangeConfirmDialog from "./BranchChangeConfirmDialog";
 import { isBoxUnit, unitLabel } from "@/lib/units";
 import {
     Select,
@@ -81,7 +82,6 @@ function formatCurrency(value) {
 export default function StockInModal({
     branchId,
     branchName,
-    products,
     branches = [],
     canAssignBranch = false,
     children,
@@ -106,6 +106,10 @@ export default function StockInModal({
         canAssignBranch: canChangeBranch,
         branches: branchOptions,
         handleBranchChange,
+        pendingBranchId,
+        confirmBranchChange,
+        cancelBranchChange,
+        reloadProducts,
         addItemToBasket,
         removeItemFromBasket,
         piecesLabel,
@@ -117,7 +121,7 @@ export default function StockInModal({
         errors,
         processing,
         handleSubmit,
-    } = useStockIn({ branchId, products, canAssignBranch, branches });
+    } = useStockIn({ branchId, canAssignBranch, branches });
 
     return (
         <>
@@ -182,6 +186,7 @@ export default function StockInModal({
                                         <Select
                                             value={data.branch_id || undefined}
                                             onValueChange={handleBranchChange}
+                                            disabled={processing}
                                         >
                                             <SelectTrigger id="branch_id">
                                                 <SelectValue placeholder="Select branch" />
@@ -274,9 +279,17 @@ export default function StockInModal({
                                         }
                                     />
                                     {productsError && (
-                                        <p className="text-sm text-destructive">
-                                            {productsError}
-                                        </p>
+                                        <div className="flex flex-wrap items-center gap-2 text-sm text-destructive">
+                                            <span>{productsError}</span>
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                size="sm"
+                                                onClick={reloadProducts}
+                                            >
+                                                Retry
+                                            </Button>
+                                        </div>
                                     )}
                                     {!productsLoading &&
                                         data.branch_id &&
@@ -683,6 +696,14 @@ export default function StockInModal({
                             </Button>
                         </DialogFooter>
                     </form>
+
+                    <BranchChangeConfirmDialog
+                        pendingBranchId={pendingBranchId}
+                        branches={branchOptions}
+                        itemCount={data.items.length}
+                        onConfirm={confirmBranchChange}
+                        onCancel={cancelBranchChange}
+                    />
                 </DialogContent>
             </Dialog>
         </>

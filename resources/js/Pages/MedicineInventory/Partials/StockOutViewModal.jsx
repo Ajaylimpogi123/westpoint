@@ -114,6 +114,15 @@ export default function StockOutViewModal({ stockOutId, children }) {
                             <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
                                 <div>
                                     <span className="text-muted-foreground">
+                                        Source Branch:
+                                    </span>{" "}
+                                    <span className="font-medium">
+                                        {details.stock_out.branch?.branch_name ??
+                                            "—"}
+                                    </span>
+                                </div>
+                                <div>
+                                    <span className="text-muted-foreground">
                                         Subtype:
                                     </span>{" "}
                                     <span className="font-medium">

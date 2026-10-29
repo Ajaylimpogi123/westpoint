@@ -5,19 +5,19 @@ namespace App\Http\Controllers;
 use App\Enums\UnitType;
 use App\Exceptions\InvalidPackSizeException;
 use App\Models\Branch;
+use App\Models\CustomerReturn;
 use App\Models\InventoryMovementLog;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\StockIn;
 use App\Models\StockOut;
-use App\Models\CustomerReturn;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\DB;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
@@ -113,23 +113,22 @@ class MedicineInventoryController extends Controller
             ? $stockOutPerPage
             : 10;
 
+        $returnPerPage = (int) $request->input('return_per_page', 10);
+        $returnPerPage = in_array($returnPerPage, [10, 15, 25, 50], true)
+            ? $returnPerPage
+            : 10;
 
-            $returnPerPage = (int) $request->input('return_per_page', 10);
-$returnPerPage = in_array($returnPerPage, [10, 15, 25, 50], true)
-    ? $returnPerPage
-    : 10;
-
-$returnBranchId = $this->resolveTransactionBranchFilter(
-    $request,
-    'return_branch_id',
-    $canViewAllBranches,
-    $sessionBranchId,
-);
-$returnBranchFilter = $this->transactionBranchFilterValue(
-    $request,
-    'return_branch_id',
-    $canViewAllBranches,
-);
+        $returnBranchId = $this->resolveTransactionBranchFilter(
+            $request,
+            'return_branch_id',
+            $canViewAllBranches,
+            $sessionBranchId,
+        );
+        $returnBranchFilter = $this->transactionBranchFilterValue(
+            $request,
+            'return_branch_id',
+            $canViewAllBranches,
+        );
 
         $stockInBranchId = $this->resolveTransactionBranchFilter(
             $request,
@@ -157,10 +156,7 @@ $returnBranchFilter = $this->transactionBranchFilterValue(
         $stockIns = ($canViewAllBranches || $sessionBranchId)
             ? StockIn::query()
                 ->when($stockInBranchId, fn ($query) => $query->where('branch_id', $stockInBranchId))
-                ->when(
-                    $canViewAllBranches && ! $stockInBranchId,
-                    fn ($query) => $query->with('branch:id,branch_name'),
-                )
+                ->with(self::branchSummaryRelation())
                 ->orderByDesc('delivery_date')
                 ->orderByDesc('stock_in_id')
                 ->paginate(
@@ -174,10 +170,7 @@ $returnBranchFilter = $this->transactionBranchFilterValue(
         $stockOuts = ($canViewAllBranches || $sessionBranchId)
             ? StockOut::query()
                 ->when($stockOutBranchId, fn ($query) => $query->where('branch_id', $stockOutBranchId))
-                ->when(
-                    $canViewAllBranches && ! $stockOutBranchId,
-                    fn ($query) => $query->with('branch:id,branch_name'),
-                )
+                ->with(self::branchSummaryRelation())
                 ->orderByDesc('created_at')
                 ->orderByDesc('stock_out_id')
                 ->paginate(
@@ -188,23 +181,20 @@ $returnBranchFilter = $this->transactionBranchFilterValue(
                 ->withQueryString()
             : null;
 
-$customerReturns = ($canViewAllBranches || $sessionBranchId)
-    ? CustomerReturn::query()
-        ->when($returnBranchId, fn ($query) => $query->where('branch_id', $returnBranchId))
-        ->when(
-            $canViewAllBranches && ! $returnBranchId,
-            fn ($query) => $query->with('branch:id,branch_name'),
-        )
-        ->with('customer:customer_id,first_name,last_name,customer_type')
-        ->orderByDesc('return_date')
-        ->orderByDesc('return_id')
-        ->paginate(
-            $returnPerPage,
-            ['return_id', 'customer_id', 'return_date', 'received_by', 'remarks', 'branch_id'],
-            'return_page'
-        )
-        ->withQueryString()
-    : null;
+        $customerReturns = ($canViewAllBranches || $sessionBranchId)
+            ? CustomerReturn::query()
+                ->when($returnBranchId, fn ($query) => $query->where('branch_id', $returnBranchId))
+                ->with(self::branchSummaryRelation())
+                ->with('customer:customer_id,first_name,last_name,customer_type')
+                ->orderByDesc('return_date')
+                ->orderByDesc('return_id')
+                ->paginate(
+                    $returnPerPage,
+                    ['return_id', 'customer_id', 'return_date', 'received_by', 'remarks', 'branch_id'],
+                    'return_page'
+                )
+                ->withQueryString()
+            : null;
 
         $movementLogPerPage = (int) $request->input('movement_log_per_page', 15);
         $movementLogPerPage = in_array($movementLogPerPage, [10, 15, 25, 50], true)
@@ -233,7 +223,7 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
                     'movement_log_per_page',
                     'stock_in_per_page',
                     'stock_out_per_page',
-                     'return_per_page',
+                    'return_per_page',
                 ]),
                 $canViewAllBranches ? [
                     'branch_id' => $inventoryBranchFilter,
@@ -304,7 +294,7 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
         });
 
         return redirect()->route('medicine-inventory.index')
-            ->with('success', 'Medicine added to ' . $this->branchNamesLabel($branchIds) . '.');
+            ->with('success', 'Medicine added to '.$this->branchNamesLabel($branchIds).'.');
     }
 
     /**
@@ -336,7 +326,7 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
         });
 
         return redirect()->back()
-            ->with('success', "{$source->med_name} added to " . $this->branchNamesLabel($branchIds) . '.');
+            ->with('success', "{$source->med_name} added to ".$this->branchNamesLabel($branchIds).'.');
     }
 
     /**
@@ -351,7 +341,7 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
             return response()->json(['medicines' => []]);
         }
 
-        $like = '%' . addcslashes($search, '%_\\') . '%';
+        $like = '%'.addcslashes($search, '%_\\').'%';
 
         $products = MedicineProduct::query()
             ->where('status', '!=', 'Deleted')
@@ -466,11 +456,9 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
 
     public function storeStock(Request $request): RedirectResponse
     {
-        $branchId = $this->branchIdOrFail();
-
         $validated = $request->validate([
             'product_id' => ['required', 'integer', 'exists:tbl_products,id'],
-            'boxes_received' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+            'boxes_received' => ['required', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
             'unit_type' => ['sometimes', 'string', Rule::in(UnitType::values())],
             'lot_number' => ['nullable', 'string', 'max:100'],
             'expiry' => ['nullable', 'date', 'after:today'],
@@ -479,9 +467,16 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
             'expiry.after' => 'The expiry date must be in the future. Expired stock cannot be added.',
         ]);
 
+        // Admins/superadmins may stock any branch's medicine; staff only their
+        // own. Stock always lands in the branch that owns the medicine.
         $medicine = MedicineProduct::active()
-            ->forBranch($branchId)
+            ->when(
+                ! $this->canViewAllBranches(),
+                fn ($query) => $query->forBranch($this->branchIdOrFail()),
+            )
             ->findOrFail($validated['product_id']);
+
+        $branchId = (int) $medicine->branch_id;
 
         $unitType = UnitType::tryFromInput($validated['unit_type'] ?? null) ?? UnitType::Box;
 
@@ -493,7 +488,7 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
                 ->with('error', $exception->getMessage());
         }
 
-        InventoryStockService::addStock(
+        $batch = InventoryStockService::addStock(
             productId: $medicine->id,
             branchId: $branchId,
             quantityInPieces: $quantityInPieces,
@@ -512,10 +507,21 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
             lotNumber: $validated['lot_number'] ?? null,
             quantity: $quantityInPieces,
             remarks: "{$validated['boxes_received']} {$unitType->value}(s) added manually.",
+            // Read by the Add Stock History report.
+            metadata: [
+                'batch_id' => $batch->id,
+                'unit_type' => $unitType->value,
+                'quantity_entered' => (int) $validated['boxes_received'],
+                'expiry' => $validated['expiry'] ?? null,
+                'shelf_number' => $validated['shelf_number'] ?? null,
+            ],
         );
 
-        return redirect()->route('medicine-inventory.index')
-            ->with('success', "Stock added: {$validated['boxes_received']} {$unitType->value}(s) ({$quantityInPieces} pieces).");
+        $branchName = Branch::query()->whereKey($branchId)->value('branch_name');
+
+        // Back, not index: keep the branch filter the admin was viewing.
+        return redirect()->back()
+            ->with('success', "Stock added to {$branchName}: {$validated['boxes_received']} {$unitType->value}(s) ({$quantityInPieces} pieces).");
     }
 
     /**
@@ -534,7 +540,7 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
         $validated = $request->validate([
             'lot_number' => ['nullable', 'string', 'max:100'],
             'expiry' => ['nullable', 'date'],
-            'quantity_in_pieces' => ['required', 'integer', 'min:0', 'max:' . self::MAX_QUANTITY],
+            'quantity_in_pieces' => ['required', 'integer', 'min:0', 'max:'.self::MAX_QUANTITY],
             'shelf_number' => ['nullable', 'string', 'max:50'],
             'adjustment_reason' => ['required', 'string', 'max:255'],
         ], [
@@ -754,7 +760,7 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
 
         $where = $existing
             ->map(fn ($product) => ($product->branch?->branch_name ?? "Branch #{$product->branch_id}")
-                . ($product->status === 'Deleted' ? ' (deactivated — restore it instead)' : ''))
+                .($product->status === 'Deleted' ? ' (deactivated — restore it instead)' : ''))
             ->implode(', ');
 
         throw ValidationException::withMessages([
@@ -808,8 +814,8 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
 
         $list = $similar
             ->take(3)
-            ->map(fn ($medicine) => $medicine['label'] . ' in '
-                . collect($medicine['branches'])->pluck('branch_name')->implode(', '))
+            ->map(fn ($medicine) => $medicine['label'].' in '
+                .collect($medicine['branches'])->pluck('branch_name')->implode(', '))
             ->implode('; ');
 
         throw ValidationException::withMessages([
@@ -999,6 +1005,16 @@ $customerReturns = ($canViewAllBranches || $sessionBranchId)
                 'pack_size',
                 'stock_threshold',
             ]);
+    }
+
+    /**
+     * History rows always carry `branch: {id, branch_name}` so the table can
+     * show where each transaction was recorded, whatever filter is active.
+     * Soft-deleted branches keep their name.
+     */
+    private static function branchSummaryRelation(): array
+    {
+        return ['branch' => fn ($query) => $query->withTrashed()->select(['id', 'branch_name'])];
     }
 
     private function branchId(): ?int

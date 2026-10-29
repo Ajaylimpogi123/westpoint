@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useForm } from "@inertiajs/react";
 import {
     UNIT_PIECE,
@@ -16,7 +16,8 @@ import {
     existingLotsForProduct,
     resolveBatchIntent,
 } from "../lib/batchIntent";
-import { fetchBranchProducts } from "../lib/inventoryMedicinesApi";
+import useBranchProducts, { resolveDefaultBranchId } from "./useBranchProducts";
+import useBranchSwitch from "./useBranchSwitch";
 import { fetchBranchCustomers } from "../lib/customersApi";
 
 const emptyDraft = () => ({
@@ -41,89 +42,68 @@ const emptyForm = (branchId) => ({
 
 export default function useCustomerReturn({
     branchId,
-    products: initialProducts = [],
     canAssignBranch = false,
     branches = [],
 }) {
-    const defaultBranchId = branchId ?? branches[0]?.id ?? null;
+    const defaultBranchId = resolveDefaultBranchId(
+        branchId,
+        branches,
+        canAssignBranch,
+    );
 
     const [open, setOpen] = useState(false);
     const [draft, setDraft] = useState(emptyDraft);
-    const [products, setProducts] = useState(initialProducts ?? []);
-    const [productsLoading, setProductsLoading] = useState(false);
-    const [productsError, setProductsError] = useState(null);
 
     const [customers, setCustomers] = useState([]);
     const [customersLoading, setCustomersLoading] = useState(false);
     const [customersError, setCustomersError] = useState(null);
+    const customersRequestRef = useRef(0);
 
     const { data, setData, post, errors, processing, reset, clearErrors } =
         useForm(emptyForm(defaultBranchId));
 
-    const loadProductsForBranch = useCallback(async (targetBranchId) => {
-        if (!targetBranchId) {
-            setProducts([]);
-            return;
-        }
+    // Medicines and lots always come from the branch selected on the form.
+    const {
+        products,
+        loading: productsLoading,
+        error: productsError,
+        reload: reloadProducts,
+    } = useBranchProducts({ open, branchId: data.branch_id });
 
-        setProductsLoading(true);
-        setProductsError(null);
+    const selectedBranchId = Number(data.branch_id) || null;
 
-        try {
-            const response = await fetchBranchProducts(targetBranchId);
-            setProducts(response.products ?? []);
-        } catch {
-            setProducts([]);
-            setProductsError(
-                "Could not load medicines for the selected branch.",
-            );
-        } finally {
-            setProductsLoading(false);
-        }
-    }, []);
+    useEffect(() => {
+        const requestId = ++customersRequestRef.current;
 
-    const loadCustomersForBranch = useCallback(async (targetBranchId) => {
-        if (!targetBranchId) {
-            setCustomers([]);
+        setCustomers([]);
+        setCustomersError(null);
+
+        if (!open || !selectedBranchId) {
+            setCustomersLoading(false);
             return;
         }
 
         setCustomersLoading(true);
-        setCustomersError(null);
 
-        try {
-            const response = await fetchBranchCustomers(targetBranchId);
-            setCustomers(response.customers ?? []);
-        } catch {
-            setCustomers([]);
-            setCustomersError(
-                "Could not load customers for the selected branch.",
-            );
-        } finally {
-            setCustomersLoading(false);
-        }
-    }, []);
-
-    useEffect(() => {
-        if (!open) {
-            return;
-        }
-
-        const selectedBranchId =
-            Number(data.branch_id) || Number(defaultBranchId);
-
-        if (!selectedBranchId) {
-            setProducts([]);
-            setCustomers([]);
-            return;
-        }
-
-        if (canAssignBranch) {
-            loadProductsForBranch(selectedBranchId);
-        }
-        loadCustomersForBranch(selectedBranchId);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [open, canAssignBranch, data.branch_id]);
+        fetchBranchCustomers(selectedBranchId)
+            .then((response) => {
+                if (customersRequestRef.current === requestId) {
+                    setCustomers(response?.customers ?? []);
+                }
+            })
+            .catch(() => {
+                if (customersRequestRef.current === requestId) {
+                    setCustomersError(
+                        "Could not load customers for the selected branch.",
+                    );
+                }
+            })
+            .finally(() => {
+                if (customersRequestRef.current === requestId) {
+                    setCustomersLoading(false);
+                }
+            });
+    }, [open, selectedBranchId]);
 
     const productMap = useMemo(() => {
         return Object.fromEntries(
@@ -153,12 +133,35 @@ export default function useCustomerReturn({
         [selectedProduct],
     );
 
+    // Switching branch clears the basket, draft and customer in one step so
+    // nothing picked for the previous branch can be posted to the new one.
+    const applyBranchChange = (value) => {
+        setData((current) => ({
+            ...current,
+            branch_id: value,
+            customer_id: "",
+            items: [],
+        }));
+        setDraft(emptyDraft());
+        clearErrors();
+    };
+
+    const {
+        pendingBranchId,
+        requestBranchChange: handleBranchChange,
+        confirmBranchChange,
+        cancelBranchChange,
+        resetBranchSwitch,
+    } = useBranchSwitch({
+        currentBranchId: data.branch_id,
+        itemCount: data.items.length,
+        applyChange: applyBranchChange,
+    });
+
     const openModal = () => {
         clearErrors();
         setDraft(emptyDraft());
-        setProductsError(null);
-        setProducts(initialProducts ?? []);
-        setCustomersError(null);
+        resetBranchSwitch();
         setData(emptyForm(defaultBranchId));
         setOpen(true);
     };
@@ -166,20 +169,9 @@ export default function useCustomerReturn({
     const closeModal = () => {
         setOpen(false);
         setDraft(emptyDraft());
-        setProducts(initialProducts ?? []);
-        setProductsError(null);
-        setCustomers([]);
-        setCustomersError(null);
+        resetBranchSwitch();
         reset();
         clearErrors();
-    };
-
-    const handleBranchChange = (value) => {
-        setData("branch_id", value);
-        setData("customer_id", "");
-        setDraft(emptyDraft());
-        setProductsError(null);
-        setCustomersError(null);
     };
 
     // Called by NewCustomerModal's onCreated once a customer is saved —
@@ -304,12 +296,22 @@ export default function useCustomerReturn({
             "items",
             data.items.filter((_, itemIndex) => itemIndex !== index),
         );
+
+        // Per-item server errors are keyed by position ("items.2.pd_id");
+        // once rows shift they would point at the wrong medicine.
+        const itemErrorKeys = Object.keys(errors).filter((key) =>
+            key.startsWith("items."),
+        );
+
+        if (itemErrorKeys.length > 0) {
+            clearErrors(...itemErrorKeys);
+        }
     };
 
     const handleSubmit = (event) => {
         event.preventDefault();
 
-        if (processing || data.items.length === 0) return;
+        if (processing || !data.branch_id || data.items.length === 0) return;
 
         post(route("customer-return.store"), {
             onSuccess: () => closeModal(),
@@ -341,6 +343,7 @@ export default function useCustomerReturn({
         products,
         productsLoading,
         productsError,
+        reloadProducts,
         customers,
         customersLoading,
         customersError,
@@ -348,6 +351,9 @@ export default function useCustomerReturn({
         canAssignBranch,
         branches,
         handleBranchChange,
+        pendingBranchId,
+        confirmBranchChange,
+        cancelBranchChange,
         addItemToBasket,
         removeItemFromBasket,
         piecesPreview,

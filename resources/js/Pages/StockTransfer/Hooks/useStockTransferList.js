@@ -3,7 +3,8 @@ import { router } from "@inertiajs/react";
 
 /**
  * useStockTransferList
- * Search + status filter for the transfers list (Index page).
+ * Search + status filter for the transfers list (Index page). Filtering runs
+ * on the server, so it covers every page, not just the one on screen.
  */
 export function useStockTransferList({
     initialSearch = "",
@@ -12,25 +13,24 @@ export function useStockTransferList({
     const [search, setSearch] = useState(initialSearch);
     const [statusFilter, setStatusFilter] = useState(initialStatus);
 
+    const visit = (params) =>
+        router.get(route("stock-transfers.index"), params, {
+            preserveState: true,
+            preserveScroll: true,
+            replace: true,
+        });
+
     const applyFilters = () => {
-        router.get(
-            route("stock-transfers.index"),
-            {
-                search: search || undefined,
-                status: statusFilter !== "all" ? statusFilter : undefined,
-            },
-            { preserveState: true, replace: true },
-        );
+        visit({
+            search: search.trim() || undefined,
+            status: statusFilter !== "all" ? statusFilter : undefined,
+        });
     };
 
     const clearFilters = () => {
         setSearch("");
         setStatusFilter("all");
-        router.get(
-            route("stock-transfers.index"),
-            {},
-            { preserveState: false },
-        );
+        visit({});
     };
 
     const handleSearchKey = (e) => {

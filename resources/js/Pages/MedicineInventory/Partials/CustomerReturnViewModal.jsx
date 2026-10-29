@@ -2,13 +2,13 @@ import { useState } from "react";
 import axios from "axios";
 import { toast } from "sonner";
 import { Printer } from "lucide-react";
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogContent,
     DialogHeader,
     DialogTitle,
-} from "@/Components/ui/dialog";
+} from "@/components/ui/dialog";
 import {
     Table,
     TableBody,
@@ -16,7 +16,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/Components/ui/table";
+} from "@/components/ui/table";
 import { formatDate, formatDateTime } from "@/lib/dates";
 
 export default function CustomerReturnViewModal({ returnId, children }) {
@@ -66,6 +66,15 @@ export default function CustomerReturnViewModal({ returnId, children }) {
                     ) : details ? (
                         <div className="space-y-4">
                             <div className="grid grid-cols-1 gap-3 text-sm sm:grid-cols-2">
+                                <div>
+                                    <span className="text-muted-foreground">
+                                        Branch:
+                                    </span>{" "}
+                                    <span className="font-medium">
+                                        {details.customer_return.branch?.branch_name ??
+                                            "—"}
+                                    </span>
+                                </div>
                                 <div>
                                     <span className="text-muted-foreground">
                                         Customer:

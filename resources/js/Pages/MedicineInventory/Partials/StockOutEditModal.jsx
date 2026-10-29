@@ -1,4 +1,4 @@
-import { Button } from "@/Components/ui/button";
+import { Button } from "@/components/ui/button";
 import {
     Dialog,
     DialogClose,
@@ -7,10 +7,10 @@ import {
     DialogHeader,
     DialogTitle,
     DialogDescription,
-} from "@/Components/ui/dialog";
-import { Input } from "@/Components/ui/input";
-import { Label } from "@/Components/ui/label";
-import InputError from "@/Components/InputError";
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import InputError from "@/components/InputError";
 import { Minus, Plus, Trash2 } from "lucide-react";
 import useStockOutEdit from "../Hooks/useStockOutEdit";
 import MedicineSearchSelect from "./MedicineSearchSelect";
@@ -31,6 +31,7 @@ export default function StockOutEditModal({ stockOutId, children }) {
         loading,
         loadError,
         transactionSubtype,
+        branchName,
         data,
         setData,
         draft,
@@ -98,6 +99,15 @@ export default function StockOutEditModal({ stockOutId, children }) {
                                     <h3 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
                                         Transaction Details
                                     </h3>
+
+                                    <div className="grid gap-3">
+                                        <Label>Source Branch</Label>
+                                        <Input
+                                            value={branchName ?? "—"}
+                                            readOnly
+                                            className="bg-muted"
+                                        />
+                                    </div>
 
                                     <div className="grid gap-3">
                                         <Label>Transaction Subtype</Label>

@@ -31,8 +31,6 @@ export default function StockOutHistoryTable({
 }) {
     const perPage = Number(filters?.stock_out_per_page) || 10;
     const branchFilter = filters?.stock_out_branch_id ?? "all";
-    const showBranchColumn =
-        canViewAllBranches && (branchFilter === "all" || branchFilter === "");
 
     const reload = (params) => {
         router.get(
@@ -167,7 +165,7 @@ export default function StockOutHistoryTable({
                             <TableHead>ID</TableHead>
                             <TableHead>Subtype</TableHead>
                             <TableHead>Date</TableHead>
-                            {showBranchColumn && <TableHead>Branch</TableHead>}
+                            <TableHead>Branch</TableHead>
                             <TableHead>Issued By</TableHead>
                             <TableHead className="text-right">
                                 Actions
@@ -187,12 +185,10 @@ export default function StockOutHistoryTable({
                                     <TableCell>
                                         {formatDate(stockOut.created_at)}
                                     </TableCell>
-                                    {showBranchColumn && (
-                                        <TableCell>
+                                    <TableCell>
                                             {stockOut.branch?.branch_name ??
                                                 "—"}
                                         </TableCell>
-                                    )}
                                     <TableCell>{stockOut.issued_by}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
@@ -279,7 +275,7 @@ export default function StockOutHistoryTable({
                         ) : (
                             <TableRow>
                                 <TableCell
-                                    colSpan={showBranchColumn ? 6 : 5}
+                                    colSpan={6}
                                     className="h-24 text-center text-sm text-muted-foreground"
                                 >
                                     No stock-out transactions recorded yet.

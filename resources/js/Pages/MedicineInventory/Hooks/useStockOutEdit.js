@@ -37,6 +37,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
     const [loading, setLoading] = useState(false);
     const [loadError, setLoadError] = useState(null);
     const [transactionSubtype, setTransactionSubtype] = useState(null);
+    const [branchName, setBranchName] = useState(null);
 
     const { data, setData, put, errors, processing, reset, clearErrors } =
         useForm(emptyForm());
@@ -67,6 +68,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
                 if (cancelled) return;
 
                 setTransactionSubtype(stock_out.transaction_subtype);
+                setBranchName(stock_out.branch?.branch_name ?? null);
                 setData({
                     patient_reference: stock_out.patient_reference ?? "",
                     issued_by: stock_out.issued_by ?? "",
@@ -381,6 +383,7 @@ export default function useStockOutEdit({ stockOutId, open }) {
         loading,
         loadError,
         transactionSubtype,
+        branchName,
         data,
         setData,
         draft,

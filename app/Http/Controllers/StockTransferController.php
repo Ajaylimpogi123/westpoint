@@ -12,10 +12,12 @@ use App\Models\StockTransferItem;
 use App\Models\StockTransferLog;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
@@ -24,62 +26,92 @@ class StockTransferController extends Controller
 {
     private const MAX_QUANTITY = InventoryStockService::MAX_TRANSACTION_QUANTITY;
 
+    private const STATUSES = ['pending', 'approved', 'rejected', 'cancelled'];
+
     // ──────────────────────────────────────────────────────
     // INDEX
     // ──────────────────────────────────────────────────────
 
-    public function index(): Response
+    public function index(Request $request): Response
     {
-        $user    = auth()->user();
-        $isAdmin = $user->role_id === 2;
+        $user = auth()->user();
+        $canViewAll = $this->canViewAll();
+        $search = trim((string) $request->input('search', ''));
+        $status = $request->input('status');
 
-        $query = StockTransfer::with([
+        $relations = [
             'fromBranch',
             'toBranch',
             'requester',
             'approver',
             'items.product',
             'logs.performer',
-        ]);
+        ];
 
-        if ($isAdmin) {
-            $transfers = $query
-                ->orderByRaw("FIELD(status, 'pending', 'approved', 'rejected', 'cancelled')")
-                ->orderBy('created_at', 'desc')
-                ->paginate(15)
-                ->withQueryString();
-        } else {
-            $transfers = $query
-                ->where('requested_by', $user->id)
-                ->orderBy('created_at', 'desc')
-                ->paginate(15)
-                ->withQueryString();
-        }
+        $transfers = StockTransfer::with($relations)
+            ->when(! $canViewAll, fn ($query) => $query->where('requested_by', $user->id))
+            ->when(in_array($status, self::STATUSES, true), fn ($query) => $query->where('status', $status))
+            ->when($search !== '', fn ($query) => $this->applySearch($query, $search))
+            ->orderByRaw("FIELD(status, 'pending', 'approved', 'rejected', 'cancelled')")
+            ->orderBy('created_at', 'desc')
+            ->paginate(15)
+            ->withQueryString();
 
-        $products = [];
-        $branches = [];
+        // The Pending tab lists every pending request, not just the ones that
+        // happen to fall on the current page of the paginated list.
+        $pendingTransfers = $canViewAll
+            ? StockTransfer::with($relations)
+                ->where('status', 'pending')
+                ->orderByRaw("FIELD(priority, 'urgent', 'normal', 'routine')")
+                ->orderBy('created_at')
+                ->get()
+            : [];
 
-        if (! $isAdmin) {
-            $products = MedicineProduct::with(['productsQty' => function ($q) {
-                    $q->dispensable()->orderBy('expiry', 'asc');
-                }])
-                ->where('branch_id', $user->branch_id)
-                ->where('status', 'Active')
-                ->get(['id', 'med_name', 'dose', 'form', 'brand_name', 'branch_id', 'pack_size']);
+        $branches = Branch::whereNull('deleted_at')
+            ->orderBy('branch_name')
+            ->get(['id', 'branch_name']);
 
-            $branches = Branch::whereNull('deleted_at')
-                ->where('id', '!=', $user->branch_id)
-                ->get(['id', 'branch_name']);
-        }
+        $sourceBranchId = $canViewAll
+            ? ($this->sessionBranchId() ?? $branches->first()?->id)
+            : $this->sessionBranchId();
 
         return Inertia::render('StockTransfer/Index', [
-            'transfers'      => $transfers,
-            'isAdmin'        => $isAdmin,
-            'products'       => $products,
-            'branches'       => $branches,
-            'userBranch'     => $user->branch_id,
-            'userBranchName' => optional($user->branch)->branch_name ?? '',
+            'transfers' => $transfers,
+            'pendingTransfers' => $pendingTransfers,
+            'filters' => [
+                'search' => $search,
+                'status' => in_array($status, self::STATUSES, true) ? $status : 'all',
+            ],
+            'canViewAll' => $canViewAll,
+            'canApprove' => $this->canApprove(),
+            'canChooseSource' => $canViewAll,
+            'currentUserId' => $user->id,
+            'products' => $sourceBranchId ? $this->sourceProductsFor($sourceBranchId) : [],
+            'branches' => $branches,
+            'userBranch' => $sourceBranchId,
+            'userBranchName' => $sourceBranchId
+                ? $branches->firstWhere('id', $sourceBranchId)?->branch_name ?? ''
+                : '',
         ]);
+    }
+
+    /**
+     * Medicines with transferable lots in a source branch. Admins and
+     * superadmins may load any branch; staff only their own.
+     */
+    public function sourceProducts(Request $request): JsonResponse
+    {
+        $validated = $request->validate([
+            'branch_id' => ['required', 'integer', Rule::exists('branches', 'id')->whereNull('deleted_at')],
+        ]);
+
+        $branchId = (int) $validated['branch_id'];
+
+        if (! $this->canViewAll() && $branchId !== $this->branchIdOrFail()) {
+            abort(403, 'You can only transfer stock from your own branch.');
+        }
+
+        return response()->json(['products' => $this->sourceProductsFor($branchId)]);
     }
 
     // ──────────────────────────────────────────────────────
@@ -88,75 +120,109 @@ class StockTransferController extends Controller
 
     public function store(Request $request): RedirectResponse
     {
-        // The source branch comes from the session, never the payload. It used
-        // to be accepted from the request with no ownership check, so a
-        // crafted from_branch_id could drain another branch's stock.
-        $fromBranchId = $this->branchIdOrFail();
+        $canChooseSource = $this->canViewAll();
+        $activeBranch = Rule::exists('branches', 'id')->whereNull('deleted_at');
 
         $validated = $request->validate([
-            'to_branch_id'               => ['required', 'exists:branches,id', Rule::notIn([$fromBranchId])],
-            'priority'                   => 'required|in:normal,urgent,routine',
-            'reason'                     => 'nullable|string|max:1000',
-            'needed_by'                  => 'nullable|date|after:today',
-            'transfer_date'              => 'required|date',
-            'items'                      => 'required|array|min:1',
-            'items.*.product_id'         => 'required|integer|exists:tbl_products,id',
-            'items.*.products_qty_id'    => 'required|integer|exists:products_qty,id',
-            'items.*.quantity_requested' => 'required|integer|min:1|max:' . self::MAX_QUANTITY,
-        ], [
-            'to_branch_id.not_in' => 'A transfer must go to a different branch.',
+            'from_branch_id' => $canChooseSource
+                ? ['required', 'integer', $activeBranch]
+                : ['nullable', 'integer'],
+            'to_branch_id' => ['required', 'integer', $activeBranch],
+            'priority' => 'required|in:normal,urgent,routine',
+            'reason' => 'nullable|string|max:1000',
+            'needed_by' => 'nullable|date|after:today',
+            'transfer_date' => 'required|date',
+            'items' => 'required|array|min:1',
+            'items.*.product_id' => 'required|integer|exists:tbl_products,id',
+            'items.*.products_qty_id' => 'required|integer|exists:products_qty,id',
+            'items.*.quantity_requested' => 'required|integer|min:1|max:'.self::MAX_QUANTITY,
         ]);
+
+        // Staff always transfer out of their session branch; the payload can't
+        // point at another branch's stock. Admins and superadmins choose.
+        if ($canChooseSource) {
+            $fromBranchId = (int) $validated['from_branch_id'];
+        } else {
+            $fromBranchId = $this->branchIdOrFail();
+
+            if (! empty($validated['from_branch_id']) && (int) $validated['from_branch_id'] !== $fromBranchId) {
+                throw ValidationException::withMessages([
+                    'from_branch_id' => 'You can only transfer stock from your own branch.',
+                ]);
+            }
+        }
+
+        if ((int) $validated['to_branch_id'] === $fromBranchId) {
+            throw ValidationException::withMessages([
+                'to_branch_id' => 'A transfer must go to a different branch.',
+            ]);
+        }
 
         try {
             // Resolve every lot before writing anything, so an invalid line
             // fails validation rather than part-way through the transaction.
             $resolved = [];
+            $requestedPerLot = [];
 
             foreach ($validated['items'] as $index => $item) {
-                $resolved[] = $this->resolveTransferLine(
+                $line = $this->resolveTransferLine(
                     $fromBranchId,
                     (int) $item['product_id'],
                     (int) $item['products_qty_id'],
                     (int) $item['quantity_requested'],
                     $index,
                 );
+
+                // The same lot on two lines must fit in the lot as a whole,
+                // not just line by line.
+                $lotId = $line['lot']->id;
+                $requestedPerLot[$lotId] = ($requestedPerLot[$lotId] ?? 0) + $line['quantity'];
+
+                if ($requestedPerLot[$lotId] > (int) $line['lot']->quantity) {
+                    throw new \RuntimeException(
+                        "Lot {$line['lot']->lot_number}: {$requestedPerLot[$lotId]} pieces requested in total, "
+                        ."but only {$line['lot']->quantity} are available."
+                    );
+                }
+
+                $resolved[] = $line;
             }
-        } catch (InsufficientStockException | \RuntimeException $exception) {
+        } catch (InsufficientStockException|\RuntimeException $exception) {
             return back()->withInput()->withErrors(['items' => $exception->getMessage()]);
         }
 
         DB::transaction(function () use ($validated, $fromBranchId, $resolved) {
             $transfer = StockTransfer::create([
-                'transfer_no'    => StockTransfer::generateTransferNo(),
+                'transfer_no' => StockTransfer::generateTransferNo(),
                 'from_branch_id' => $fromBranchId,
-                'to_branch_id'   => $validated['to_branch_id'],
-                'requested_by'   => auth()->id(),
-                'status'         => 'pending',
-                'priority'       => $validated['priority'],
-                'reason'         => $validated['reason'] ?? null,
-                'needed_by'      => $validated['needed_by'] ?? null,
-                'transfer_date'  => $validated['transfer_date'],
+                'to_branch_id' => $validated['to_branch_id'],
+                'requested_by' => auth()->id(),
+                'status' => 'pending',
+                'priority' => $validated['priority'],
+                'reason' => $validated['reason'] ?? null,
+                'needed_by' => $validated['needed_by'] ?? null,
+                'transfer_date' => $validated['transfer_date'],
             ]);
 
             foreach ($resolved as $line) {
                 StockTransferItem::create([
-                    'stock_transfer_id'  => $transfer->id,
-                    'product_id'         => $line['product']->id,
-                    'products_qty_id'    => $line['lot']->id,
+                    'stock_transfer_id' => $transfer->id,
+                    'product_id' => $line['product']->id,
+                    'products_qty_id' => $line['lot']->id,
                     // Lot number and expiry are copied from the batch rather
                     // than trusted from the request, so the recorded line
                     // always describes the batch it actually points at.
-                    'lot_number'         => $line['lot']->lot_number,
-                    'expiry'             => $line['lot']->expiry,
+                    'lot_number' => $line['lot']->lot_number,
+                    'expiry' => $line['lot']->expiry,
                     'quantity_requested' => $line['quantity'],
                 ]);
             }
 
             StockTransferLog::create([
                 'stock_transfer_id' => $transfer->id,
-                'action'            => 'created',
-                'performed_by'      => auth()->id(),
-                'note'              => 'Transfer request submitted.',
+                'action' => 'created',
+                'performed_by' => auth()->id(),
+                'note' => 'Transfer request submitted.',
             ]);
         });
 
@@ -168,29 +234,15 @@ class StockTransferController extends Controller
     // SHOW
     // ──────────────────────────────────────────────────────
 
-    public function show(StockTransfer $stockTransfer): Response
+    /**
+     * There is no standalone detail page; details open in a modal on the
+     * list. Old links land on the list filtered to this transfer.
+     */
+    public function show(StockTransfer $stockTransfer): RedirectResponse
     {
-        $user    = auth()->user();
-        $isAdmin = $user->role_id === 2;
+        $this->assertCanSee($stockTransfer);
 
-        if (! $isAdmin && $stockTransfer->requested_by !== $user->id) {
-            abort(403);
-        }
-
-        $stockTransfer->load([
-            'fromBranch',
-            'toBranch',
-            'requester',
-            'approver',
-            'items.product',
-            'items.productsQty',
-            'logs.performer',
-        ]);
-
-        return Inertia::render('StockTransfer/Show', [
-            'transfer' => $stockTransfer,
-            'isAdmin'  => $isAdmin,
-        ]);
+        return redirect()->route('stock-transfers.index', ['search' => $stockTransfer->transfer_no]);
     }
 
     // ──────────────────────────────────────────────────────
@@ -199,12 +251,8 @@ class StockTransferController extends Controller
 
     public function approve(Request $request, StockTransfer $stockTransfer): RedirectResponse
     {
-        if (auth()->user()->role_id !== 2) {
+        if (! $this->canApprove()) {
             abort(403);
-        }
-
-        if (! $stockTransfer->isPending()) {
-            return back()->withErrors(['status' => 'This transfer has already been actioned.']);
         }
 
         $stockTransfer->load('items');
@@ -212,7 +260,7 @@ class StockTransferController extends Controller
         $requestedById = $stockTransfer->items->keyBy('id');
 
         $request->validate([
-            'approved_quantities'   => 'nullable|array',
+            'approved_quantities' => 'nullable|array',
             // Approving more than was requested is not a partial approval, it
             // is an unaudited stock movement. The ceiling is per item, so it
             // has to be resolved per key rather than as a static max rule.
@@ -238,34 +286,39 @@ class StockTransferController extends Controller
 
         try {
             DB::transaction(function () use ($request, $stockTransfer) {
+                // Lock and re-check, so two admins approving at once can't
+                // move the same stock twice.
+                $transfer = $this->lockPendingOrFail($stockTransfer);
+                $transfer->load('items', 'fromBranch', 'toBranch');
+
                 if ($request->filled('approved_quantities')) {
-                    foreach ($stockTransfer->items as $item) {
+                    foreach ($transfer->items as $item) {
                         if (isset($request->approved_quantities[$item->id])) {
                             $item->update([
                                 'quantity_approved' => $request->approved_quantities[$item->id],
                             ]);
                         }
                     }
+
+                    $transfer->load('items');
                 }
 
-                $stockTransfer->load('items');
-
-                $stockTransfer->update([
-                    'status'      => 'approved',
+                $transfer->update([
+                    'status' => 'approved',
                     'approved_by' => auth()->id(),
                     'approved_at' => now(),
                 ]);
 
                 StockTransferLog::create([
-                    'stock_transfer_id' => $stockTransfer->id,
-                    'action'            => 'approved',
-                    'performed_by'      => auth()->id(),
-                    'note'              => 'Transfer approved by admin.',
+                    'stock_transfer_id' => $transfer->id,
+                    'action' => 'approved',
+                    'performed_by' => auth()->id(),
+                    'note' => 'Transfer approved by admin.',
                 ]);
 
-                $this->moveStock($stockTransfer);
+                $this->moveStock($transfer);
             });
-        } catch (InsufficientStockException | \RuntimeException $exception) {
+        } catch (InsufficientStockException|\RuntimeException $exception) {
             return back()->withErrors(['status' => $exception->getMessage()]);
         } catch (Throwable $exception) {
             report($exception);
@@ -285,12 +338,8 @@ class StockTransferController extends Controller
 
     public function reject(Request $request, StockTransfer $stockTransfer): RedirectResponse
     {
-        if (auth()->user()->role_id !== 2) {
+        if (! $this->canApprove()) {
             abort(403);
-        }
-
-        if (! $stockTransfer->isPending()) {
-            return back()->withErrors(['status' => 'This transfer has already been actioned.']);
         }
 
         $validated = $request->validate([
@@ -299,18 +348,22 @@ class StockTransferController extends Controller
 
         try {
             DB::transaction(function () use ($validated, $stockTransfer) {
-                $stockTransfer->update([
-                    'status'         => 'rejected',
+                $transfer = $this->lockPendingOrFail($stockTransfer);
+
+                $transfer->update([
+                    'status' => 'rejected',
                     'rejection_note' => $validated['rejection_note'],
                 ]);
 
                 StockTransferLog::create([
-                    'stock_transfer_id' => $stockTransfer->id,
-                    'action'            => 'rejected',
-                    'performed_by'      => auth()->id(),
-                    'note'              => $validated['rejection_note'],
+                    'stock_transfer_id' => $transfer->id,
+                    'action' => 'rejected',
+                    'performed_by' => auth()->id(),
+                    'note' => $validated['rejection_note'],
                 ]);
             });
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['status' => $exception->getMessage()]);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -327,27 +380,25 @@ class StockTransferController extends Controller
 
     public function cancel(StockTransfer $stockTransfer): RedirectResponse
     {
-        $user = auth()->user();
-
-        if ($stockTransfer->requested_by !== $user->id) {
+        if ((int) $stockTransfer->requested_by !== (int) auth()->id()) {
             abort(403);
-        }
-
-        if (! $stockTransfer->isPending()) {
-            return back()->withErrors(['status' => 'Only pending transfers can be cancelled.']);
         }
 
         try {
             DB::transaction(function () use ($stockTransfer) {
-                $stockTransfer->update(['status' => 'cancelled']);
+                $transfer = $this->lockPendingOrFail($stockTransfer, 'Only pending transfers can be cancelled.');
+
+                $transfer->update(['status' => 'cancelled']);
 
                 StockTransferLog::create([
-                    'stock_transfer_id' => $stockTransfer->id,
-                    'action'            => 'cancelled',
-                    'performed_by'      => auth()->id(),
-                    'note'              => 'Cancelled by requester.',
+                    'stock_transfer_id' => $transfer->id,
+                    'action' => 'cancelled',
+                    'performed_by' => auth()->id(),
+                    'note' => 'Cancelled by requester.',
                 ]);
             });
+        } catch (\RuntimeException $exception) {
+            return back()->withErrors(['status' => $exception->getMessage()]);
         } catch (Throwable $exception) {
             report($exception);
 
@@ -359,8 +410,96 @@ class StockTransferController extends Controller
     }
 
     // ──────────────────────────────────────────────────────
+    // SLIP
+    // ──────────────────────────────────────────────────────
+
+    public function slip(StockTransfer $stockTransfer): Response
+    {
+        // Only approved transfers have a slip
+        if (! $stockTransfer->isApproved()) {
+            abort(403, 'Transfer slip is only available for approved transfers.');
+        }
+
+        $this->assertCanSee($stockTransfer);
+
+        $stockTransfer->load([
+            'fromBranch',
+            'toBranch',
+            'requester',
+            'approver',
+            'items.product',
+        ]);
+
+        return Inertia::render('StockTransfer/TransferSlip', [
+            'transfer' => $stockTransfer,
+        ]);
+    }
+
+    // ──────────────────────────────────────────────────────
     // PRIVATE
     // ──────────────────────────────────────────────────────
+
+    private function roleId(): int
+    {
+        return (int) (session('role_id') ?? auth()->user()?->role_id);
+    }
+
+    /** Admins approve and reject; superadmins can see but not approve. */
+    private function canApprove(): bool
+    {
+        return $this->roleId() === 2;
+    }
+
+    private function canViewAll(): bool
+    {
+        return in_array($this->roleId(), [2, 3], true);
+    }
+
+    private function assertCanSee(StockTransfer $stockTransfer): void
+    {
+        if (! $this->canViewAll() && (int) $stockTransfer->requested_by !== (int) auth()->id()) {
+            abort(403);
+        }
+    }
+
+    private function lockPendingOrFail(
+        StockTransfer $stockTransfer,
+        string $message = 'This transfer has already been actioned.',
+    ): StockTransfer {
+        $transfer = StockTransfer::query()->whereKey($stockTransfer->id)->lockForUpdate()->firstOrFail();
+
+        if (! $transfer->isPending()) {
+            throw new \RuntimeException($message);
+        }
+
+        return $transfer;
+    }
+
+    private function applySearch($query, string $search): void
+    {
+        $like = '%'.addcslashes($search, '%_\\').'%';
+
+        $query->where(function ($inner) use ($like) {
+            $inner->where('transfer_no', 'like', $like)
+                ->orWhereHas('fromBranch', fn ($q) => $q->where('branch_name', 'like', $like))
+                ->orWhereHas('toBranch', fn ($q) => $q->where('branch_name', 'like', $like))
+                ->orWhereHas('requester', fn ($q) => $q->where('name', 'like', $like))
+                ->orWhereHas('items', fn ($q) => $q->where('lot_number', 'like', $like)
+                    ->orWhereHas('product', fn ($p) => $p->where('med_name', 'like', $like)
+                        ->orWhere('brand_name', 'like', $like)));
+        });
+    }
+
+    private function sourceProductsFor(int $branchId)
+    {
+        return MedicineProduct::with(['productsQty' => function ($q) {
+            $q->dispensable()->orderBy('expiry', 'asc');
+        }])
+            ->forBranch($branchId)
+            ->active()
+            ->orderBy('med_name')
+            ->get(['id', 'med_name', 'dose', 'form', 'brand_name', 'branch_id', 'pack_size']);
+    }
 
     /**
      * Validate that a requested line refers to a lot the source branch owns.
@@ -377,7 +516,7 @@ class StockTransferController extends Controller
         int $quantity,
         int $index,
     ): array {
-        $line = 'Line ' . ($index + 1);
+        $line = 'Line '.($index + 1);
 
         $product = MedicineProduct::query()
             ->active()
@@ -385,7 +524,7 @@ class StockTransferController extends Controller
             ->find($productId);
 
         if (! $product) {
-            throw new \RuntimeException("{$line}: that medicine is not stocked in your branch.");
+            throw new \RuntimeException("{$line}: that medicine is not stocked in the source branch.");
         }
 
         $lot = ProductQty::query()
@@ -429,6 +568,8 @@ class StockTransferController extends Controller
 
             $sourceProduct = MedicineProduct::findOrFail($item->product_id);
 
+            $this->assertLotStillTransferable($item, $sourceProduct);
+
             // Locks, re-checks sufficiency, decrements, and normalizes status.
             InventoryStockService::deductFromBatch(
                 batchId: (int) $item->products_qty_id,
@@ -456,10 +597,33 @@ class StockTransferController extends Controller
 
         StockTransferLog::create([
             'stock_transfer_id' => $stockTransfer->id,
-            'action'            => 'stock_moved',
-            'performed_by'      => auth()->id(),
-            'note'              => 'Stock quantities updated automatically upon approval.',
+            'action' => 'stock_moved',
+            'performed_by' => auth()->id(),
+            'note' => 'Stock quantities updated automatically upon approval.',
         ]);
+    }
+
+    /**
+     * A request can sit pending for days. deductFromBatch() checks quantity
+     * but not expiry, so a lot that expired (or was deleted) in the meantime
+     * would otherwise be shipped to the other branch.
+     */
+    private function assertLotStillTransferable(StockTransferItem $item, MedicineProduct $sourceProduct): void
+    {
+        $lot = ProductQty::query()->whereKey($item->products_qty_id)->lockForUpdate()->first();
+
+        if (! $lot || $lot->isDeleted() || (int) $lot->product_id !== (int) $sourceProduct->id) {
+            throw new \RuntimeException(
+                "Lot {$item->lot_number} of {$sourceProduct->med_name} is no longer available. Reject this request and ask for a new one."
+            );
+        }
+
+        if ($lot->isExpired()) {
+            throw new \RuntimeException(
+                "Lot {$lot->lot_number} of {$sourceProduct->med_name} expired on {$lot->expiry->format('d M Y')} "
+                .'and cannot be transferred. Reject this request and ask for another lot.'
+            );
+        }
     }
 
     /**
@@ -473,10 +637,10 @@ class StockTransferController extends Controller
     private function resolveDestinationProduct(MedicineProduct $sourceProduct, int $toBranchId): MedicineProduct
     {
         $identity = [
-            'branch_id'  => $toBranchId,
-            'med_name'   => $sourceProduct->med_name,
-            'dose'       => $sourceProduct->dose,
-            'form'       => $sourceProduct->form,
+            'branch_id' => $toBranchId,
+            'med_name' => $sourceProduct->med_name,
+            'dose' => $sourceProduct->dose,
+            'form' => $sourceProduct->form,
             'brand_name' => $sourceProduct->brand_name,
         ];
 
@@ -497,7 +661,7 @@ class StockTransferController extends Controller
             if ((int) $destProduct->pack_size !== (int) $sourceProduct->pack_size) {
                 throw new \RuntimeException(
                     "{$sourceProduct->med_name} has a pack size of {$sourceProduct->pack_size} in the source branch "
-                    . "but {$destProduct->pack_size} in the destination. Reconcile the pack sizes before transferring."
+                    ."but {$destProduct->pack_size} in the destination. Reconcile the pack sizes before transferring."
                 );
             }
 
@@ -505,12 +669,13 @@ class StockTransferController extends Controller
         }
 
         return MedicineProduct::create($identity + [
-            'pack_size'       => $sourceProduct->pack_size,
-            'retail_price'    => $sourceProduct->retail_price,
+            'pack_size' => $sourceProduct->pack_size,
+            'retail_price' => $sourceProduct->retail_price,
             'wholesale_price' => $sourceProduct->wholesale_price,
+            'vat_status' => $sourceProduct->vat_status ?? 'Non-VAT',
             'stock_threshold' => $sourceProduct->stock_threshold,
-            'is_generic'      => $sourceProduct->is_generic,
-            'status'          => 'Active',
+            'is_generic' => $sourceProduct->is_generic,
+            'status' => 'Active',
         ]);
     }
 
@@ -553,42 +718,21 @@ class StockTransferController extends Controller
         );
     }
 
-    private function branchIdOrFail(): int
+    private function sessionBranchId(): ?int
     {
         $branchId = session('branch_id') ?? auth()->user()?->branch_id;
+
+        return $branchId ? (int) $branchId : null;
+    }
+
+    private function branchIdOrFail(): int
+    {
+        $branchId = $this->sessionBranchId();
 
         if (! $branchId) {
             abort(403, 'No branch assigned to your session.');
         }
 
-        return (int) $branchId;
-    }
-
-    public function slip(StockTransfer $stockTransfer): Response
-    {
-        // Only approved transfers have a slip
-        if (! $stockTransfer->isApproved()) {
-            abort(403, 'Transfer slip is only available for approved transfers.');
-        }
-
-        // Staff can only view their own slip
-        $user    = auth()->user();
-        $isAdmin = $user->role_id === 2;
-
-        if (! $isAdmin && $stockTransfer->requested_by !== $user->id) {
-            abort(403);
-        }
-
-        $stockTransfer->load([
-            'fromBranch',
-            'toBranch',
-            'requester',
-            'approver',
-            'items.product',
-        ]);
-
-        return Inertia::render('StockTransfer/TransferSlip', [
-            'transfer' => $stockTransfer,
-        ]);
+        return $branchId;
     }
 }

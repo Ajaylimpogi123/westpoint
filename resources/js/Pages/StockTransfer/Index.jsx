@@ -17,14 +17,18 @@ import TransferDetailModal from "./Partials/TransferDetailModal";
 
 export default function Index({
     transfers,
-    isAdmin,
+    pendingTransfers = [],
+    filters = {},
+    canViewAll = false,
+    canApprove = false,
+    canChooseSource = false,
+    currentUserId,
     products = [],
     branches = [],
     userBranch,
-    userBranchName,
 }) {
     const {
-        props: { flash },
+        props: { flash, errors },
     } = usePage();
 
     // Flash toasts — useEffect prevents firing on every re-render
@@ -33,14 +37,30 @@ export default function Index({
         if (flash?.error) toast.error(flash.error);
     }, [flash]);
 
+    // Approve / reject / cancel failures come back as errors.status (e.g.
+    // not enough stock left in the lot). They used to be dropped silently.
+    useEffect(() => {
+        if (errors?.status) toast.error(errors.status);
+    }, [errors?.status]);
+
     const [detailTransfer, setDetailTransfer] = useState(null);
 
-    const wizardForm = useStockTransferForm({ userBranch });
-    const listState = useStockTransferList();
+    const wizardForm = useStockTransferForm({
+        userBranch,
+        products,
+        canChooseSource,
+    });
+    const listState = useStockTransferList({
+        initialSearch: filters.search ?? "",
+        initialStatus: filters.status ?? "all",
+    });
     const approval = useApproval();
 
-    const pendingTransfers =
-        transfers.data?.filter((t) => t.status === "pending") ?? [];
+    const hasFilters = Boolean(filters.search) || (filters.status ?? "all") !== "all";
+    const listTab = canViewAll ? "all" : "my-requests";
+    const [tab, setTab] = useState(
+        hasFilters ? listTab : canViewAll ? "pending" : "new-request",
+    );
 
     return (
         <AuthenticatedLayout
@@ -49,7 +69,7 @@ export default function Index({
                     <h2 className="text-xl font-semibold text-gray-800">
                         Stock Transfers
                     </h2>
-                    {isAdmin && pendingTransfers.length > 0 && (
+                    {canViewAll && pendingTransfers.length > 0 && (
                         <span
                             className="inline-flex items-center gap-1.5 text-xs
                             px-2.5 py-1 rounded-full bg-yellow-100
@@ -71,65 +91,51 @@ export default function Index({
                             Stock Transfer
                         </h1>
                         <p className="mt-2 text-sm text-white">
-                            Stock Transfer Request, Stock Transfer Approval ,
-                            and review Stock Transfer activity.
+                            Request stock from one branch to another, approve
+                            requests, and review transfer activity.
                         </p>
                     </div>
 
-                    <Tabs
-                        defaultValue={isAdmin ? "pending" : "new-request"}
-                        className="space-y-6"
-                    >
+                    <Tabs value={tab} onValueChange={setTab} className="space-y-6">
                         {/* ── Tab triggers ──────────────────────────── */}
-                        <TabsList className="grid h-auto w-full grid-cols-1 gap-2 bg-white/10 p-1 sm:grid-cols-2">
-                            {isAdmin ? (
-                                <>
-                                    <TabsTrigger
-                                        value="pending"
-                                        className="gap-2"
-                                    >
-                                        Pending
-                                        {pendingTransfers.length > 0 && (
-                                            <span
-                                                className="inline-flex items-center justify-center
-                                            w-5 h-5 text-[10px] font-bold rounded-full
+                        <TabsList
+                            className={`grid h-auto w-full grid-cols-1 gap-2 bg-white/10 p-1 ${
+                                canViewAll ? "sm:grid-cols-3" : "sm:grid-cols-2"
+                            }`}
+                        >
+                            {canViewAll && (
+                                <TabsTrigger value="pending" className="gap-2">
+                                    Pending
+                                    {pendingTransfers.length > 0 && (
+                                        <span
+                                            className="inline-flex items-center justify-center
+                                            min-w-5 h-5 px-1 text-[10px] font-bold rounded-full
                                             bg-yellow-400 text-yellow-900"
-                                            >
-                                                {pendingTransfers.length}
-                                            </span>
-                                        )}
-                                    </TabsTrigger>
-                                    <TabsTrigger value="all">
-                                        All Requests
-                                    </TabsTrigger>
-                                </>
-                            ) : (
-                                <>
-                                    <TabsTrigger value="new-request">
-                                        + New Request
-                                    </TabsTrigger>
-                                    <TabsTrigger value="my-requests">
-                                        My Requests
-                                    </TabsTrigger>
-                                </>
+                                        >
+                                            {pendingTransfers.length}
+                                        </span>
+                                    )}
+                                </TabsTrigger>
                             )}
+                            <TabsTrigger value={listTab}>
+                                {canViewAll ? "All Requests" : "My Requests"}
+                            </TabsTrigger>
+                            <TabsTrigger value="new-request">
+                                + New Request
+                            </TabsTrigger>
                         </TabsList>
-
-                        {/* ════════════════════════════════════════════
-                        STAFF TABS
-                    ════════════════════════════════════════════ */}
 
                         {/* New Request — wizard */}
                         <TabsContent value="new-request">
-                            <div className="bg-white rounded-xl border border-gray-200 p-6">
+                            <div className="bg-white rounded-xl border border-gray-200 p-4 sm:p-6">
                                 <div className="mb-5">
                                     <h3 className="text-sm font-semibold text-gray-800">
                                         New stock transfer request
                                     </h3>
                                     <p className="text-xs text-gray-400 mt-0.5">
                                         Select medicine → choose lot → enter
-                                        destination. Your request will be sent
-                                        to admin for approval.
+                                        destination. Stock moves only after an
+                                        admin approves the request.
                                     </p>
                                 </div>
 
@@ -145,63 +151,53 @@ export default function Index({
                                     addItem={wizardForm.addItem}
                                     removeItem={wizardForm.removeItem}
                                     submit={wizardForm.submit}
-                                    products={products}
+                                    products={wizardForm.products}
+                                    productsLoading={wizardForm.productsLoading}
+                                    productsError={wizardForm.productsError}
+                                    retryProducts={wizardForm.retryProducts}
+                                    canChooseSource={canChooseSource}
+                                    changeSourceBranch={
+                                        wizardForm.changeSourceBranch
+                                    }
                                     branches={branches}
-                                    userBranchName={userBranchName}
                                 />
                             </div>
                         </TabsContent>
 
-                        {/* My Requests — list */}
-                        <TabsContent value="my-requests">
+                        {/* My Requests / All Requests — list */}
+                        <TabsContent value={listTab}>
                             <div className="space-y-4">
                                 <SearchBar listState={listState} />
                                 <TransfersTable
                                     transfers={transfers}
-                                    isAdmin={false}
+                                    isAdmin={canViewAll}
+                                    currentUserId={currentUserId}
                                     onCancel={approval.cancel}
                                     onView={setDetailTransfer}
                                 />
                             </div>
                         </TabsContent>
 
-                        {/* ════════════════════════════════════════════
-                        ADMIN TABS
-                    ════════════════════════════════════════════ */}
-
-                        {/* Pending — approval cards */}
-                        <TabsContent value="pending">
-                            <div className="space-y-4">
-                                {pendingTransfers.length === 0 ? (
-                                    <EmptyState message="No pending transfer requests." />
-                                ) : (
-                                    pendingTransfers.map((transfer) => (
-                                        <ApprovalCard
-                                            key={transfer.id}
-                                            transfer={transfer}
-                                            approval={approval}
-                                            onView={setDetailTransfer}
-                                        />
-                                    ))
-                                )}
-                            </div>
-                        </TabsContent>
-
-                        {/* All Requests — full list */}
-                        <TabsContent value="all">
-                            <div className="space-y-4">
-                                <SearchBar
-                                    listState={listState}
-                                    showStatusFilter
-                                />
-                                <TransfersTable
-                                    transfers={transfers}
-                                    isAdmin={true}
-                                    onCancel={approval.cancel}
-                                    onView={setDetailTransfer}
-                                />
-                            </div>
-                        </TabsContent>
+                        {/* Pending — approval cards (admin acts, superadmin views) */}
+                        {canViewAll && (
+                            <TabsContent value="pending">
+                                <div className="space-y-4">
+                                    {pendingTransfers.length === 0 ? (
+                                        <EmptyState message="No pending transfer requests." />
+                                    ) : (
+                                        pendingTransfers.map((transfer) => (
+                                            <ApprovalCard
+                                                key={transfer.id}
+                                                transfer={transfer}
+                                                approval={approval}
+                                                canApprove={canApprove}
+                                                onView={setDetailTransfer}
+                                            />
+                                        ))
+                                    )}
+                                </div>
+                            </TabsContent>
+                        )}
                     </Tabs>
                 </div>
             </div>
@@ -220,7 +216,7 @@ export default function Index({
 // ─────────────────────────────────────────────────────────────────────
 // Search + status filter bar
 // ─────────────────────────────────────────────────────────────────────
-function SearchBar({ listState, showStatusFilter = false }) {
+function SearchBar({ listState }) {
     const {
         search,
         setSearch,
@@ -238,26 +234,24 @@ function SearchBar({ listState, showStatusFilter = false }) {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 onKeyDown={handleSearchKey}
-                placeholder="Search by ref no, medicine, branch…"
+                placeholder="Search by ref no, medicine, lot, branch, requester…"
                 className="flex-1 min-w-[200px] text-sm border border-gray-300
                     rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500
                     focus:outline-none"
             />
 
-            {showStatusFilter && (
-                <select
-                    value={statusFilter}
-                    onChange={(e) => setStatusFilter(e.target.value)}
-                    className="text-sm border border-gray-300 rounded-lg px-3 py-2
-                        focus:ring-2 focus:ring-blue-500 focus:outline-none"
-                >
-                    <option value="all">All status</option>
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="cancelled">Cancelled</option>
-                </select>
-            )}
+            <select
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="text-sm border border-gray-300 rounded-lg px-3 py-2
+                    focus:ring-2 focus:ring-blue-500 focus:outline-none"
+            >
+                <option value="all">All status</option>
+                <option value="pending">Pending</option>
+                <option value="approved">Approved</option>
+                <option value="rejected">Rejected</option>
+                <option value="cancelled">Cancelled</option>
+            </select>
 
             <button
                 type="button"
@@ -289,7 +283,7 @@ function EmptyState({ message }) {
     return (
         <div
             className="flex flex-col items-center justify-center py-20
-            text-gray-400 gap-3"
+            text-gray-400 gap-3 rounded-xl bg-white"
         >
             <svg
                 className="w-12 h-12"

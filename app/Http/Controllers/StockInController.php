@@ -4,10 +4,11 @@ namespace App\Http\Controllers;
 
 use App\Enums\UnitType;
 use App\Exceptions\InvalidPackSizeException;
+use App\Http\Controllers\Concerns\ResolvesTransactionBranch;
+use App\Models\InventoryMovementLog;
 use App\Models\MedicineProduct;
 use App\Models\StockIn;
 use App\Models\StockInItem;
-use App\Models\InventoryMovementLog;
 use App\Services\IdempotencyGuard;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
@@ -22,17 +23,21 @@ use Throwable;
 
 class StockInController extends Controller
 {
+    use ResolvesTransactionBranch;
+
     private const MAX_QUANTITY = InventoryStockService::MAX_TRANSACTION_QUANTITY;
+
+    private const FORBIDDEN_MESSAGE = 'You do not have access to this stock-in transaction.';
 
     public function store(Request $request): RedirectResponse
     {
-        $sessionBranchId = $this->branchIdOrFail();
-        $canAssignBranch = $this->canAssignBranch();
+        // Only staff need a session branch; admins/superadmins pick any branch.
+        $this->assertCanSubmitForAnyBranch();
 
         $validated = $request->validate([
             'supplier_name' => ['required', 'string', 'max:255'],
             'delivery_date' => ['required', 'date'],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'branch_id' => $this->branchIdRules(),
             'received_by' => ['required', 'string', 'max:255'],
             'remarks' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],
@@ -41,7 +46,7 @@ class StockInController extends Controller
             // Receiving already-expired goods put stock into the dispensable
             // pool that FEFO would then hand out first.
             'items.*.expiry_date' => ['required', 'date', 'after:today'],
-            'items.*.quantity_received' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+            'items.*.quantity_received' => ['required', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
             'items.*.shelf_number' => ['nullable', 'string', 'max:50'],
             'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
             'items.*.confirm_duplicate_lot' => ['sometimes', 'boolean'],
@@ -49,15 +54,11 @@ class StockInController extends Controller
             'items.*.expiry_date.after' => 'The expiry date must be in the future. Expired stock cannot be received.',
         ]);
 
-        $branchId = $canAssignBranch
-            ? (int) $validated['branch_id']
-            : $sessionBranchId;
+        $branchId = $this->resolveTransactionBranchId((int) $validated['branch_id']);
 
-        if (! $canAssignBranch && (int) $validated['branch_id'] !== $sessionBranchId) {
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'The destination branch does not match your session branch.');
-        }
+        // A basket built for another branch (e.g. the branch was switched
+        // after items were added) is rejected before anything is claimed.
+        $this->assertItemsBelongToBranch($validated['items'], $branchId);
 
         $idempotencyKey = $request->input('idempotency_key');
 
@@ -132,7 +133,7 @@ class StockInController extends Controller
                     );
                 }
             });
-        } catch (InvalidPackSizeException | \RuntimeException $exception) {
+        } catch (InvalidPackSizeException|\RuntimeException $exception) {
             // Nothing was written, so hand the key back and let the operator
             // correct the entry and resubmit the same form.
             IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_IN, $idempotencyKey);
@@ -155,9 +156,10 @@ class StockInController extends Controller
 
     public function show(StockIn $stockIn): JsonResponse
     {
-        $this->assertCanAccessBranchTransaction((int) $stockIn->branch_id);
+        $this->assertCanAccessBranchTransaction((int) $stockIn->branch_id, self::FORBIDDEN_MESSAGE);
 
         $stockIn->load([
+            ...self::branchSummaryRelation(),
             'items' => function ($query) {
                 $query->select([
                     'item_id',
@@ -181,6 +183,8 @@ class StockInController extends Controller
                 'received_by' => $stockIn->received_by,
                 'remarks' => $stockIn->remarks,
                 'created_at' => $stockIn->created_at,
+                'branch_id' => (int) $stockIn->branch_id,
+                'branch' => self::branchSummary($stockIn->branch),
             ],
             'items' => $stockIn->items->map(function (StockInItem $item) {
                 return [
@@ -203,10 +207,10 @@ class StockInController extends Controller
 
     public function receipt(StockIn $stockIn): Response
     {
-        $this->assertCanAccessBranchTransaction((int) $stockIn->branch_id);
+        $this->assertCanAccessBranchTransaction((int) $stockIn->branch_id, self::FORBIDDEN_MESSAGE);
 
         $stockIn->load([
-            'branch',
+            ...self::branchSummaryRelation(),
             'items' => function ($query) {
                 $query->select([
                     'item_id',
@@ -226,34 +230,5 @@ class StockInController extends Controller
         return Inertia::render('MedicineInventory/StockInReceipt', [
             'stockIn' => $stockIn,
         ]);
-    }
-
-    private function assertCanAccessBranchTransaction(int $transactionBranchId): void
-    {
-        if ($this->canAssignBranch()) {
-            return;
-        }
-
-        $branchId = $this->branchIdOrFail();
-
-        if ($transactionBranchId !== $branchId) {
-            abort(403, 'You do not have access to this stock-in transaction.');
-        }
-    }
-
-    private function canAssignBranch(): bool
-    {
-        return in_array((int) session('role_id'), [2, 3], true);
-    }
-
-    private function branchIdOrFail(): int
-    {
-        $branchId = session('branch_id');
-
-        if (! $branchId) {
-            abort(403, 'No branch assigned to your session.');
-        }
-
-        return (int) $branchId;
     }
 }

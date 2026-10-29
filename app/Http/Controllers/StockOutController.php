@@ -5,13 +5,14 @@ namespace App\Http\Controllers;
 use App\Enums\UnitType;
 use App\Exceptions\InsufficientStockException;
 use App\Exceptions\InvalidPackSizeException;
+use App\Http\Controllers\Concerns\ResolvesTransactionBranch;
+use App\Models\InventoryMovementLog;
 use App\Models\MedicineProduct;
 use App\Models\ProductQty;
 use App\Models\Sale;
 use App\Models\SaleItem;
 use App\Models\StockOut;
 use App\Models\StockOutItem;
-use App\Models\InventoryMovementLog;
 use App\Services\IdempotencyGuard;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
@@ -26,19 +27,23 @@ use Throwable;
 
 class StockOutController extends Controller
 {
+    use ResolvesTransactionBranch;
+
     private const MAX_QUANTITY = InventoryStockService::MAX_TRANSACTION_QUANTITY;
+
+    private const FORBIDDEN_MESSAGE = 'You do not have access to this stock-out transaction.';
 
     public function store(Request $request): RedirectResponse
     {
-        $sessionBranchId = $this->branchIdOrFail();
-        $canAssignBranch = $this->canAssignBranch();
+        // Only staff need a session branch; admins/superadmins pick any branch.
+        $this->assertCanSubmitForAnyBranch();
 
         $validated = $request->validate([
             'transaction_subtype' => ['required', 'string', Rule::in([
                 'Delivery to Customer',
                 'Returned to supplier',
             ])],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'branch_id' => $this->branchIdRules(),
             'patient_reference' => ['nullable', 'string', 'max:255'],
             'issued_by' => ['required', 'string', 'max:255'],
             'remarks' => ['nullable', 'string', 'max:2000'],
@@ -47,22 +52,18 @@ class StockOutController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
             'items.*.products_qty_id' => ['required', 'integer', 'exists:products_qty,id'],
-            'items.*.quantity_deducted' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+            'items.*.quantity_deducted' => ['required', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
             'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
             // Only meaningful (and only validated as required) for Box lines
             // — enforced in the loop below, since it depends on unit_type.
-            'items.*.pieces_per_box' => ['nullable', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+            'items.*.pieces_per_box' => ['nullable', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
         ]);
 
-        $branchId = $canAssignBranch
-            ? (int) $validated['branch_id']
-            : $sessionBranchId;
+        $branchId = $this->resolveTransactionBranchId((int) $validated['branch_id']);
 
-        if (! $canAssignBranch && (int) $validated['branch_id'] !== $sessionBranchId) {
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'The source branch does not match your session branch.');
-        }
+        // Medicines and lots must come from the source branch; a stale basket
+        // from a previously selected branch is rejected before claiming.
+        $this->assertItemsBelongToBranch($validated['items'], $branchId, checkBatches: true);
 
         $idempotencyKey = $request->input('idempotency_key');
 
@@ -164,7 +165,7 @@ class StockOutController extends Controller
                     ]);
                 }
             });
-        } catch (InvalidPackSizeException | InsufficientStockException | \RuntimeException $exception) {
+        } catch (InvalidPackSizeException|InsufficientStockException|\RuntimeException $exception) {
             IdempotencyGuard::release(IdempotencyGuard::SCOPE_STOCK_OUT, $idempotencyKey);
 
             return redirect()->back()
@@ -185,9 +186,10 @@ class StockOutController extends Controller
 
     public function show(StockOut $stockOut): JsonResponse
     {
-        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
+        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id, self::FORBIDDEN_MESSAGE);
 
         $stockOut->load([
+            ...self::branchSummaryRelation(),
             'items' => function ($query) {
                 $query->select([
                     'item_id',
@@ -217,6 +219,8 @@ class StockOutController extends Controller
                 'delivered_to_address' => $stockOut->delivered_to_address,
                 'delivery_confirmed' => (bool) $stockOut->delivery_confirmed,
                 'created_at' => $stockOut->created_at,
+                'branch_id' => (int) $stockOut->branch_id,
+                'branch' => self::branchSummary($stockOut->branch),
             ],
             'items' => $stockOut->items->map(function (StockOutItem $item) {
                 return [
@@ -242,10 +246,10 @@ class StockOutController extends Controller
 
     public function receipt(StockOut $stockOut): Response
     {
-        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
+        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id, self::FORBIDDEN_MESSAGE);
 
         $stockOut->load([
-            'branch',
+            ...self::branchSummaryRelation(),
             'items' => function ($query) {
                 $query->select([
                     'item_id',
@@ -277,7 +281,7 @@ class StockOutController extends Controller
      */
     public function confirmDelivery(StockOut $stockOut): RedirectResponse
     {
-        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
+        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id, self::FORBIDDEN_MESSAGE);
 
         if ($stockOut->transaction_subtype !== 'Delivery to Customer') {
             return redirect()->back()
@@ -310,6 +314,10 @@ class StockOutController extends Controller
                     if (! $medicine) {
                         continue;
                     }
+
+                    // The lot may have expired (or been removed) since the
+                    // delivery was recorded; re-check before dispensing it.
+                    $this->assertBatchDispensableForBranch((int) $item->products_qty_id, $medicine, $branchId);
 
                     // Deduct now, from the exact lot the operator selected when
                     // the stock-out was recorded (or last edited). pieces_deducted
@@ -359,7 +367,7 @@ class StockOutController extends Controller
 
                 $stockOut->update(['delivery_confirmed' => true]);
             });
-        } catch (InsufficientStockException | \RuntimeException $exception) {
+        } catch (InsufficientStockException|\RuntimeException $exception) {
             return redirect()->back()
                 ->with('error', $exception->getMessage());
         } catch (Throwable $exception) {
@@ -375,13 +383,14 @@ class StockOutController extends Controller
 
     public function edit(StockOut $stockOut): JsonResponse
     {
-        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
+        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id, self::FORBIDDEN_MESSAGE);
 
         if (! $this->isEditable($stockOut)) {
             abort(403, 'This stock-out can no longer be edited.');
         }
 
         $stockOut->load([
+            ...self::branchSummaryRelation(),
             'items' => function ($query) {
                 $query->select([
                     'item_id', 'stock_out_id', 'pd_id', 'products_qty_id',
@@ -395,7 +404,8 @@ class StockOutController extends Controller
             'stock_out' => [
                 'stock_out_id' => $stockOut->stock_out_id,
                 'transaction_subtype' => $stockOut->transaction_subtype,
-                'branch_id' => $stockOut->branch_id,
+                'branch_id' => (int) $stockOut->branch_id,
+                'branch' => self::branchSummary($stockOut->branch),
                 'patient_reference' => $stockOut->patient_reference,
                 'issued_by' => $stockOut->issued_by,
                 'remarks' => $stockOut->remarks,
@@ -416,7 +426,7 @@ class StockOutController extends Controller
 
     public function update(Request $request, StockOut $stockOut): RedirectResponse
     {
-        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id);
+        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id, self::FORBIDDEN_MESSAGE);
 
         if (! $this->isEditable($stockOut)) {
             return redirect()->back()
@@ -432,12 +442,16 @@ class StockOutController extends Controller
             'items' => ['required', 'array', 'min:1'],
             'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
             'items.*.products_qty_id' => ['required', 'integer', 'exists:products_qty,id'],
-            'items.*.quantity_deducted' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+            'items.*.quantity_deducted' => ['required', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
             'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
-            'items.*.pieces_per_box' => ['nullable', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+            'items.*.pieces_per_box' => ['nullable', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
         ]);
 
+        // Items are checked against the stock-out's own branch, which is
+        // fixed once recorded — never against the editor's session branch.
         $branchId = (int) $stockOut->branch_id;
+
+        $this->assertItemsBelongToBranch($validated['items'], $branchId, checkBatches: true);
 
         try {
             DB::transaction(function () use ($validated, $stockOut, $branchId) {
@@ -502,7 +516,7 @@ class StockOutController extends Controller
                     ]);
                 }
             });
-        } catch (InvalidPackSizeException | InsufficientStockException | \RuntimeException $exception) {
+        } catch (InvalidPackSizeException|InsufficientStockException|\RuntimeException $exception) {
             return redirect()->back()->withInput()->with('error', $exception->getMessage());
         } catch (Throwable $exception) {
             report($exception);
@@ -512,6 +526,34 @@ class StockOutController extends Controller
         }
 
         return redirect()->back()->with('success', 'Stock-out transaction updated successfully.');
+    }
+
+    /**
+     * Locks the lot and confirms it still belongs to this medicine in the
+     * stock-out's branch and is fit to dispense right now.
+     */
+    private function assertBatchDispensableForBranch(int $batchId, MedicineProduct $medicine, int $branchId): void
+    {
+        $batch = ProductQty::query()
+            ->whereKey($batchId)
+            ->where('product_id', $medicine->id)
+            ->whereHas('product', fn ($query) => $query->forBranch($branchId))
+            ->lockForUpdate()
+            ->first();
+
+        if (! $batch || $batch->isDeleted()) {
+            throw new \RuntimeException(
+                "The selected lot is no longer available for {$medicine->med_name}. Edit the delivery and pick another lot."
+            );
+        }
+
+        if ($batch->status === ProductQty::STATUS_EXPIRED || $batch->isExpired()) {
+            $expiry = $batch->expiry?->format('d M Y') ?? 'an earlier date';
+
+            throw new \RuntimeException(
+                "Lot {$batch->lot_number} of {$medicine->med_name} expired on {$expiry} and cannot be dispensed. Edit the delivery and pick another lot."
+            );
+        }
     }
 
     private function isEditable(StockOut $stockOut): bool
@@ -568,7 +610,7 @@ class StockOutController extends Controller
 
     private function generateDispenseInvoiceNumber(int $stockOutId): string
     {
-        return 'DISP-' . date('Ymd') . '-' . str_pad((string) $stockOutId, 5, '0', STR_PAD_LEFT);
+        return 'DISP-'.date('Ymd').'-'.str_pad((string) $stockOutId, 5, '0', STR_PAD_LEFT);
     }
 
     /**
@@ -592,39 +634,10 @@ class StockOutController extends Controller
         if ($batch->isExpired()) {
             throw new \RuntimeException(
                 "Lot {$batch->lot_number} of {$medicine->med_name} expired on "
-                . $batch->expiry->format('d M Y') . ' and cannot be dispensed.'
+                .$batch->expiry->format('d M Y').' and cannot be dispensed.'
             );
         }
 
         return $batch;
-    }
-
-    private function assertCanAccessBranchTransaction(int $transactionBranchId): void
-    {
-        if ($this->canAssignBranch()) {
-            return;
-        }
-
-        $branchId = $this->branchIdOrFail();
-
-        if ($transactionBranchId !== $branchId) {
-            abort(403, 'You do not have access to this stock-out transaction.');
-        }
-    }
-
-    private function canAssignBranch(): bool
-    {
-        return in_array((int) session('role_id'), [2, 3], true);
-    }
-
-    private function branchIdOrFail(): int
-    {
-        $branchId = session('branch_id');
-
-        if (! $branchId) {
-            abort(403, 'No branch assigned to your session.');
-        }
-
-        return (int) $branchId;
     }
 }

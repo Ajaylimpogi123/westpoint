@@ -50,13 +50,63 @@ export const LOG_ACTION_CONFIG = {
 export { formatDate, formatDateTime } from "@/lib/dates";
 
 // ─────────────────────────────────────────────────────────
+// Labels
+// ─────────────────────────────────────────────────────────
+
+/** "Amoxicillin 500mg Capsule — Amoxil", skipping blank parts. */
+export function describeProduct(product) {
+    if (!product) return "—";
+    const name = [product.med_name, product.dose, product.form]
+        .filter(Boolean)
+        .join(" ");
+    return product.brand_name ? `${name} — ${product.brand_name}` : name;
+}
+
+/**
+ * Transfer quantities are always pieces. Adds the box equivalent when the
+ * pack size is known, e.g. "25 pcs (2 boxes + 5 pcs)".
+ */
+export function piecesLabel(pieces, packSize) {
+    const qty = Number(pieces) || 0;
+    const pack = Number(packSize) || 0;
+    const base = `${qty} pcs`;
+
+    if (pack <= 1 || qty < pack) return base;
+
+    const boxes = Math.floor(qty / pack);
+    const rest = qty % pack;
+    const boxText = `${boxes} ${boxes === 1 ? "box" : "boxes"}`;
+
+    return rest
+        ? `${base} (${boxText} + ${rest} pcs)`
+        : `${base} (${boxText})`;
+}
+
+/**
+ * Who closed a request. Rejections and cancellations don't set approved_by,
+ * so they come from the activity log instead.
+ */
+export function actionedBy(transfer) {
+    if (transfer.status === "approved") {
+        return transfer.approver?.name ?? null;
+    }
+    const log = (transfer.logs ?? []).find((l) => l.action === transfer.status);
+    return log?.performer?.name ?? null;
+}
+
+// ─────────────────────────────────────────────────────────
 // Expiry helpers (used by LotRow + LotPickerList)
 // ─────────────────────────────────────────────────────────
 
+// Whole calendar days from today (0 = expires today, still transferable,
+// matching the server's notExpired scope).
 export function getDaysUntilExpiry(expiry) {
     if (!expiry) return null;
-    const diff = new Date(expiry) - new Date();
-    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+    const [y, m, d] = String(expiry).slice(0, 10).split("-").map(Number);
+    const expiryDay = new Date(y, m - 1, d);
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    return Math.round((expiryDay - today) / (1000 * 60 * 60 * 24));
 }
 
 export function getExpiryStatus(expiry) {
@@ -74,6 +124,13 @@ export function getExpiryStatus(expiry) {
             color: "text-red-700",
             bg: "bg-red-50",
             canTransfer: false,
+        };
+    if (days === 0)
+        return {
+            label: "Expires today",
+            color: "text-yellow-700",
+            bg: "bg-yellow-50",
+            canTransfer: true,
         };
     if (days <= 30)
         return {

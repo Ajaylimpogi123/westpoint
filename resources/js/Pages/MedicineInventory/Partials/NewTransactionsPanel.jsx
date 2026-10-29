@@ -16,7 +16,6 @@ export default function NewTransactionsPanel({
     branches = [],
     canAssignBranch = false,
     canViewAllBranches = false,
-    products,
     stockIns,
     stockOuts,
     customerReturns,
@@ -51,7 +50,6 @@ export default function NewTransactionsPanel({
                                 branchName={branchName}
                                 branches={branches}
                                 canAssignBranch={canAssignBranch}
-                                products={products}
                             >
                                 <Button className="flex items-center gap-2">
                                     <Plus className="h-4 w-4" />
@@ -94,7 +92,6 @@ export default function NewTransactionsPanel({
                                 branchName={branchName}
                                 branches={branches}
                                 canAssignBranch={canAssignBranch}
-                                products={products}
                             >
                                 <Button className="flex items-center gap-2">
                                     <Plus className="h-4 w-4" />
@@ -136,7 +133,6 @@ export default function NewTransactionsPanel({
                                 branchName={branchName}
                                 branches={branches}
                                 canAssignBranch={canAssignBranch}
-                                products={products}
                             >
                                 <Button className="flex items-center gap-2">
                                     <Plus className="h-4 w-4" />

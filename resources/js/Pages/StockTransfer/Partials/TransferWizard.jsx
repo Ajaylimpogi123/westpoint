@@ -20,11 +20,19 @@ export default function TransferWizard({
     selectedItems,
     addItem,
     removeItem,
-    submit, // ← removeItem from hook
+    submit,
     products,
+    productsLoading,
+    productsError,
+    retryProducts,
+    canChooseSource,
+    changeSourceBranch,
     branches,
-    userBranchName,
 }) {
+    const sourceBranchName =
+        branches.find((b) => String(b.id) === String(data.from_branch_id))
+            ?.branch_name ?? "";
+
     return (
         <div className="space-y-6">
             {/* Step bar */}
@@ -54,7 +62,7 @@ export default function TransferWizard({
                                     {isDone ? "✓" : stepNum}
                                 </div>
                                 <span
-                                    className={`text-xs font-medium whitespace-nowrap
+                                    className={`hidden text-xs font-medium whitespace-nowrap sm:inline
                                     ${
                                         isDone
                                             ? "text-green-600"
@@ -80,10 +88,19 @@ export default function TransferWizard({
             {step === 1 && (
                 <StepItemLot
                     products={products}
+                    productsLoading={productsLoading}
+                    productsError={productsError}
+                    onRetryProducts={retryProducts}
+                    branches={branches}
+                    sourceBranchId={data.from_branch_id}
+                    sourceBranchName={sourceBranchName}
+                    canChooseSource={canChooseSource}
+                    onChangeSource={changeSourceBranch}
                     selectedItems={selectedItems}
                     onAddItem={addItem}
-                    onRemoveItem={removeItem} // ← fix: was missing before
+                    onRemoveItem={removeItem}
                     onNext={goNext}
+                    error={errors.items}
                 />
             )}
 
@@ -94,7 +111,7 @@ export default function TransferWizard({
                     setData={setData}
                     errors={errors}
                     branches={branches}
-                    userBranchName={userBranchName}
+                    userBranchName={sourceBranchName}
                     onNext={goNext}
                     onBack={goBack}
                 />
@@ -106,8 +123,9 @@ export default function TransferWizard({
                     data={data}
                     selectedItems={selectedItems}
                     branches={branches}
-                    userBranchName={userBranchName}
+                    userBranchName={sourceBranchName}
                     processing={processing}
+                    errors={errors}
                     onSubmit={submit}
                     onBack={goBack}
                 />

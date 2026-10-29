@@ -1,4 +1,8 @@
-import { formatDate, PRIORITY_CONFIG } from "../lib/TransferHelpers";
+import {
+    formatDate,
+    piecesLabel,
+    PRIORITY_CONFIG,
+} from "../lib/TransferHelpers";
 
 /**
  * StepReview — Wizard Step 3
@@ -12,11 +16,14 @@ export default function StepReview({
     branches,
     userBranchName,
     processing,
+    errors = {},
     onSubmit,
     onBack,
 }) {
     const toBranch = branches.find((b) => b.id == data.to_branch_id);
     const priority = PRIORITY_CONFIG[data.priority] ?? PRIORITY_CONFIG.normal;
+    // Every server error lands here, including ones for fields on earlier steps.
+    const errorMessages = [...new Set(Object.values(errors).filter(Boolean))];
 
     return (
         <div className="space-y-5">
@@ -25,12 +32,25 @@ export default function StepReview({
                 until an admin approves this request.
             </p>
 
+            {errorMessages.length > 0 && (
+                <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+                    <p className="font-medium">
+                        The request could not be submitted:
+                    </p>
+                    <ul className="mt-1 list-disc pl-5">
+                        {errorMessages.map((message) => (
+                            <li key={message}>{message}</li>
+                        ))}
+                    </ul>
+                </div>
+            )}
+
             {/* Route + meta summary */}
             <div className="bg-gray-50 border border-gray-200 rounded-xl p-4">
                 <div className="text-xs uppercase tracking-wide text-gray-400 mb-3">
                     Transfer details
                 </div>
-                <div className="grid grid-cols-2 gap-y-3 gap-x-6 text-sm">
+                <div className="grid grid-cols-1 gap-y-3 gap-x-6 text-sm sm:grid-cols-2">
                     <Detail label="From" value={userBranchName || "—"} />
                     <Detail label="To" value={toBranch?.branch_name ?? "—"} />
                     <Detail
@@ -80,9 +100,11 @@ export default function StepReview({
                             <div>
                                 <div className="text-sm font-medium text-gray-800">
                                     {item._product_name}
-                                    <span className="text-gray-400 font-normal ml-1">
-                                        · {item._brand}
-                                    </span>
+                                    {item._brand && (
+                                        <span className="text-gray-400 font-normal ml-1">
+                                            · {item._brand}
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="text-xs text-gray-400 mt-0.5">
                                     <span className="font-mono">
@@ -96,8 +118,11 @@ export default function StepReview({
                                     )}
                                 </div>
                             </div>
-                            <div className="text-sm font-semibold text-gray-800 ml-4">
-                                {item.quantity_requested} units
+                            <div className="text-sm font-semibold text-gray-800 ml-4 text-right">
+                                {piecesLabel(
+                                    item.quantity_requested,
+                                    item._pack_size,
+                                )}
                             </div>
                         </div>
                     ))}

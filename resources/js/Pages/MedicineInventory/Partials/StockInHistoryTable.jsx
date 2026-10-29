@@ -30,9 +30,6 @@ export default function StockInHistoryTable({
 }) {
     const perPage = Number(filters?.stock_in_per_page) || 10;
     const branchFilter = filters?.stock_in_branch_id ?? "all";
-    const showBranchColumn =
-        canViewAllBranches &&
-        (branchFilter === "all" || branchFilter === "");
 
     const reload = (params) => {
         router.get(
@@ -142,9 +139,7 @@ export default function StockInHistoryTable({
                             <TableHead>ID</TableHead>
                             <TableHead>Supplier</TableHead>
                             <TableHead>Date</TableHead>
-                            {showBranchColumn && (
-                                <TableHead>Branch</TableHead>
-                            )}
+                            <TableHead>Branch</TableHead>
                             <TableHead>Received By</TableHead>
                             <TableHead className="text-right">Actions</TableHead>
                         </TableRow>
@@ -162,12 +157,10 @@ export default function StockInHistoryTable({
                                     <TableCell>
                                         {formatDate(stockIn.delivery_date)}
                                     </TableCell>
-                                    {showBranchColumn && (
-                                        <TableCell>
+                                    <TableCell>
                                             {stockIn.branch?.branch_name ??
                                                 "—"}
                                         </TableCell>
-                                    )}
                                     <TableCell>{stockIn.received_by}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
@@ -210,7 +203,7 @@ export default function StockInHistoryTable({
                         ) : (
                             <TableRow>
                                 <TableCell
-                                    colSpan={showBranchColumn ? 6 : 5}
+                                    colSpan={6}
                                     className="h-24 text-center text-sm text-muted-foreground"
                                 >
                                     No stock-in transactions recorded yet.

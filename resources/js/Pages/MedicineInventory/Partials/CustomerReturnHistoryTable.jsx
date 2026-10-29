@@ -1,12 +1,12 @@
-import { Button } from "@/Components/ui/button";
-import { Label } from "@/Components/ui/label";
+import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
 import {
     Select,
     SelectContent,
     SelectItem,
     SelectTrigger,
     SelectValue,
-} from "@/Components/ui/select";
+} from "@/components/ui/select";
 import {
     Table,
     TableBody,
@@ -14,7 +14,7 @@ import {
     TableHead,
     TableHeader,
     TableRow,
-} from "@/Components/ui/table";
+} from "@/components/ui/table";
 import { router } from "@inertiajs/react";
 import { Eye, Printer } from "lucide-react";
 import CustomerReturnViewModal from "./CustomerReturnViewModal";
@@ -30,8 +30,6 @@ export default function CustomerReturnHistoryTable({
 }) {
     const perPage = Number(filters?.return_per_page) || 10;
     const branchFilter = filters?.return_branch_id ?? "all";
-    const showBranchColumn =
-        canViewAllBranches && (branchFilter === "all" || branchFilter === "");
 
     const reload = (params) => {
         router.get(
@@ -124,7 +122,7 @@ export default function CustomerReturnHistoryTable({
                             <TableHead>ID</TableHead>
                             <TableHead>Customer</TableHead>
                             <TableHead>Date</TableHead>
-                            {showBranchColumn && <TableHead>Branch</TableHead>}
+                            <TableHead>Branch</TableHead>
                             <TableHead>Received By</TableHead>
                             <TableHead className="text-right">
                                 Actions
@@ -146,11 +144,9 @@ export default function CustomerReturnHistoryTable({
                                     <TableCell>
                                         {formatDate(item.return_date)}
                                     </TableCell>
-                                    {showBranchColumn && (
-                                        <TableCell>
+                                    <TableCell>
                                             {item.branch?.branch_name ?? "—"}
                                         </TableCell>
-                                    )}
                                     <TableCell>{item.received_by}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
@@ -193,7 +189,7 @@ export default function CustomerReturnHistoryTable({
                         ) : (
                             <TableRow>
                                 <TableCell
-                                    colSpan={showBranchColumn ? 6 : 5}
+                                    colSpan={6}
                                     className="h-24 text-center text-sm text-muted-foreground"
                                 >
                                     No returns recorded yet.

@@ -4,6 +4,7 @@ import { getDaysUntilExpiry } from "../lib/TransferHelpers";
 /**
  * useLotSelector
  * Handles product selection and FEFO-sorted lot picking for Step 1 of the wizard.
+ * Lot `quantity` here is what is still free after lines already in the list.
  */
 export function useLotSelector() {
     const [selectedProduct, setSelectedProduct] = useState(null);
@@ -16,18 +17,19 @@ export function useLotSelector() {
         setQtyError("");
         setQty("");
 
-        // Auto-select first valid (non-expired) lot — products_qty is already
-        // sorted by expiry ASC from the controller (FEFO)
+        // Auto-select first valid (non-expired, not fully used) lot —
+        // products_qty is already sorted by expiry ASC from the controller (FEFO)
         const firstValid = product?.products_qty?.find((lot) => {
             const days = getDaysUntilExpiry(lot.expiry);
-            return days === null || days > 0;
+            return (days === null || days >= 0) && lot.quantity > 0;
         });
         setSelectedLot(firstValid || null);
     };
 
     const selectLot = (lot) => {
         const days = getDaysUntilExpiry(lot.expiry);
-        if (days !== null && days <= 0) return; // block expired lots
+        if (days !== null && days < 0) return; // block expired lots
+        if (lot.quantity <= 0) return; // already fully in the list
         setSelectedLot(lot);
         setQty("");
         setQtyError("");
@@ -35,21 +37,23 @@ export function useLotSelector() {
 
     const updateQty = (value) => {
         setQty(value);
-        const parsed = parseInt(value, 10);
-        if (!parsed || parsed <= 0) {
-            setQtyError("Enter a valid quantity.");
+        const parsed = Number(value);
+        if (!Number.isInteger(parsed) || parsed <= 0) {
+            setQtyError("Enter a whole number of pieces.");
         } else if (parsed > (selectedLot?.quantity ?? 0)) {
-            setQtyError(`Max available: ${selectedLot?.quantity ?? 0} units.`);
+            setQtyError(`Max available: ${selectedLot?.quantity ?? 0} pcs.`);
         } else {
             setQtyError("");
         }
     };
 
+    const parsedQty = Number(qty);
     const isValid =
         !!selectedProduct &&
         !!selectedLot &&
-        parseInt(qty, 10) > 0 &&
-        parseInt(qty, 10) <= (selectedLot?.quantity ?? 0) &&
+        Number.isInteger(parsedQty) &&
+        parsedQty > 0 &&
+        parsedQty <= (selectedLot?.quantity ?? 0) &&
         !qtyError;
 
     const reset = () => {

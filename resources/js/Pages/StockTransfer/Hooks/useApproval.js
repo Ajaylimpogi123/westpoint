@@ -3,20 +3,33 @@ import { useForm } from "@inertiajs/react";
 
 /**
  * useApproval
- * Drives the admin Approve / Reject flow.
- * Used by ApprovalCard and the pending tab on Index.
+ * Drives the admin Approve / Reject flow and the requester's Cancel.
+ * Server-side failures come back as errors.status and are shown as a toast
+ * by the Index page.
  */
 export function useApproval() {
     const [rejectingId, setRejectingId] = useState(null); // which transfer is being rejected
+    const [approvingId, setApprovingId] = useState(null); // which card shows "Processing…"
 
     const approveForm = useForm({});
     const rejectForm = useForm({ rejection_note: "" });
 
     // ── Approve ───────────────────────────────────────────
 
-    const approve = (transferId) => {
-        approveForm.post(route("stock-transfers.approve", transferId), {
-            onSuccess: () => approveForm.reset(),
+    const approve = (transfer) => {
+        // Approving moves stock immediately, so ask first.
+        if (
+            !confirm(
+                `Approve ${transfer.transfer_no}? Stock moves from ${transfer.from_branch?.branch_name} to ${transfer.to_branch?.branch_name} right away.`,
+            )
+        ) {
+            return;
+        }
+
+        setApprovingId(transfer.id);
+        approveForm.post(route("stock-transfers.approve", transfer.id), {
+            preserveScroll: true,
+            onFinish: () => setApprovingId(null),
         });
     };
 
@@ -35,22 +48,26 @@ export function useApproval() {
 
     const submitReject = (transferId) => {
         rejectForm.post(route("stock-transfers.reject", transferId), {
+            preserveScroll: true,
             onSuccess: () => closeReject(),
         });
     };
 
-    // ── Cancel (staff) ────────────────────────────────────
+    // ── Cancel (requester) ────────────────────────────────
 
     const cancelForm = useForm({});
 
     const cancel = (transferId) => {
         if (!confirm("Cancel this transfer request?")) return;
-        cancelForm.post(route("stock-transfers.cancel", transferId));
+        cancelForm.post(route("stock-transfers.cancel", transferId), {
+            preserveScroll: true,
+        });
     };
 
     return {
         // approve
         approve,
+        approvingId,
         approveProcessing: approveForm.processing,
 
         // reject

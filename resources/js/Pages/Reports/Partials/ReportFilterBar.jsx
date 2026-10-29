@@ -14,8 +14,11 @@ export default function ReportFilterBar({
     paymentMethodOptions = null,
     showDateRange = true,
     showSupplierName = false,
+    searchPlaceholder = null,
+    statusLabel = "Status",
 }) {
     const [form, setForm] = useState({
+        search: filters.search || "",
         supplier_name: filters.supplier_name || "",
         date_from: filters.date_from || "",
         date_to: filters.date_to || "",
@@ -35,11 +38,33 @@ export default function ReportFilterBar({
         });
     };
 
+    const clear = () => {
+        setForm(Object.fromEntries(Object.keys(form).map((key) => [key, ""])));
+        router.get(route(routeName), {}, { preserveState: true, replace: true });
+    };
+
     return (
         <form
             onSubmit={submit}
             className="flex flex-wrap items-end gap-3 mb-4 bg-white p-4 rounded-lg shadow-sm"
         >
+            {searchPlaceholder && (
+                <div>
+                    <label className="block text-xs font-medium text-gray-600 mb-1">
+                        Search
+                    </label>
+                    <input
+                        type="text"
+                        value={form.search}
+                        onChange={(e) =>
+                            setForm({ ...form, search: e.target.value })
+                        }
+                        placeholder={searchPlaceholder}
+                        className="border-gray-300 rounded-md text-sm"
+                    />
+                </div>
+            )}
+
             {showSupplierName && (
                 <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">
@@ -135,7 +160,7 @@ export default function ReportFilterBar({
             {statusOptions && (
                 <div>
                     <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Status
+                        {statusLabel}
                     </label>
                     <select
                         value={form.status}
@@ -145,11 +170,17 @@ export default function ReportFilterBar({
                         className="border-gray-300 rounded-md text-sm"
                     >
                         <option value="">All</option>
-                        {statusOptions.map((s) => (
-                            <option key={s} value={s}>
-                                {s}
-                            </option>
-                        ))}
+                        {statusOptions.map((s) => {
+                            // Accept plain strings or { value, label }.
+                            const value = typeof s === "object" ? s.value : s;
+                            const label = typeof s === "object" ? s.label : s;
+
+                            return (
+                                <option key={value} value={value}>
+                                    {label}
+                                </option>
+                            );
+                        })}
                     </select>
                 </div>
             )}
@@ -159,6 +190,13 @@ export default function ReportFilterBar({
                 className="bg-slate-800 text-white text-sm px-4 py-2 rounded-md hover:bg-slate-700"
             >
                 Apply
+            </button>
+            <button
+                type="button"
+                onClick={clear}
+                className="text-sm text-slate-500 px-3 py-2 hover:text-slate-700"
+            >
+                Clear
             </button>
         </form>
     );

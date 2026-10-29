@@ -11,6 +11,7 @@ import {
     Boxes,
     AlertTriangle,
     CalendarClock,
+    History,
     PackagePlus,
     PackageMinus,
     ScrollText,
@@ -95,6 +96,13 @@ const REPORTS = [
         group: "Inventory",
         icon: CalendarClock,
         description: "Batches expired or expiring soon.",
+    },
+    {
+        name: "Add Stock History",
+        route: "reports.add-stock-history",
+        group: "Inventory",
+        icon: History,
+        description: "Stock added manually from Medicine Inventory.",
     },
     {
         name: "Stock In",

@@ -10,6 +10,13 @@ const STEPS = ["Requested", "Admin review", "Stock moved", "Slip ready"];
 export default function PipelineBar({ status }) {
     const doneUntil = getPipelineStep(status);
     const isRejected = status === "rejected" || status === "cancelled";
+    // Step 2 says what actually stopped the request.
+    const stepLabel = (label, stepNum) =>
+        stepNum === 2 && status === "rejected"
+            ? "Rejected"
+            : stepNum === 2 && status === "cancelled"
+              ? "Cancelled"
+              : label;
 
     return (
         <div className="flex items-center gap-0 bg-gray-50 rounded-lg px-3 py-2 mt-3">
@@ -50,7 +57,7 @@ export default function PipelineBar({ status }) {
                                           : "text-gray-400"
                                 }`}
                             >
-                                {label}
+                                {stepLabel(label, stepNum)}
                             </span>
                         </div>
                         {i < STEPS.length - 1 && (

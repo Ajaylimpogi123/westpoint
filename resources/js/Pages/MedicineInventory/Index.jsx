@@ -17,7 +17,6 @@ export default function Index({
     branches = [],
     canViewAllBranches = false,
     canAssignBranch = false,
-    products,
     stockIns,
     stockOuts,
     customerReturns,
@@ -70,7 +69,7 @@ export default function Index({
                                 branchName={branchName}
                                 branches={branches}
                                 canAssignBranch={canAssignBranch}
-                                products={products}
+                                canViewAllBranches={canViewAllBranches}
                                 stockIns={stockIns}
                                 stockOuts={stockOuts}
                                 customerReturns={customerReturns}

@@ -4,11 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Enums\UnitType;
 use App\Exceptions\InvalidPackSizeException;
+use App\Http\Controllers\Concerns\ResolvesTransactionBranch;
 use App\Models\BranchCustomer;
 use App\Models\CustomerReturn;
 use App\Models\CustomerReturnItem;
-use App\Models\MedicineProduct;
 use App\Models\InventoryMovementLog;
+use App\Models\MedicineProduct;
 use App\Services\IdempotencyGuard;
 use App\Services\InventoryMovementLogger;
 use App\Services\InventoryStockService;
@@ -17,30 +18,35 @@ use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Inertia\Inertia;
 use Inertia\Response;
 use Throwable;
 
 class CustomerReturnController extends Controller
 {
+    use ResolvesTransactionBranch;
+
     private const MAX_QUANTITY = InventoryStockService::MAX_TRANSACTION_QUANTITY;
+
+    private const FORBIDDEN_MESSAGE = 'You do not have access to this return.';
 
     public function store(Request $request): RedirectResponse
     {
-        $sessionBranchId = $this->branchIdOrFail();
-        $canAssignBranch = $this->canAssignBranch();
+        // Only staff need a session branch; admins/superadmins pick any branch.
+        $this->assertCanSubmitForAnyBranch();
 
         $validated = $request->validate([
             'customer_id' => ['required', 'integer', 'exists:tbl_customers,customer_id'],
             'return_date' => ['required', 'date'],
-            'branch_id' => ['required', 'integer', 'exists:branches,id'],
+            'branch_id' => $this->branchIdRules(),
             'received_by' => ['required', 'string', 'max:255'],
             'remarks' => ['nullable', 'string', 'max:2000'],
             'items' => ['required', 'array', 'min:1'],
             'items.*.pd_id' => ['required', 'integer', 'exists:tbl_products,id'],
             'items.*.batch_number' => ['required', 'string', 'max:100'],
             'items.*.expiry_date' => ['required', 'date', 'after:today'],
-            'items.*.quantity_received' => ['required', 'integer', 'min:1', 'max:' . self::MAX_QUANTITY],
+            'items.*.quantity_received' => ['required', 'integer', 'min:1', 'max:'.self::MAX_QUANTITY],
             'items.*.shelf_number' => ['nullable', 'string', 'max:50'],
             'items.*.unit_type' => ['required', 'string', Rule::in(UnitType::values())],
             'items.*.confirm_duplicate_lot' => ['sometimes', 'boolean'],
@@ -48,15 +54,7 @@ class CustomerReturnController extends Controller
             'items.*.expiry_date.after' => 'The expiry date must be in the future. Expired returns cannot be received back into stock.',
         ]);
 
-        $branchId = $canAssignBranch
-            ? (int) $validated['branch_id']
-            : $sessionBranchId;
-
-        if (! $canAssignBranch && (int) $validated['branch_id'] !== $sessionBranchId) {
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'The destination branch does not match your session branch.');
-        }
+        $branchId = $this->resolveTransactionBranchId((int) $validated['branch_id']);
 
         // The customer must belong to the branch the return is being
         // recorded for, so a crafted payload can't attribute a return to
@@ -67,10 +65,12 @@ class CustomerReturnController extends Controller
             ->exists();
 
         if (! $customerBelongsToBranch) {
-            return redirect()->back()
-                ->withInput()
-                ->with('error', 'The selected customer does not belong to this branch.');
+            throw ValidationException::withMessages([
+                'customer_id' => 'The selected customer does not belong to this branch.',
+            ]);
         }
+
+        $this->assertItemsBelongToBranch($validated['items'], $branchId);
 
         $idempotencyKey = $request->input('idempotency_key');
 
@@ -143,7 +143,7 @@ class CustomerReturnController extends Controller
                     );
                 }
             });
-        } catch (InvalidPackSizeException | \RuntimeException $exception) {
+        } catch (InvalidPackSizeException|\RuntimeException $exception) {
             IdempotencyGuard::release(IdempotencyGuard::SCOPE_CUSTOMER_RETURN, $idempotencyKey);
 
             return redirect()->back()
@@ -164,9 +164,10 @@ class CustomerReturnController extends Controller
 
     public function show(CustomerReturn $customerReturn): JsonResponse
     {
-        $this->assertCanAccessBranchTransaction((int) $customerReturn->branch_id);
+        $this->assertCanAccessBranchTransaction((int) $customerReturn->branch_id, self::FORBIDDEN_MESSAGE);
 
         $customerReturn->load([
+            ...self::branchSummaryRelation(),
             'customer:customer_id,first_name,last_name,customer_type',
             'items' => function ($query) {
                 $query->select([
@@ -187,13 +188,15 @@ class CustomerReturnController extends Controller
             'customer_return' => [
                 'return_id' => $customerReturn->return_id,
                 'customer' => $customerReturn->customer ? [
-                    'name' => trim($customerReturn->customer->first_name . ' ' . $customerReturn->customer->last_name),
+                    'name' => trim($customerReturn->customer->first_name.' '.$customerReturn->customer->last_name),
                     'customer_type' => $customerReturn->customer->customer_type,
                 ] : null,
                 'return_date' => $customerReturn->return_date,
                 'received_by' => $customerReturn->received_by,
                 'remarks' => $customerReturn->remarks,
                 'created_at' => $customerReturn->created_at,
+                'branch_id' => (int) $customerReturn->branch_id,
+                'branch' => self::branchSummary($customerReturn->branch),
             ],
             'items' => $customerReturn->items->map(function (CustomerReturnItem $item) {
                 return [
@@ -216,10 +219,10 @@ class CustomerReturnController extends Controller
 
     public function receipt(CustomerReturn $customerReturn): Response
     {
-        $this->assertCanAccessBranchTransaction((int) $customerReturn->branch_id);
+        $this->assertCanAccessBranchTransaction((int) $customerReturn->branch_id, self::FORBIDDEN_MESSAGE);
 
         $customerReturn->load([
-            'branch',
+            ...self::branchSummaryRelation(),
             'customer',
             'items' => function ($query) {
                 $query->select([
@@ -233,34 +236,5 @@ class CustomerReturnController extends Controller
         return Inertia::render('MedicineInventory/CustomerReturnReceipt', [
             'customerReturn' => $customerReturn,
         ]);
-    }
-
-    private function assertCanAccessBranchTransaction(int $transactionBranchId): void
-    {
-        if ($this->canAssignBranch()) {
-            return;
-        }
-
-        $branchId = $this->branchIdOrFail();
-
-        if ($transactionBranchId !== $branchId) {
-            abort(403, 'You do not have access to this return.');
-        }
-    }
-
-    private function canAssignBranch(): bool
-    {
-        return in_array((int) session('role_id'), [2, 3], true);
-    }
-
-    private function branchIdOrFail(): int
-    {
-        $branchId = session('branch_id');
-
-        if (! $branchId) {
-            abort(403, 'No branch assigned to your session.');
-        }
-
-        return (int) $branchId;
     }
 }

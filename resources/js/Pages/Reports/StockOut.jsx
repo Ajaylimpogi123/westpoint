@@ -1,38 +1,15 @@
-import { router } from "@inertiajs/react";
-import { useState } from "react";
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
-
+import ReportFilterBar from "./Partials/ReportFilterBar";
 import DataTable from "./Partials/DataTable";
+import MovementTotals, { medicineColumn } from "./Partials/MovementTotals";
 
-export default function StockOut({ filters, items, branches }) {
-    const [form, setForm] = useState({
-        date_from: filters?.date_from || "",
-        date_to: filters?.date_to || "",
-        branch_id: filters?.branch_id || "",
-    });
+const STATUS_STYLES = {
+    Deducted: "bg-slate-100 text-slate-700",
+    Delivered: "bg-emerald-50 text-emerald-700",
+    "Pending delivery": "bg-amber-50 text-amber-700",
+};
 
-    const set = (key) => (e) => setForm({ ...form, [key]: e.target.value });
-
-    const submit = (e) => {
-        e.preventDefault();
-        const query = Object.fromEntries(
-            Object.entries(form).filter(([, v]) => v !== ""),
-        );
-        router.get(route("reports.stock-out"), query, {
-            preserveState: true,
-            replace: true,
-        });
-    };
-
-    const reset = () => {
-        setForm({ date_from: "", date_to: "", branch_id: "" });
-        router.get(
-            route("reports.stock-out"),
-            {},
-            { preserveState: true, replace: true },
-        );
-    };
-
+export default function StockOut({ filters, items, totals, subtypes, branches }) {
     return (
         <AuthenticatedLayout
             header={<h2 className="text-xl font-semibold">Stock Out</h2>}
@@ -44,83 +21,71 @@ export default function StockOut({ filters, items, branches }) {
                             Stock Out Report
                         </h1>
                         <p className="mt-2 text-sm text-white">
-                            Overview of stock out, including product details,
-                            Lot # and quantities.
+                            Stock issued from each branch, by date recorded. A
+                            delivery to a customer takes stock only once it is
+                            confirmed.
                         </p>
                     </div>
-                    <form
-                        onSubmit={submit}
-                        className="flex flex-wrap items-end gap-3 mb-4 bg-white p-4 rounded-lg shadow-sm"
-                    >
-                        <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
-                                From
-                            </label>
-                            <input
-                                type="date"
-                                value={form.date_from}
-                                onChange={set("date_from")}
-                                className="border-gray-300 rounded-md text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
-                                To
-                            </label>
-                            <input
-                                type="date"
-                                value={form.date_to}
-                                onChange={set("date_to")}
-                                className="border-gray-300 rounded-md text-sm"
-                            />
-                        </div>
-                        <div>
-                            <label className="block text-xs font-medium text-gray-600 mb-1">
-                                Branch
-                            </label>
-                            <select
-                                value={form.branch_id}
-                                onChange={set("branch_id")}
-                                className="border-gray-300 rounded-md text-sm"
-                            >
-                                <option value="">All branches</option>
-                                {branches?.map((b) => (
-                                    <option key={b.id} value={b.id}>
-                                        {b.branch_name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <button
-                            type="submit"
-                            className="bg-slate-800 text-white text-sm px-4 py-2 rounded-md hover:bg-slate-700"
-                        >
-                            Apply
-                        </button>
-                        <button
-                            type="button"
-                            onClick={reset}
-                            className="text-sm text-slate-500 px-3 py-2 hover:text-slate-700"
-                        >
-                            Clear
-                        </button>
-                    </form>
-
+                    <ReportFilterBar
+                        routeName="reports.stock-out"
+                        filters={filters}
+                        branchOptions={branches}
+                        statusOptions={subtypes}
+                        statusLabel="Type"
+                    />
+                    <MovementTotals
+                        items={[
+                            { label: "Transactions", value: totals.transactions },
+                            { label: "Line items", value: totals.lines },
+                            {
+                                label: "Pieces deducted",
+                                value: totals.pieces,
+                                hint: "Removed from stock",
+                            },
+                            {
+                                label: "Pending pieces",
+                                value: totals.pending_pieces,
+                                hint: "Deliveries not yet confirmed",
+                            },
+                        ]}
+                    />
                     <DataTable
                         columns={[
-                            { key: "transaction_subtype", label: "Type" },
-                            { key: "med_name", label: "Product" },
-                            { key: "lot_number", label: "Lot #" },
-                            { key: "quantity_deducted", label: "Qty" },
-                            { key: "delivered_to", label: "Delivered To" },
                             {
-                                key: "delivery_confirmed",
-                                label: "Confirmed",
+                                key: "stock_out_id",
+                                label: "Ref #",
+                                render: (r) => `SO-${r.stock_out_id}`,
+                            },
+                            { key: "created_at", label: "Date" },
+                            { key: "branch_name", label: "Branch" },
+                            medicineColumn,
+                            { key: "lot_number", label: "Lot #" },
+                            { key: "expiry", label: "Expiry" },
+                            {
+                                key: "quantity_deducted",
+                                label: "Qty",
                                 render: (r) =>
-                                    r.delivery_confirmed ? "✅" : "—",
+                                    `${r.quantity_deducted} ${r.unit_type ?? ""}`,
+                            },
+                            { key: "pieces_deducted", label: "Pieces" },
+                            { key: "transaction_subtype", label: "Type" },
+                            {
+                                key: "status",
+                                label: "Status",
+                                render: (r) => (
+                                    <span
+                                        className={`rounded-full px-2 py-0.5 text-xs font-medium ${STATUS_STYLES[r.status] ?? ""}`}
+                                    >
+                                        {r.status}
+                                    </span>
+                                ),
+                            },
+                            {
+                                key: "delivered_to",
+                                label: "Delivered To",
+                                render: (r) => r.delivered_to || "-",
                             },
                             { key: "issued_by", label: "Issued By" },
-                            { key: "created_at", label: "Date" },
                         ]}
                         rows={items}
                     />

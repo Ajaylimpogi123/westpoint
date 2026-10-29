@@ -258,7 +258,7 @@ export default function StockOutReceipt({ stockOut }) {
                     {/* Existing transaction details (unchanged data) */}
                     <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 mb-2 text-[10px]">
                         <FieldLine
-                            label="From"
+                            label="Source branch"
                             value={stockOut.branch?.branch_name}
                         />
                         <FieldLine

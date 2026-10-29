@@ -76,8 +76,12 @@ class StockTransfer extends Model
     {
         $year = now()->year;
 
+        // Called inside the create transaction; the row lock makes a
+        // concurrent request wait instead of reading the same last number
+        // and failing on the unique index.
         $last = static::whereYear('created_at', $year)
             ->orderBy('id', 'desc')
+            ->lockForUpdate()
             ->first();
 
         $sequence = $last

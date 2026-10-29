@@ -3,8 +3,10 @@ import TransferStatusBadge from "./TransferStatusBadge";
 import PipelineBar from "./PipelineBar";
 import TransferLogsPanel from "./TransferLogsPanel";
 import {
+    actionedBy,
     formatDate,
     formatDateTime,
+    piecesLabel,
     PRIORITY_CONFIG,
 } from "../lib/TransferHelpers";
 
@@ -17,6 +19,12 @@ export default function TransferDetailModal({ transfer, onClose }) {
     const priority =
         PRIORITY_CONFIG[transfer.priority] ?? PRIORITY_CONFIG.normal;
     const isApproved = transfer.status === "approved";
+    const closedBy = actionedBy(transfer);
+    const closedByLabel = {
+        approved: "Approved by",
+        rejected: "Rejected by",
+        cancelled: "Cancelled by",
+    }[transfer.status];
 
     return (
         <div
@@ -74,7 +82,7 @@ export default function TransferDetailModal({ transfer, onClose }) {
                     <PipelineBar status={transfer.status} />
 
                     {/* Meta grid */}
-                    <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
                         <Detail
                             label="Requested by"
                             value={transfer.requester?.name ?? "—"}
@@ -97,11 +105,8 @@ export default function TransferDetailModal({ transfer, onClose }) {
                                 value={formatDateTime(transfer.approved_at)}
                             />
                         )}
-                        {transfer.approver && (
-                            <Detail
-                                label="Actioned by"
-                                value={transfer.approver.name}
-                            />
+                        {closedByLabel && closedBy && (
+                            <Detail label={closedByLabel} value={closedBy} />
                         )}
                         {transfer.rejection_note && (
                             <div
@@ -143,38 +148,47 @@ export default function TransferDetailModal({ transfer, onClose }) {
                                     >
                                         <div>
                                             <div className="text-sm font-medium text-gray-800">
-                                                {item.product?.med_name}{" "}
-                                                {item.product?.dose}
-                                                <span
-                                                    className="text-gray-400 font-normal
-                                                    ml-1 text-xs"
-                                                >
-                                                    · {item.product?.brand_name}
-                                                </span>
+                                                {[
+                                                    item.product?.med_name,
+                                                    item.product?.dose,
+                                                ]
+                                                    .filter(Boolean)
+                                                    .join(" ")}
+                                                {item.product?.brand_name && (
+                                                    <span
+                                                        className="text-gray-400 font-normal
+                                                        ml-1 text-xs"
+                                                    >
+                                                        · {item.product.brand_name}
+                                                    </span>
+                                                )}
                                             </div>
                                             <div
                                                 className="text-xs text-gray-400
                                                 font-mono mt-0.5"
                                             >
-                                                Lot {item.lot_number}
+                                                Lot {item.lot_number ?? "—"}
                                                 {item.expiry &&
                                                     ` · exp. ${formatDate(item.expiry)}`}
                                             </div>
                                         </div>
                                         <div className="text-right ml-4">
                                             <div className="text-sm font-semibold text-gray-800">
-                                                {item.quantity_approved ??
-                                                    item.quantity_requested}{" "}
-                                                units
+                                                {piecesLabel(
+                                                    item.quantity_approved ??
+                                                        item.quantity_requested,
+                                                    item.product?.pack_size,
+                                                )}
                                             </div>
-                                            {item.quantity_approved !== null &&
+                                            {item.quantity_approved != null &&
                                                 item.quantity_approved !==
                                                     item.quantity_requested && (
                                                     <div className="text-xs text-yellow-600">
                                                         Requested:{" "}
                                                         {
                                                             item.quantity_requested
-                                                        }
+                                                        }{" "}
+                                                        pcs
                                                     </div>
                                                 )}
                                         </div>

@@ -32,6 +32,7 @@ export default function DataTable({
                     {rows.map((row, i) => (
                         <tr
                             key={
+                                row.item_id ??
                                 row.id ??
                                 row.log_id ??
                                 row.stock_in_id ??

@@ -1,8 +1,9 @@
 import AuthenticatedLayout from "@/Layouts/AuthenticatedLayout";
 import ReportFilterBar from "./Partials/ReportFilterBar";
 import DataTable from "./Partials/DataTable";
+import MovementTotals, { medicineColumn } from "./Partials/MovementTotals";
 
-export default function StockIn({ filters, items, branches }) {
+export default function StockIn({ filters, items, totals, branches }) {
     return (
         <AuthenticatedLayout
             header={<h2 className="text-xl font-semibold">Stock In</h2>}
@@ -14,8 +15,9 @@ export default function StockIn({ filters, items, branches }) {
                             Stock In Report
                         </h1>
                         <p className="mt-2 text-sm text-white">
-                            Overview of stock in activities, including supplier
-                            information, product details, and receipt dates.
+                            Supplier deliveries received into each branch, by
+                            delivery date. Manual Add Stock entries are in the
+                            Add Stock History report.
                         </p>
                     </div>
                     <ReportFilterBar
@@ -24,16 +26,38 @@ export default function StockIn({ filters, items, branches }) {
                         branchOptions={branches}
                         showSupplierName={true}
                     />
+                    <MovementTotals
+                        items={[
+                            { label: "Transactions", value: totals.transactions },
+                            { label: "Line items", value: totals.lines },
+                            {
+                                label: "Pieces received",
+                                value: totals.pieces,
+                                hint: "Added to stock",
+                            },
+                        ]}
+                    />
                     <DataTable
                         columns={[
-                            { key: "supplier_name", label: "Supplier" },
-                            { key: "med_name", label: "Product" },
-                            { key: "batch_number", label: "Batch #" },
-                            { key: "expiry_date", label: "Expiry" },
-                            { key: "unit_type", label: "Unit" },
-                            { key: "quantity_received", label: "Qty Received" },
-                            { key: "received_by", label: "Received By" },
+                            {
+                                key: "stock_in_id",
+                                label: "Ref #",
+                                render: (r) => `SI-${r.stock_in_id}`,
+                            },
                             { key: "delivery_date", label: "Date" },
+                            { key: "branch_name", label: "Branch" },
+                            medicineColumn,
+                            { key: "batch_number", label: "Lot #" },
+                            { key: "expiry_date", label: "Expiry" },
+                            {
+                                key: "quantity_received",
+                                label: "Qty",
+                                render: (r) =>
+                                    `${r.quantity_received} ${r.unit_type ?? ""}`,
+                            },
+                            { key: "pieces_received", label: "Pieces" },
+                            { key: "supplier_name", label: "Supplier" },
+                            { key: "received_by", label: "Received By" },
                         ]}
                         rows={items}
                     />
