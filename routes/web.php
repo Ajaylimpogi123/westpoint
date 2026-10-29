@@ -22,6 +22,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/profile', [ProfileController::class, 'edit'])->name('profile.edit');
     Route::patch('/profile', [ProfileController::class, 'update'])->name('profile.update');
     Route::delete('/profile', [ProfileController::class, 'destroy'])->name('profile.destroy');
+
+    // Pinged while the user is typing/clicking, so a long form (e.g. a big
+    // stock-out basket) does not outlive the session and fail on save.
+    Route::get('/session/keep-alive', fn () => response()->noContent())->name('session.keep-alive');
 });
 
 require __DIR__.'/auth.php';

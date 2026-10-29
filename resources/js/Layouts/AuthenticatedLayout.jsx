@@ -2,7 +2,11 @@ import { SiteHeader } from "@/components/site-header";
 import { SidebarInset, SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Toaster } from "@/components/ui/sonner";
+import { useSessionKeepAlive } from "@/hooks/use-session-keep-alive";
+
 export default function AuthenticatedLayout({ children }) {
+    useSessionKeepAlive();
+
     return (
         <SidebarProvider>
             <AppSidebar variant="inset" />
