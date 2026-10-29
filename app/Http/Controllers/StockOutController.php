@@ -291,6 +291,18 @@ class StockOutController extends Controller
             $branchId = (int) $stockOut->branch_id;
 
             DB::transaction(function () use ($stockOut, $branchId) {
+                // Two clicks (or two users) at once must not both deduct and
+                // sell, and a delete in between must not be confirmed.
+                $locked = StockOut::query()->whereKey($stockOut->getKey())->lockForUpdate()->first();
+
+                if (! $locked) {
+                    throw new \RuntimeException('This stock-out was deleted.');
+                }
+
+                if ($locked->delivery_confirmed) {
+                    throw new \RuntimeException('This stock-out has already been added to sales.');
+                }
+
                 $items = StockOutItem::query()
                     ->where('stock_out_id', $stockOut->stock_out_id)
                     ->with('product:id,med_name,retail_price,wholesale_price')
@@ -515,6 +527,59 @@ class StockOutController extends Controller
     }
 
     /**
+     * Deletes a stock-out that has not become a sale: a pending delivery
+     * (nothing was deducted) or a return to supplier (its pieces go back to
+     * their lots). Deliveries added to sales and legacy dispenses are kept.
+     */
+    public function destroy(StockOut $stockOut): RedirectResponse
+    {
+        $this->assertCanAccessBranchTransaction((int) $stockOut->branch_id, self::FORBIDDEN_MESSAGE);
+
+        if (! $this->isEditable($stockOut)) {
+            return redirect()->back()
+                ->with('error', 'This stock-out can no longer be deleted.');
+        }
+
+        $branchId = (int) $stockOut->branch_id;
+        $label = "Stock Out #{$stockOut->stock_out_id}";
+
+        try {
+            DB::transaction(function () use ($stockOut, $branchId) {
+                // Same lock as update/confirm: a concurrent Add to Sales either
+                // finishes first (and the delete is refused) or sees no row.
+                $stockOut = StockOut::query()->whereKey($stockOut->getKey())->lockForUpdate()->firstOrFail();
+
+                if (! $this->isEditable($stockOut)) {
+                    throw new \RuntimeException('This stock-out can no longer be deleted.');
+                }
+
+                if ($stockOut->transaction_subtype !== self::SUBTYPE_DELIVERY) {
+                    $oldItems = StockOutItem::query()
+                        ->where('stock_out_id', $stockOut->stock_out_id)
+                        ->with('product:id,med_name')
+                        ->get();
+
+                    // An empty new basket puts every piece back.
+                    $this->applyReturnEdit($stockOut, $branchId, $oldItems, [], 'Stock-out deleted');
+                }
+
+                // Items go with it (ON DELETE CASCADE).
+                $stockOut->delete();
+            });
+        } catch (InsufficientStockException|\RuntimeException $exception) {
+            return redirect()->back()
+                ->with('error', $this->userMessage($exception, 'Stock-out could not be deleted. Please try again.'));
+        } catch (Throwable $exception) {
+            report($exception);
+
+            return redirect()->back()
+                ->with('error', 'Stock-out could not be deleted. Please try again.');
+        }
+
+        return redirect()->back()->with('success', "{$label} deleted.");
+    }
+
+    /**
      * Pieces this stock-out currently holds, per lot.
      *
      * @param  \Illuminate\Support\Collection<int, StockOutItem>  $items
@@ -540,7 +605,7 @@ class StockOutController extends Controller
      * @param  \Illuminate\Support\Collection<int, StockOutItem>  $oldItems
      * @param  list<array{medicine: MedicineProduct, batch: ProductQty, unit_type: UnitType, quantity: int, pieces_per_box: ?int, pieces: int}>  $lines
      */
-    private function applyReturnEdit(StockOut $stockOut, int $branchId, $oldItems, array $lines): void
+    private function applyReturnEdit(StockOut $stockOut, int $branchId, $oldItems, array $lines, string $remarks = 'Stock-out edited'): void
     {
         $lots = [];
 
@@ -599,7 +664,7 @@ class StockOutController extends Controller
                 medicineName: $lot['med_name'],
                 lotNumber: $lot['lot_number'],
                 quantity: -$change,
-                remarks: 'Stock-out edited',
+                remarks: $remarks,
             );
         }
     }

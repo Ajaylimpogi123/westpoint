@@ -10,5 +10,8 @@ Route::middleware('auth')->group(function () {
     Route::post('/stock-out/{stockOut}/confirm-delivery', [StockOutController::class, 'confirmDelivery'])->name('stock-out.confirm-delivery');
     Route::get('/stock-out/{stockOut}/edit', [StockOutController::class, 'edit'])->name('stock-out.edit');
     Route::put('/stock-out/{stockOut}', [StockOutController::class, 'update'])->name('stock-out.update');
+    Route::delete('/stock-out/{stockOut}', [StockOutController::class, 'destroy'])
+        ->middleware('role:2,3')
+        ->name('stock-out.destroy');
 
 });

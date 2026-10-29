@@ -15,8 +15,8 @@ import {
     TableHeader,
     TableRow,
 } from "@/components/ui/table";
-import { router } from "@inertiajs/react";
-import { CheckCircle2, Eye, Printer } from "lucide-react";
+import { router, usePage } from "@inertiajs/react";
+import { CheckCircle2, Eye, Printer, Trash2 } from "lucide-react";
 import Swal from "sweetalert2";
 import StockOutViewModal from "./StockOutViewModal";
 import { formatDate } from "@/lib/dates";
@@ -28,12 +28,28 @@ import {
 
 const PER_PAGE_OPTIONS = [10, 15, 25, 50];
 
+// Delete/confirm change stock, so refresh stock too; "flash" carries the
+// success or refusal message.
+const RELOAD_PROPS = ["stockOuts", "medicines", "products", "movementLogs", "flash"];
+
+/** Mirrors StockOutController::isEditable(): not yet a sale, not legacy. */
+function isEditable(stockOut) {
+    return (
+        (stockOut.transaction_subtype === DELIVERY_TO_CUSTOMER &&
+            !stockOut.delivery_confirmed) ||
+        stockOut.transaction_subtype === RETURNED_TO_SUPPLIER
+    );
+}
+
 export default function StockOutHistoryTable({
     stockOuts,
     filters,
     canViewAllBranches = false,
     branches = [],
 }) {
+    const { auth } = usePage().props;
+    // Deleting is admin/superadmin only (route middleware role:2,3).
+    const canDelete = [2, 3].includes(Number(auth?.user?.role_id));
     const perPage = Number(filters?.stock_out_per_page) || 10;
     const branchFilter = filters?.stock_out_branch_id ?? "all";
 
@@ -92,11 +108,36 @@ export default function StockOutHistoryTable({
             {},
             {
                 preserveScroll: true,
-                // Confirming deducts stock, so refresh stock too; "flash"
-                // carries the success or refusal message.
-                only: ["stockOuts", "medicines", "products", "movementLogs", "flash"],
+                only: RELOAD_PROPS,
             },
         );
+    };
+
+    const deleteStockOut = async (stockOut) => {
+        const isReturn =
+            stockOut.transaction_subtype === RETURNED_TO_SUPPLIER;
+
+        const result = await Swal.fire({
+            icon: "warning",
+            title: `Delete Stock Out #${stockOut.stock_out_id}?`,
+            text: isReturn
+                ? "Its pieces will be put back into their lots. This cannot be undone."
+                : "No stock was deducted for this delivery yet. This cannot be undone.",
+            showCancelButton: true,
+            confirmButtonText: "Yes, delete",
+            confirmButtonColor: "#dc2626",
+            cancelButtonText: "Cancel",
+            focusCancel: true,
+        });
+
+        if (!result.isConfirmed) {
+            return;
+        }
+
+        router.delete(route("stock-out.destroy", stockOut.stock_out_id), {
+            preserveScroll: true,
+            only: RELOAD_PROPS,
+        });
     };
 
     return (
@@ -199,12 +240,22 @@ export default function StockOutHistoryTable({
                                     <TableCell>{stockOut.issued_by}</TableCell>
                                     <TableCell className="text-right">
                                         <div className="flex items-center justify-end gap-2">
-                                            {/* Mirrors StockOutController::isEditable(). */}
-                                            {((stockOut.transaction_subtype ===
-                                                DELIVERY_TO_CUSTOMER &&
-                                                !stockOut.delivery_confirmed) ||
-                                                stockOut.transaction_subtype ===
-                                                    RETURNED_TO_SUPPLIER) && (
+                                            {canDelete && isEditable(stockOut) && (
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    size="sm"
+                                                    className="flex items-center gap-1 border-red-200 text-red-600 hover:bg-red-50 hover:text-red-700"
+                                                    onClick={() =>
+                                                        deleteStockOut(stockOut)
+                                                    }
+                                                >
+                                                    <Trash2 className="h-3.5 w-3.5" />
+                                                    Delete
+                                                </Button>
+                                            )}
+
+                                            {isEditable(stockOut) && (
                                                     <StockOutEditModal
                                                         stockOutId={
                                                             stockOut.stock_out_id
